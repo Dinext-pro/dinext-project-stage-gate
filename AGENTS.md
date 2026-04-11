@@ -1126,6 +1126,11 @@ def setUp(self):
     make_test_records()
 ```
 
+### 10.3.1 Ретроспектива по unit-тестам без HTTP/request context
+
+- Если тест напрямую вызывает код, где внутри используется `frappe.throw(...)`, `frappe.msgprint(...)` или whitelisted-обертки, инициализируйте `frappe.local.flags` в `setUp`, например `SimpleNamespace(in_test=True, mute_messages=True)`. Иначе тест может падать не по бизнес-логике, а с `RuntimeError: object is not bound` или `AttributeError` на `flags`/`mute_messages`.
+- Если в тесте нужен fallback/stub для `frappe`, не подменяйте `sys.modules["frappe"]` безусловно на уровне модуля. Сначала пробуйте импортировать реальный `frappe`, и только при `ModuleNotFoundError` устанавливайте минимальный stub, иначе один тестовый модуль может сломать остальные тесты в том же процессе.
+
 ### 10.4 Continuous Integration
 
 При создании приложения с опцией `create_github_workflow=True` создается workflow для автоматического тестирования.

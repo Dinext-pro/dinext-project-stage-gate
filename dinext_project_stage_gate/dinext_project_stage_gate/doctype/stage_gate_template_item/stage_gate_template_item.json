@@ -1,0 +1,71 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-04-11 19:57:11.257353",
+ "description": "Checklist item template for stage gate reviews.",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "title",
+  "description",
+  "checklist_item",
+  "is_mandatory",
+  "default_responsible_role",
+  "evidence_type_hint"
+ ],
+ "fields": [
+  {
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Title",
+   "reqd": 1
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description"
+  },
+  {
+   "default": "1",
+   "fieldname": "checklist_item",
+   "fieldtype": "Check",
+   "label": "Checklist Item"
+  },
+  {
+   "default": "1",
+   "fieldname": "is_mandatory",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Is Mandatory"
+  },
+  {
+   "fieldname": "default_responsible_role",
+   "fieldtype": "Link",
+   "label": "Default Responsible Role",
+   "options": "Role"
+  },
+  {
+   "fieldname": "evidence_type_hint",
+   "fieldtype": "Select",
+   "label": "Evidence Type Hint",
+   "options": "Task\nIssue\nFile\nMeeting Notes\nAny Document"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-04-11 19:57:11.257353",
+ "modified_by": "Administrator",
+ "module": "Dinext Project Stage Gate",
+ "name": "Stage Gate Template Item",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

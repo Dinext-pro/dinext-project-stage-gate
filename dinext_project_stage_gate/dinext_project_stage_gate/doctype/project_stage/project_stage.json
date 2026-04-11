@@ -1,0 +1,90 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "prompt",
+ "creation": "2026-04-11 19:57:11.238752",
+ "description": "Stage registry for the Stage-gate domain layer.",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "stage_code",
+  "sequence_hint",
+  "color",
+  "icon",
+  "description",
+  "is_gate_required",
+  "enabled"
+ ],
+ "fields": [
+  {
+   "fieldname": "stage_code",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Stage Code",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "sequence_hint",
+   "fieldtype": "Int",
+   "label": "Sequence Hint"
+  },
+  {
+   "fieldname": "color",
+   "fieldtype": "Color",
+   "label": "Color"
+  },
+  {
+   "fieldname": "icon",
+   "fieldtype": "Data",
+   "label": "Icon"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description"
+  },
+  {
+   "default": "1",
+   "fieldname": "is_gate_required",
+   "fieldtype": "Check",
+   "label": "Is Gate Required"
+  },
+  {
+   "default": "1",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Enabled"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-04-11 19:57:11.238752",
+ "modified_by": "Administrator",
+ "module": "Dinext Project Stage Gate",
+ "name": "Project Stage",
+ "naming_rule": "Set by user",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

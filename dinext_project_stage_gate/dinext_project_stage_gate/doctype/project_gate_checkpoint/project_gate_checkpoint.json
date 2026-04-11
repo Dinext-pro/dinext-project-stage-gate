@@ -1,0 +1,127 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "prompt",
+ "creation": "2026-04-11 20:04:25.980692",
+ "description": "Checkpoint approval for a project stage.",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "project",
+  "stage_instance",
+  "gate_template",
+  "checkpoint_level",
+  "status",
+  "responsible_user",
+  "approver_user",
+  "approver_role",
+  "approval_date",
+  "decision_comment",
+  "checklist"
+ ],
+ "fields": [
+  {
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Project",
+   "options": "Project",
+   "reqd": 1
+  },
+  {
+   "fieldname": "stage_instance",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Stage Instance",
+   "options": "Project Stage Instance",
+   "reqd": 1
+  },
+  {
+   "fieldname": "gate_template",
+   "fieldtype": "Link",
+   "label": "Gate Template",
+   "options": "Stage Gate Template",
+   "reqd": 1
+  },
+  {
+   "fieldname": "checkpoint_level",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Checkpoint Level",
+   "options": "Project Gate Checkpoint Level"
+  },
+  {
+   "default": "Draft",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Draft\nIn Review\nApproved\nRejected\nWaived\nBlocked"
+  },
+  {
+   "fieldname": "responsible_user",
+   "fieldtype": "Link",
+   "label": "Responsible User",
+   "options": "User"
+  },
+  {
+   "fieldname": "approver_user",
+   "fieldtype": "Link",
+   "label": "Approver User",
+   "options": "User"
+  },
+  {
+   "fieldname": "approver_role",
+   "fieldtype": "Link",
+   "label": "Approver Role",
+   "options": "Role"
+  },
+  {
+   "fieldname": "approval_date",
+   "fieldtype": "Date",
+   "label": "Approval Date"
+  },
+  {
+   "fieldname": "decision_comment",
+   "fieldtype": "Small Text",
+   "label": "Decision Comment"
+  },
+  {
+   "fieldname": "checklist",
+   "fieldtype": "Table",
+   "label": "Checklist",
+   "options": "Project Gate Checklist Item",
+   "reqd": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-04-11 20:04:25.980692",
+ "modified_by": "Administrator",
+ "module": "Dinext Project Stage Gate",
+ "name": "Project Gate Checkpoint",
+ "naming_rule": "Set by user",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

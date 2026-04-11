@@ -1,0 +1,119 @@
+.stage-gate-widget-root {
+	margin-bottom: 16px;
+	padding: 12px 16px;
+	border: 1px solid var(--border-color);
+	border-radius: var(--border-radius-md);
+	background: var(--card-bg);
+	animation: stage-gate-fade-in 0.18s ease-out;
+}
+
+.stage-gate-widget-header {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px;
+	margin-bottom: 12px;
+}
+
+.stage-gate-widget-title {
+	font-size: 14px;
+	font-weight: 600;
+	color: var(--text-color);
+}
+
+.stage-gate-widget-subtitle {
+	font-size: 12px;
+	color: var(--text-muted);
+	margin-top: 2px;
+}
+
+.stage-gate-widget-empty {
+	color: var(--text-muted);
+	font-size: 13px;
+}
+
+.stage-gate-chain {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	overflow-x: auto;
+	padding-bottom: 4px;
+}
+
+.stage-gate-connector {
+	flex: 0 0 18px;
+	height: 2px;
+	background: var(--border-color);
+}
+
+.stage-gate-node {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 4px;
+	min-width: 144px;
+	padding: 10px 12px;
+	border-radius: 12px;
+	border: 1px solid var(--border-color);
+	background: var(--subtle-fg);
+	cursor: pointer;
+	transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+}
+
+.stage-gate-node:hover {
+	transform: translateY(-1px);
+	box-shadow: var(--shadow-sm);
+}
+
+.stage-gate-node-label {
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--text-color);
+}
+
+.stage-gate-node-meta,
+.stage-gate-node-gate {
+	font-size: 11px;
+	color: var(--text-muted);
+}
+
+.stage-gate-status-active {
+	border-color: var(--blue-300);
+	background: var(--blue-50);
+}
+
+.stage-gate-status-completed,
+.stage-gate-status-approved {
+	border-color: var(--green-400);
+	background: var(--green-50);
+}
+
+.stage-gate-status-waiting-gate,
+.stage-gate-status-planned {
+	border-color: var(--orange-300);
+	background: var(--yellow-50);
+}
+
+.stage-gate-status-rejected,
+.stage-gate-status-blocked {
+	border-color: var(--red-400);
+	background: var(--red-50);
+}
+
+.stage-gate-status-skipped {
+	border-color: var(--gray-300);
+	background: var(--gray-100);
+}
+
+@keyframes stage-gate-fade-in {
+	from {
+		opacity: 0;
+		transform: translateY(4px);
+	}
+
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
