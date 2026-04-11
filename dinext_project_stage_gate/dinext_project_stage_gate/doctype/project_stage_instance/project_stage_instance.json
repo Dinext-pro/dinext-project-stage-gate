@@ -1,0 +1,136 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "prompt",
+ "creation": "2026-04-11 20:00:05.175674",
+ "description": "Actual stage execution record for a project.",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "project",
+  "stage",
+  "governance_model",
+  "sequence",
+  "status",
+  "planned_start_date",
+  "planned_end_date",
+  "actual_start_date",
+  "actual_end_date",
+  "gate_due_date",
+  "gate_result",
+  "previous_stage_instance",
+  "next_stage_instance"
+ ],
+ "fields": [
+  {
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Project",
+   "options": "Project",
+   "reqd": 1
+  },
+  {
+   "fieldname": "stage",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Stage",
+   "options": "Project Stage",
+   "reqd": 1
+  },
+  {
+   "fieldname": "governance_model",
+   "fieldtype": "Link",
+   "label": "Governance Model",
+   "options": "Project Governance Model",
+   "reqd": 1
+  },
+  {
+   "fieldname": "sequence",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Sequence"
+  },
+  {
+   "default": "Planned",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Planned\nActive\nWaiting Gate\nApproved\nRejected\nSkipped\nCompleted"
+  },
+  {
+   "fieldname": "planned_start_date",
+   "fieldtype": "Date",
+   "label": "Planned Start Date"
+  },
+  {
+   "fieldname": "planned_end_date",
+   "fieldtype": "Date",
+   "label": "Planned End Date"
+  },
+  {
+   "fieldname": "actual_start_date",
+   "fieldtype": "Date",
+   "label": "Actual Start Date"
+  },
+  {
+   "fieldname": "actual_end_date",
+   "fieldtype": "Date",
+   "label": "Actual End Date"
+  },
+  {
+   "fieldname": "gate_due_date",
+   "fieldtype": "Date",
+   "label": "Gate Due Date"
+  },
+  {
+   "fieldname": "gate_result",
+   "fieldtype": "Select",
+   "label": "Gate Result",
+   "options": "Pending\nApproved\nRejected\nWaived"
+  },
+  {
+   "fieldname": "previous_stage_instance",
+   "fieldtype": "Link",
+   "label": "Previous Stage Instance",
+   "options": "Project Stage Instance"
+  },
+  {
+   "fieldname": "next_stage_instance",
+   "fieldtype": "Link",
+   "label": "Next Stage Instance",
+   "options": "Project Stage Instance"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-04-11 20:00:05.175674",
+ "modified_by": "ikhmel@dinord.ru",
+ "module": "Dinext Project Stage Gate",
+ "name": "Project Stage Instance",
+ "naming_rule": "Set by user",
+ "owner": "ikhmel@dinord.ru",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

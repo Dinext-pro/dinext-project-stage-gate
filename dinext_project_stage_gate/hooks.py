@@ -5,6 +5,85 @@ app_description = "Dinext Project Stage Gate"
 app_email = "info@dinext.ru"
 app_license = "mit"
 
+required_apps = ["erpnext", "dinext_projects"]
+
+fixtures = [
+	{
+		"doctype": "Role",
+		"filters": [
+			[
+				"name",
+				"in",
+				[
+					"Stage Gate Owner",
+					"Stage Gate Reviewer",
+					"Stage Gate Approver",
+					"Project Governance Admin",
+				],
+			],
+			["disabled", "=", 0],
+		],
+	},
+	{
+		"doctype": "Custom Field",
+		"filters": [
+			["module", "=", "Dinext Project Stage Gate"],
+		],
+	},
+	{
+		"doctype": "Custom DocPerm",
+		"filters": [
+			["parent", "in", [
+				"Project Stage",
+				"Project Gate Checkpoint Level",
+				"Project Governance Model",
+				"Project Governance Model Stage",
+				"Stage Gate Template",
+				"Stage Gate Template Item",
+				"Project Stage Instance",
+				"Project Gate Checkpoint",
+				"Project Gate Checklist Item",
+			]],
+		],
+	},
+	{
+		"doctype": "Workflow",
+		"filters": [
+			["name", "in", ["Project Gate Checkpoint Workflow"]],
+			["is_active", "=", 1],
+		],
+	},
+	{
+		"doctype": "Workflow Action Master",
+		"filters": [
+			[
+				"name",
+				"in",
+				["Submit for Review", "Approve", "Reject", "Block", "Resume Review", "Revise", "Waive"],
+			],
+		],
+	},
+	{
+		"doctype": "Workflow State",
+		"filters": [
+			["workflow_state_name", "in", [
+				"Draft",
+				"In Review",
+				"Approved",
+				"Rejected",
+				"Waived",
+				"Blocked",
+			]],
+		],
+	},
+	{
+		"doctype": "Report",
+		"filters": [
+			["name", "in", ["Project Stage Gate Roadmap"]],
+		],
+	},
+]
+
 # Apps
 # ------------------
 
@@ -43,7 +122,7 @@ app_license = "mit"
 # page_js = {"page" : "public/js/file.js"}
 
 # include js in doctype views
-# doctype_js = {"doctype" : "public/js/doctype.js"}
+doctype_js = {"Project": "public/js/project_stage_gate_project.js"}
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
