@@ -66,16 +66,17 @@
 		0 100%,
 		var(--stage-gate-notch) 50%
 	);
-	transform-origin: left center;
+	translate: 0 0;
+	scale: 1;
 	animation: stage-gate-node-enter var(--stage-gate-enter-duration) var(--stage-gate-enter-easing) both;
 	animation-delay: calc(var(--stage-order, 0) * var(--stage-gate-enter-step));
 	transition:
 		background-color 0.16s ease,
 		color 0.16s ease,
 		opacity 0.16s ease,
-		transform 0.16s ease,
+		scale 0.16s ease,
 		filter 0.16s ease;
-	will-change: transform, opacity, filter;
+	will-change: translate, scale, opacity, filter;
 }
 
 .stage-gate-node:first-child {
@@ -87,13 +88,13 @@
 }
 
 .stage-gate-node:hover {
-	transform: scale(var(--stage-gate-hover-scale));
-	filter: brightness(0.94);
+	scale: var(--stage-gate-hover-scale);
+	filter: brightness(0.9);
 	z-index: 2;
 }
 
 .stage-gate-node:focus-visible {
-	transform: scale(var(--stage-gate-hover-scale));
+	scale: var(--stage-gate-hover-scale);
 	filter: brightness(0.94);
 	z-index: 2;
 	outline: 2px solid var(--primary);
@@ -113,42 +114,44 @@
 }
 
 .stage-gate-status-active {
-	background: var(--blue-500);
+	background: var(--blue-600);
 	color: white;
 }
 
 .stage-gate-status-completed,
 .stage-gate-status-approved {
-	background: #1f8f5f;
+	background: #176c48;
 	color: white;
 }
 
 .stage-gate-status-waiting-gate,
 .stage-gate-status-planned {
-	background: var(--gray-100);
-	color: var(--gray-700);
+	background: var(--gray-300);
+	color: var(--gray-800);
 }
 
 .stage-gate-status-rejected,
 .stage-gate-status-blocked {
-	background: var(--red-500);
+	background: var(--red-600);
 	color: white;
 }
 
 .stage-gate-status-skipped {
-	background: var(--gray-200);
-	color: var(--gray-700);
+	background: var(--gray-400);
+	color: var(--gray-900);
 }
 
 @keyframes stage-gate-node-enter {
 	from {
 		opacity: 0;
-		transform: translateX(-8px) scale(0.98);
+		translate: -8px 0;
+		scale: 0.98;
 	}
 
 	to {
 		opacity: 1;
-		transform: translateX(0) scale(1);
+		translate: 0 0;
+		scale: 1;
 	}
 }
 
@@ -163,7 +166,7 @@
 
 	.stage-gate-node:hover,
 	.stage-gate-node:focus-visible {
-		transform: none;
+		scale: 1;
 		filter: none;
 	}
 }
