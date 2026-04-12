@@ -12,8 +12,13 @@ dinext_project_stage_gate.project.refresh_widget = async function (frm) {
 	}
 
 	const page = frm.page.wrapper;
+	dinext_project_stage_gate.project.remove_widget(page);
+
 	if (!frm.doc.governance_model) {
-		dinext_project_stage_gate.project.remove_widget(page);
+		return;
+	}
+
+	if (!frm.doc.name || frm.is_new()) {
 		return;
 	}
 
@@ -23,11 +28,6 @@ dinext_project_stage_gate.project.refresh_widget = async function (frm) {
 	if (!widget.length) {
 		widget = $('<section class="stage-gate-widget-root"></section>');
 		page.find(".layout-main-section").first().prepend(widget);
-	}
-
-	if (!frm.doc.name || frm.is_new()) {
-		dinext_project_stage_gate.project.remove_widget(page);		
-		return;
 	}
 
 	try {
