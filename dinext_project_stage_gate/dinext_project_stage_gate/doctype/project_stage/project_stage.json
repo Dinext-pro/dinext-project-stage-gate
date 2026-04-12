@@ -10,8 +10,6 @@
  "field_order": [
   "stage_code",
   "sequence_hint",
-  "color",
-  "icon",
   "description",
   "is_gate_required",
   "enabled"
@@ -29,16 +27,6 @@
    "fieldname": "sequence_hint",
    "fieldtype": "Int",
    "label": "Sequence Hint"
-  },
-  {
-   "fieldname": "color",
-   "fieldtype": "Color",
-   "label": "Color"
-  },
-  {
-   "fieldname": "icon",
-   "fieldtype": "Data",
-   "label": "Icon"
   },
   {
    "fieldname": "description",
@@ -62,7 +50,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-04-11 19:57:11.238752",
+ "modified": "2026-04-13 01:20:16.578843",
  "modified_by": "Administrator",
  "module": "Dinext Project Stage Gate",
  "name": "Project Stage",

@@ -6,6 +6,14 @@ frappe.ui.form.on("Project", {
 	},
 });
 
+$(document).on("form-unload", function (e, frm) {  
+    if (!frm.doc || frm.is_new()) {  
+        return;  
+    }  
+    const page = frm.page.wrapper;
+	dinext_project_stage_gate.project.remove_widget(page);
+});
+
 dinext_project_stage_gate.project.refresh_widget = async function (frm) {
 	if (!frm || !frm.page || !frm.page.wrapper) {
 		return;
