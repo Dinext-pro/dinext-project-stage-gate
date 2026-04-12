@@ -216,13 +216,17 @@ doctype_js = {"Project": "public/js/project_stage_gate_project.js"}
 # ---------------
 # Hook on document methods and events
 
-# doc_events = {
-# 	"*": {
-# 		"on_update": "method",
-# 		"on_cancel": "method",
-# 		"on_trash": "method"
-# 	}
-# }
+doc_events = {
+	"Project": {
+		"validate": "dinext_project_stage_gate.stage_gate.project_hooks.validate_project_governance_model_change",
+		"after_insert": "dinext_project_stage_gate.stage_gate.project_hooks.sync_project_stage_chain",
+		"on_update": "dinext_project_stage_gate.stage_gate.project_hooks.sync_project_stage_chain",
+	},
+	"Project Stage Instance": {
+		"on_update": "dinext_project_stage_gate.stage_gate.project_hooks.sync_project_stage_summary_from_instance",
+		"on_trash": "dinext_project_stage_gate.stage_gate.project_hooks.sync_project_stage_summary_from_instance",
+	},
+}
 
 # Scheduled Tasks
 # ---------------

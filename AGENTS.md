@@ -1130,6 +1130,7 @@ def setUp(self):
 
 - Если тест напрямую вызывает код, где внутри используется `frappe.throw(...)`, `frappe.msgprint(...)` или whitelisted-обертки, инициализируйте `frappe.local.flags` в `setUp`, например `SimpleNamespace(in_test=True, mute_messages=True)`. Иначе тест может падать не по бизнес-логике, а с `RuntimeError: object is not bound` или `AttributeError` на `flags`/`mute_messages`.
 - Если в тесте нужен fallback/stub для `frappe`, не подменяйте `sys.modules["frappe"]` безусловно на уровне модуля. Сначала пробуйте импортировать реальный `frappe`, и только при `ModuleNotFoundError` устанавливайте минимальный stub, иначе один тестовый модуль может сломать остальные тесты в том же процессе.
+- Если unit-тест напрямую вызывает код, использующий `frappe._()` / `from frappe import _`, не запускайте такой тест как «чистый» `python -m unittest` без Frappe-контекста. Либо запускайте его через `bench --site ... run-tests`, либо патчьте `_` в тестируемом модуле. Иначе падение часто происходит не по логике функции, а в слое translations/cache/logger (`frappe.cache`, merged translations, `frappe.log`).
 
 ### 10.4 Continuous Integration
 

@@ -22,10 +22,12 @@ class TestProjectStageGateRoadmapReport(unittest.TestCase):
 		)
 
 		self.assertTrue(any(column["fieldname"] == "governance_model" for column in columns))
+		self.assertEqual(columns[0]["label"], "Portfolio")
 		self.assertEqual(data[0]["project"], "PROJ-001")
 		self.assertEqual(message["projects"][0]["name"], "PROJ-001")
 		self.assertIsNone(chart)
 		self.assertEqual(report_summary[0]["value"], 1)
+		self.assertEqual(report_summary[0]["label"], "Projects")
 		get_roadmap_dataset.assert_called_once_with({"company": "Dinext"})
 
 	def test_build_rows_includes_project_manager_and_governance_model(self):

@@ -12,6 +12,7 @@ function loadWidgetScript() {
 	const state = {
 		prependCount: 0,
 		callCount: 0,
+		lastHtml: "",
 	};
 	let page;
 
@@ -21,7 +22,9 @@ function loadWidgetScript() {
 			this.removed = false;
 		}
 
-		html() {}
+		html(value) {
+			state.lastHtml = value;
+		}
 
 		find() {
 			return { on() {} };
@@ -103,7 +106,14 @@ function loadWidgetScript() {
 }
 
 function __(value) {
-	return value;
+	return (
+		{
+			Approved: "Одобрено",
+			"In Review": "На рассмотрении",
+			Pending: "Ожидает решения",
+			"Waiting Gate": "Ожидание гейта",
+		}[value] || value
+	);
 }
 
 test("refresh_widget does not mount or fetch when governance model is missing", async () => {
@@ -172,4 +182,38 @@ test("render_chain removes widget when stage chain is empty", () => {
 	project.render_chain(page.widget, []);
 
 	assert.equal(page.widget, null);
+});
+
+test("render_chain translates displayed statuses but preserves raw status class names", () => {
+	const { project, state } = loadWidgetScript();
+	const widget = {
+		length: 1,
+		html(value) {
+			state.lastHtml = value;
+		},
+		find() {
+			return { on() {} };
+		},
+	};
+
+	project.render_chain(widget, [
+		{
+			name: "PSI-001",
+			stage: "Discovery",
+			stage_name: "Discovery",
+			status: "Waiting Gate",
+			gate_result: "Approved",
+			checkpoints: [
+				{
+					checkpoint_level: "Stage Exit",
+					status: "In Review",
+				},
+			],
+		},
+	]);
+
+	assert.match(state.lastHtml, /stage-gate-status-waiting-gate/);
+	assert.match(state.lastHtml, /Ожидание гейта/);
+	assert.match(state.lastHtml, /Одобрено/);
+	assert.match(state.lastHtml, /Stage Exit: На рассмотрении/);
 });
