@@ -1,25 +1,25 @@
 # Dinext Project Stage Gate
 
-## 📖 Overview
+## 📖 Обзор
 
-`dinext_project_stage_gate` adds a dedicated Stage-gate governance layer on top of standard ERPNext `Project` records. The app keeps `Project` as the main business object and introduces separate metadata and transactional DocTypes for stage registries, governance models, gate templates, stage execution, checkpoint approvals, and roadmap reporting.
+`dinext_project_stage_gate` добавляет отдельный слой управления по модели Stage-gate поверх стандартных записей ERPNext `Project`. Приложение сохраняет `Project` как основной бизнес-объект и вводит отдельные metadata- и transactional-DocType для реестра стадий, моделей управления, шаблонов gate, исполнения стадий, согласования checkpoint и дорожной карты.
 
-The implementation is intentionally independent from the standard `Project` workflow and from `Task Type = Stage/Phase`. Tasks, issues, and existing portfolio links can still be used as related evidence, but the source of truth for governance progression lives in the Stage-gate domain model.
+Реализация намеренно независима от стандартного workflow `Project` и от подхода `Task Type = Stage/Phase`. Задачи, issues и существующие связи с портфелями по-прежнему можно использовать как связанные артефакты и evidence, но источником истины для управленческого продвижения проекта является доменная модель Stage-gate.
 
-## ✨ Features
+## ✨ Возможности
 
-- Dedicated master data for `Project Stage`, `Project Governance Model`, `Stage Gate Template`, and `Project Gate Checkpoint Level`
-- Transactional execution layer with `Project Stage Instance`, `Project Gate Checkpoint`, and `Project Gate Checklist Item`
-- Whitelisted Python API for project stage-chain and roadmap datasets
-- Project form widget rendered via `doctype_js`, without requiring a custom HTML field
-- Stage-gate roadmap Script Report with lazy-loaded ECharts rendering
-- Role and permission model for `Stage Gate Owner`, `Stage Gate Reviewer`, `Stage Gate Approver`, and `Project Governance Admin`
-- Dedicated checkpoint workflow that does not modify the existing `Project` approval flow
-- Backfill utility for migrating old naming fields and checkpoint levels to the current canonical model
+- Отдельные master-справочники для `Project Stage`, `Project Governance Model`, `Stage Gate Template` и `Project Gate Checkpoint Level`
+- Transactional-слой исполнения через `Project Stage Instance`, `Project Gate Checkpoint` и `Project Gate Checklist Item`
+- Whitelisted Python API для цепочки стадий проекта и данных roadmap-отчета
+- Виджет на форме `Project`, подключаемый через `doctype_js`, без отдельного HTML custom field
+- Script Report дорожной карты Stage-gate с ленивой загрузкой ECharts
+- Ролевая и permission-модель для `Stage Gate Owner`, `Stage Gate Reviewer`, `Stage Gate Approver` и `Project Governance Admin`
+- Отдельный workflow checkpoint, не изменяющий существующий approval-flow `Project`
+- Utility для backfill старых naming-полей и уровней checkpoint в текущую каноническую модель
 
-## 🚀 Installation
+## 🚀 Установка
 
-Install the app into an existing Administrator that already contains `erpnext` and `dinext_projects`:
+Установите приложение в существующий Administrator, где уже есть `erpnext` и `dinext_projects`:
 
 ```bash
 cd /path/to/frappe-bench
@@ -28,73 +28,73 @@ bench --site <site> install-app dinext_project_stage_gate
 bench --site <site> migrate
 ```
 
-If you are applying metadata changes in developer mode, make sure developer mode is enabled on the site before creating or updating DocTypes:
+Если вы применяете metadata-изменения в developer mode, убедитесь, что он включен на сайте до создания или обновления DocType:
 
 ```bash
 bench --site <site> set-config developer_mode 1
 ```
 
-After site-level metadata changes, export fixtures to keep repository state aligned with the database:
+После site-level metadata-изменений экспортируйте fixtures, чтобы состояние репозитория совпадало с базой данных:
 
 ```bash
 bench --site <site> export-fixtures --app dinext_project_stage_gate
 ```
 
-## 🛠️ Usage
+## 🛠️ Использование
 
-### Assign a governance model to a project
+### Назначение модели управления проекту
 
-1. Create or update `Project Stage` records.
-2. Create `Project Gate Checkpoint Level` records for the approval layers you need.
-3. Build a `Project Governance Model` with ordered stage rows.
-4. Build `Stage Gate Template` records linked to a `Project Gate Checkpoint Level`.
-5. Assign a governance model to a `Project`.
+1. Создайте или обновите записи `Project Stage`.
+2. Создайте записи `Project Gate Checkpoint Level` для нужных уровней согласования.
+3. Соберите `Project Governance Model` с упорядоченными строками стадий.
+4. Создайте `Stage Gate Template`, связанные с `Project Gate Checkpoint Level`.
+5. Назначьте модель управления документу `Project`.
 
-The Project form then uses the whitelisted API to render the Stage-gate chain. If no governance model is assigned, the widget is not shown.
+После этого форма `Project` использует whitelisted API для отрисовки Stage-gate цепочки. Если модель управления не назначена, виджет не показывается.
 
-### Query the API
+### Вызов API
 
-The app exposes two primary whitelisted methods:
+Приложение предоставляет два основных whitelisted-метода:
 
 ```python
 dinext_project_stage_gate.stage_gate.api.get_project_stage_chain(project)
 dinext_project_stage_gate.stage_gate.api.get_roadmap_dataset(filters=None)
 ```
 
-From bench:
+Вызов через bench:
 
 ```bash
 bench --site <site> execute dinext_project_stage_gate.stage_gate.api.ping
 bench --site <site> execute dinext_project_stage_gate.stage_gate.api.get_roadmap_dataset
 ```
 
-### Run the Stage-gate backfill utility
+### Запуск utility для backfill Stage-gate
 
-This utility creates default checkpoint levels and migrates legacy naming fields and checkpoint level data into the current model:
+Этот utility создает уровни checkpoint по умолчанию и переносит старые naming-поля и данные уровней checkpoint в текущую модель:
 
 ```bash
 bench --site <site> execute \
   dinext_project_stage_gate.stage_gate.backfill.backfill_checkpoint_levels_and_names
 ```
 
-## 📦 Technologies
+## 📦 Технологии
 
 - Python 3.10+
 - Frappe Framework / ERPNext
-- JavaScript form scripts and Script Reports
-- ECharts for roadmap visualization
-- Ruff for Python linting
-- Prettier / ESLint / pyupgrade via pre-commit tooling
+- JavaScript form scripts и Script Reports
+- ECharts для визуализации дорожной карты
+- Ruff для Python linting
+- Prettier / ESLint / pyupgrade через pre-commit tooling
 
-## 🔧 Configuration
+## 🔧 Конфигурация
 
-Key application configuration lives in [`dinext_project_stage_gate/hooks.py`](dinext_project_stage_gate/hooks.py).
+Основная конфигурация приложения находится в [`dinext_project_stage_gate/hooks.py`](dinext_project_stage_gate/hooks.py).
 
-Important settings and integration points:
+Ключевые настройки и точки интеграции:
 
 - `required_apps = ["erpnext", "dinext_projects"]`
 - `doctype_js = {"Project": "public/js/project_stage_gate_project.js"}`
-- fixture export for:
+- экспорт fixtures для:
   - `Role`
   - `Custom Field`
   - `Custom DocPerm`
@@ -103,58 +103,58 @@ Important settings and integration points:
   - `Workflow State`
   - `Report`
 
-The app relies on site metadata and fixture export rather than environment variables.
+Приложение опирается на site metadata и export-fixtures, а не на переменные окружения.
 
-## ✅ Requirements
+## ✅ Требования
 
-- A working Administrator
-- Installed apps:
+- Рабочий Administrator
+- Установленные приложения:
   - `frappe`
   - `erpnext`
   - `dinext_projects`
-- Access to run `bench --site <site> migrate`
-- Developer mode enabled when creating/updating DocTypes or metadata in the database
+- Доступ к запуску `bench --site <site> migrate`
+- Включенный developer mode при создании/обновлении DocType или metadata в базе данных
 
-## 🤝 Contributing
+## 🤝 Вклад в проект
 
-Install and enable `pre-commit` before contributing:
+Перед внесением изменений установите и включите `pre-commit`:
 
 ```bash
 cd apps/dinext_project_stage_gate
 pre-commit install
 ```
 
-Current repository tooling includes:
+В репозитории используются:
 
 - `ruff`
 - `eslint`
 - `prettier`
 - `pyupgrade`
 
-When changing metadata-backed behavior, prefer this workflow:
+При изменении metadata-driven поведения придерживайтесь такого процесса:
 
-1. Update code and metadata files
-2. Run site migration
-3. Run targeted tests
-4. Export fixtures
+1. Обновить код и metadata-файлы
+2. Выполнить site migration
+3. Запустить целевые тесты
+4. Экспортировать fixtures
 
-Project-specific development guidance lives in [`AGENTS.md`](AGENTS.md).
+Проектные правила разработки находятся в [`AGENTS.md`](AGENTS.md).
 
-## 📄 Documentation
+## 📄 Документация
 
-- [`README.md`](README.md) — high-level project overview
-- [`AGENTS.md`](AGENTS.md) — project doctrine and Frappe-specific working rules
-- [`dinext_project_stage_gate/hooks.py`](dinext_project_stage_gate/hooks.py) — app bootstrap, fixtures, and client script bindings
-- [`dinext_project_stage_gate/stage_gate/api.py`](dinext_project_stage_gate/stage_gate/api.py) — whitelisted API surface
-- [`dinext_project_stage_gate/stage_gate/query.py`](dinext_project_stage_gate/stage_gate/query.py) — read models for widget/report data
-- [`dinext_project_stage_gate/stage_gate/backfill.py`](dinext_project_stage_gate/stage_gate/backfill.py) — migration helper for canonical naming and checkpoint levels
+- [`README.md`](README.md) — обзор проекта на верхнем уровне
+- [`AGENTS.md`](AGENTS.md) — проектная доктрина и правила работы с Frappe
+- [`dinext_project_stage_gate/hooks.py`](dinext_project_stage_gate/hooks.py) — bootstrap приложения, fixtures и client script bindings
+- [`dinext_project_stage_gate/stage_gate/api.py`](dinext_project_stage_gate/stage_gate/api.py) — whitelisted API
+- [`dinext_project_stage_gate/stage_gate/query.py`](dinext_project_stage_gate/stage_gate/query.py) — read-model слой для виджета и отчета
+- [`dinext_project_stage_gate/stage_gate/backfill.py`](dinext_project_stage_gate/stage_gate/backfill.py) — helper для миграции канонических имен и checkpoint levels
 
-## ❤️ Acknowledgements
+## ❤️ Благодарности
 
-- Frappe and ERPNext for the metadata-driven application platform
-- `dinext_projects` for the surrounding project, portfolio, and reporting context this app integrates with
+- Frappe и ERPNext за metadata-driven платформу приложений
+- `dinext_projects` за окружающий контекст проектов, портфелей и отчетности, с которым интегрируется это приложение
 
-## 🗂️ Repository Structure
+## 🗂️ Структура репозитория
 
 ```text
 .
@@ -213,16 +213,16 @@ Project-specific development guidance lives in [`AGENTS.md`](AGENTS.md).
             └── project_stage_gate_roadmap/
 ```
 
-Structure notes:
+Пояснения к структуре:
 
-- `dinext_project_stage_gate/dinext_project_stage_gate/doctype/` contains metadata-backed DocType definitions, controllers, and tests.
-- `dinext_project_stage_gate/stage_gate/` contains the thin Python service/query/API layer for cross-document logic.
-- `dinext_project_stage_gate/public/` contains Project form UI assets and the vendored ECharts stub.
-- `dinext_project_stage_gate/fixtures/` stores exported metadata required to reproduce roles, permissions, workflows, report definitions, and custom fields.
-- `dinext_project_stage_gate/tests/` contains focused Python unit tests for service, query, API, permissions, and report behavior.
-- `tests/` at the repository root contains the isolated JavaScript regression test for the Project form widget behavior.
+- `dinext_project_stage_gate/dinext_project_stage_gate/doctype/` содержит metadata-backed определения DocType, контроллеры и тесты.
+- `dinext_project_stage_gate/stage_gate/` содержит тонкий Python-слой service/query/API для кросс-документной логики.
+- `dinext_project_stage_gate/public/` содержит UI-ассеты формы `Project` и vendored ECharts stub.
+- `dinext_project_stage_gate/fixtures/` хранит экспортированные metadata, необходимые для воспроизведения ролей, прав, workflow, отчетов и custom fields.
+- `dinext_project_stage_gate/tests/` содержит точечные Python unit-тесты для service, query, API, permissions и report-поведения.
+- `tests/` в корне репозитория содержит изолированный JavaScript regression-тест для поведения Project widget.
 
-## 🔗 Flow Chart
+## 🔗 Схема потока
 
 ```mermaid
 flowchart LR
@@ -254,13 +254,13 @@ flowchart LR
   QueryLayer --> RoadmapReport
 ```
 
-The main runtime flow is:
+Основной runtime-поток выглядит так:
 
-1. Metadata DocTypes define the governance model, stage registry, checkpoint levels, and gate templates.
-2. Projects reference governance models and accumulate transactional stage instances and checkpoints.
-3. `stage_gate.query` assembles read-optimized datasets for the Project widget and the roadmap report.
-4. Client-side code renders the Stage-gate chain on the `Project` form and a roadmap chart in the Script Report.
+1. Metadata DocType определяют модель управления, реестр стадий, уровни checkpoint и ExampleCustomer08 gate.
+2. Проекты ссылаются на модели управления и накапливают transactional stage instances и checkpoints.
+3. `stage_gate.query` собирает read-optimized datasets для виджета проекта и roadmap-отчета.
+4. Клиентский код отрисовывает Stage-gate цепочку на форме `Project` и roadmap chart в Script Report.
 
-## License
+## Лицензия
 
 `mit`
