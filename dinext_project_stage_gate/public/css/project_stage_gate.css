@@ -1,9 +1,9 @@
 .stage-gate-widget-root {
-	margin-bottom: 16px;
-	padding: 12px 16px;
-	border: 1px solid var(--border-color);
-	border-radius: var(--border-radius-md);
-	background: var(--card-bg);
+	margin-bottom: 4px;
+	padding: 2px 4px;
+	border: none;
+	border-radius: 8px;
+	background: transparent;
 	animation: stage-gate-fade-in 0.18s ease-out;
 }
 
@@ -33,76 +33,91 @@
 }
 
 .stage-gate-chain {
+	--stage-gate-notch: 14px;
+	--stage-gate-tip: 14px;
 	display: flex;
 	align-items: center;
-	gap: 8px;
-	overflow-x: auto;
-	padding-bottom: 4px;
-}
-
-.stage-gate-connector {
-	flex: 0 0 18px;
-	height: 2px;
-	background: var(--border-color);
+	gap: 1px;
+	width: 100%;
+	min-width: 0;
+	overflow: visible;
 }
 
 .stage-gate-node {
 	display: flex;
-	flex-direction: column;
-	align-items: flex-start;
-	gap: 4px;
-	min-width: 144px;
-	padding: 10px 12px;
-	border-radius: 12px;
-	border: 1px solid var(--border-color);
-	background: var(--subtle-fg);
+	flex: 1 1 0;
+	align-items: center;
+	justify-content: center;
+	min-width: 0;
+	height: 24px;
+	padding: 0 calc(var(--stage-gate-tip) + 4px) 0 calc(var(--stage-gate-notch) + 4px);
+	border: none;
+	background: var(--gray-100);
 	cursor: pointer;
-	transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+	color: var(--gray-900);
+	clip-path: polygon(
+		0 0,
+		calc(100% - var(--stage-gate-tip)) 0,
+		100% 50%,
+		calc(100% - var(--stage-gate-tip)) 100%,
+		0 100%,
+		var(--stage-gate-notch) 50%
+	);
+	transform-origin: left center;
+	transition: background-color 0.16s ease, color 0.16s ease, opacity 0.16s ease;
+	will-change: clip-path, transform, opacity;
+}
+
+.stage-gate-node:first-child {
+	z-index: 1;
+}
+
+.stage-gate-node:only-child {
+	padding: 0 calc(var(--stage-gate-tip) + 4px) 0 calc(var(--stage-gate-notch) + 4px);
 }
 
 .stage-gate-node:hover {
-	transform: translateY(-1px);
-	box-shadow: var(--shadow-sm);
+	opacity: 0.96;
 }
 
 .stage-gate-node-label {
-	font-size: 13px;
-	font-weight: 600;
-	color: var(--text-color);
-}
-
-.stage-gate-node-meta,
-.stage-gate-node-gate {
+	display: block;
+	width: 100%;
+	overflow: hidden;
 	font-size: 11px;
-	color: var(--text-muted);
+	font-weight: 600;
+	line-height: 1;
+	text-align: center;
+	white-space: nowrap;
+	text-overflow: ellipsis;
 }
 
 .stage-gate-status-active {
-	border-color: var(--blue-300);
-	background: var(--blue-50);
+	background: var(--blue-500);
+	color: white;
 }
 
 .stage-gate-status-completed,
 .stage-gate-status-approved {
-	border-color: var(--green-400);
-	background: var(--green-50);
+	background: #1f8f5f;
+	color: white;
 }
 
 .stage-gate-status-waiting-gate,
 .stage-gate-status-planned {
-	border-color: var(--orange-300);
-	background: var(--yellow-50);
+	background: var(--gray-100);
+	color: var(--gray-700);
 }
 
 .stage-gate-status-rejected,
 .stage-gate-status-blocked {
-	border-color: var(--red-400);
-	background: var(--red-50);
+	background: var(--red-500);
+	color: white;
 }
 
 .stage-gate-status-skipped {
-	border-color: var(--gray-300);
-	background: var(--gray-100);
+	background: var(--gray-200);
+	color: var(--gray-700);
 }
 
 @keyframes stage-gate-fade-in {

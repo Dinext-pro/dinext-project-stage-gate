@@ -72,40 +72,38 @@ dinext_project_stage_gate.project.render_chain = function (widget, stages) {
 	}
 
 	const items = stages
-		.map((stage) => {
+		.map((stage, index) => {
 			const status = stage.status || "Planned";
 			const statusLabel = dinext_project_stage_gate.project.translate_status(status);
 			const gateStatus = stage.gate_result || stage.checkpoints?.[0]?.status || "Pending";
 			const gateStatusLabel = dinext_project_stage_gate.project.translate_status(gateStatus);
 			const title = frappe.utils.escape_html(stage.stage_name || stage.stage || __("Unnamed stage"));
 			const stageName = frappe.utils.escape_html(stage.name || "");
-			const tooltip = frappe.utils.escape_html(
-				(stage.checkpoints || [])
-					.map(
-						(checkpoint) =>
-							`${checkpoint.checkpoint_level || __("Gate")}: ${dinext_project_stage_gate.project.translate_status(checkpoint.status)}`
-					)
-					.join(" | ") || gateStatusLabel
-			);
+			const tooltipParts = [
+				`${__("Status")}: ${statusLabel}`,
+				`${__("Gate")}: ${gateStatusLabel}`,
+			];
+			const checkpointSummary = (stage.checkpoints || [])
+				.map(
+					(checkpoint) =>
+						`${checkpoint.checkpoint_level || __("Gate")}: ${dinext_project_stage_gate.project.translate_status(checkpoint.status)}`
+				)
+				.join(" | ");
+			if (checkpointSummary) {
+				tooltipParts.push(checkpointSummary);
+			}
+			const tooltip = frappe.utils.escape_html(tooltipParts.join(" | "));
 
 			return `<button type="button" class="stage-gate-node stage-gate-status-${frappe.scrub(
 				status
-			)}" data-stage-instance="${stageName}" title="${tooltip}">
+			)}" data-stage-instance="${stageName}" title="${tooltip}" aria-label="${title}" style="--stage-order: ${index};">
 				<span class="stage-gate-node-label">${title}</span>
-				<span class="stage-gate-node-meta">${frappe.utils.escape_html(statusLabel)}</span>
-				<span class="stage-gate-node-gate">${frappe.utils.escape_html(gateStatusLabel)}</span>
 			</button>`;
 		})
-		.join('<span class="stage-gate-connector" aria-hidden="true"></span>');
+		.join("");
 
 	widget.html(
-		`<div class="stage-gate-widget-header">
-			<div>
-				<div class="stage-gate-widget-title">${__("Stage-gate")}</div>
-				<div class="stage-gate-widget-subtitle">${__("Current lifecycle status across configured stages.")}</div>
-			</div>
-		</div>
-		<div class="stage-gate-chain">${items}</div>`
+		`<div class="stage-gate-chain">${items}</div>`
 	);
 
 	widget.find("[data-stage-instance]").on("click", function () {
