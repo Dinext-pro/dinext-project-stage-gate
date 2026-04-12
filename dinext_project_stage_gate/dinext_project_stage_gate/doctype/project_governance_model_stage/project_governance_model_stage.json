@@ -13,8 +13,7 @@
   "exit_criteria_text",
   "expected_duration_days",
   "checkpoint_template",
-  "is_skippable",
-  "color_override"
+  "is_skippable"
  ],
  "fields": [
   {
@@ -57,19 +56,14 @@
    "fieldname": "is_skippable",
    "fieldtype": "Check",
    "label": "Is Skippable"
-  },
-  {
-   "fieldname": "color_override",
-   "fieldtype": "Color",
-   "label": "Color Override"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-04-11 19:57:30.781606",
- "modified_by": "ikhmel@dinord.ru",
+ "modified": "2026-04-13 01:19:50.536317",
+ "modified_by": "Administrator",
  "module": "Dinext Project Stage Gate",
  "name": "Project Governance Model Stage",
  "owner": "ikhmel@dinord.ru",
