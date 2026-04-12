@@ -19,6 +19,22 @@ def build_stage_chain(project, governance_model):
 	return chain
 
 
+def prepare_stage_instances(stage_chain):
+	prepared = []
+	for index, row in enumerate(stage_chain, start=1):
+		item = dict(row)
+		sequence = int(item.get("sequence") or index)
+		item["sequence"] = sequence
+		item["name"] = _build_stage_instance_name(item.get("project"), index)
+		prepared.append(item)
+
+	for index, row in enumerate(prepared):
+		row["previous_stage_instance"] = prepared[index - 1]["name"] if index > 0 else None
+		row["next_stage_instance"] = prepared[index + 1]["name"] if index + 1 < len(prepared) else None
+
+	return prepared
+
+
 def compute_project_stage_summary(stage_instances):
 	current = next(
 		(
@@ -46,4 +62,8 @@ def advance_stage_chain(stage_instances, current_stage_name):
 			updated[index + 1]["status"] = "Active"
 		break
 	return updated
+
+
+def _build_stage_instance_name(project, position):
+	return f"{project}-STAGE-{int(position):03d}"
 

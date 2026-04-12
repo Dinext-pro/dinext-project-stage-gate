@@ -65,6 +65,10 @@ frappe.query_reports["Project Stage Gate Roadmap"] = {
 
 frappe.provide("dinext_project_stage_gate.roadmap");
 
+dinext_project_stage_gate.roadmap.translateStatus = function (value) {
+	return value ? __(value) : value;
+};
+
 dinext_project_stage_gate.roadmap.ensure_assets = function () {
 	if (window.echarts) {
 		return Promise.resolve();
@@ -115,7 +119,7 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 			stage.actual_start_date || stage.planned_start_date,
 			stage.actual_end_date || stage.planned_end_date,
 			stage.stage,
-			stage.status,
+			dinext_project_stage_gate.roadmap.translateStatus(stage.status),
 		],
 	}));
 	const gates = payload.gates
@@ -125,7 +129,7 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 			value: [
 				gate.approval_date,
 				categoryIndexByLabel[projectIndex[gate.project]] ?? 0,
-				gate.status,
+				dinext_project_stage_gate.roadmap.translateStatus(gate.status),
 			],
 		}));
 

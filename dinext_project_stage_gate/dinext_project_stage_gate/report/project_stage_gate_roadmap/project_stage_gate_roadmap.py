@@ -1,3 +1,5 @@
+from frappe import _
+
 from dinext_project_stage_gate.stage_gate import query
 
 
@@ -10,17 +12,17 @@ def execute(filters=None):
 	report_summary = [
 		{
 			"value": len(dataset["projects"]),
-			"label": "Projects",
+			"label": _("Projects"),
 			"datatype": "Int",
 		},
 		{
 			"value": len(dataset["stageBars"]),
-			"label": "Stages",
+			"label": _("Stages"),
 			"datatype": "Int",
 		},
 		{
 			"value": len(dataset["gates"]),
-			"label": "Gates",
+			"label": _("Gates"),
 			"datatype": "Int",
 		},
 	]
@@ -32,56 +34,56 @@ def get_columns():
 	return [
 		{
 			"fieldname": "portfolio",
-			"label": "Portfolio",
+			"label": _("Portfolio"),
 			"fieldtype": "Data",
 			"width": 180,
 		},
 		{
 			"fieldname": "project",
-			"label": "Project",
+			"label": _("Project"),
 			"fieldtype": "Link",
 			"options": "Project",
 			"width": 180,
 		},
 		{
 			"fieldname": "project_name",
-			"label": "Project Name",
+			"label": _("Project Name"),
 			"fieldtype": "Data",
 			"width": 220,
 		},
 		{
 			"fieldname": "company",
-			"label": "Company",
+			"label": _("Company"),
 			"fieldtype": "Data",
 			"width": 180,
 		},
 		{
 			"fieldname": "customer",
-			"label": "Customer",
+			"label": _("Customer"),
 			"fieldtype": "Data",
 			"width": 180,
 		},
 		{
 			"fieldname": "project_manager",
-			"label": "Project Manager",
+			"label": _("Project Manager"),
 			"fieldtype": "Data",
 			"width": 180,
 		},
 		{
 			"fieldname": "governance_model",
-			"label": "Governance Model",
+			"label": _("Governance Model"),
 			"fieldtype": "Data",
 			"width": 180,
 		},
 		{
 			"fieldname": "current_stage",
-			"label": "Current Stage",
+			"label": _("Current Stage"),
 			"fieldtype": "Data",
 			"width": 140,
 		},
 		{
 			"fieldname": "stage_gate_status",
-			"label": "Stage-gate Status",
+			"label": _("Stage-gate Status"),
 			"fieldtype": "Data",
 			"width": 140,
 		},

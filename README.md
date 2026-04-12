@@ -12,10 +12,12 @@
 - Transactional-слой исполнения через `Project Stage Instance`, `Project Gate Checkpoint` и `Project Gate Checklist Item`
 - Whitelisted Python API для цепочки стадий проекта и данных roadmap-отчета
 - Виджет на форме `Project`, подключаемый через `doctype_js`, без отдельного HTML custom field
+- Автоматическое создание `Project Stage Instance` при назначении `Project Governance Model` проекту
+- Автоматическое обновление полей `current_stage_instance`, `current_stage`, `stage_gate_status` и `current_gate_result` на `Project`
+- Защита от смены или очистки `governance_model` после того, как stage chain уже создан
 - Script Report дорожной карты Stage-gate с ленивой загрузкой ECharts
 - Ролевая и permission-модель для `Stage Gate Owner`, `Stage Gate Reviewer`, `Stage Gate Approver` и `Project Governance Admin`
 - Отдельный workflow checkpoint, не изменяющий существующий approval-flow `Project`
-- Utility для backfill старых naming-полей и уровней checkpoint в текущую каноническую модель
 
 ## 🚀 Установка
 
@@ -49,8 +51,19 @@ bench --site <site> export-fixtures --app dinext_project_stage_gate
 3. Соберите `Project Governance Model` с упорядоченными строками стадий.
 4. Создайте `Stage Gate Template`, связанные с `Project Gate Checkpoint Level`.
 5. Назначьте модель управления документу `Project`.
+6. Сохраните `Project`.
 
-После этого форма `Project` использует whitelisted API для отрисовки Stage-gate цепочки. Если модель управления не назначена, виджет не показывается.
+После сохранения серверный hook автоматически:
+
+1. Загружает выбранный `Project Governance Model`.
+2. Строит упорядоченную stage chain.
+3. Создает записи `Project Stage Instance` с детерминированными именами вида `<PROJECT>-STAGE-001`.
+4. Заполняет связи `previous_stage_instance` / `next_stage_instance`.
+5. Обновляет summary-поля на `Project`.
+
+Дальше форма `Project` использует whitelisted API для отрисовки уже сохраненной Stage-gate цепочки. Если модель управления не назначена, виджет не показывается.
+
+Если chain уже создан, приложение блокирует смену или очистку `governance_model`, чтобы не потерять согласования и связанные execution-данные.
 
 ### Вызов API
 
@@ -66,15 +79,6 @@ dinext_project_stage_gate.stage_gate.api.get_roadmap_dataset(filters=None)
 ```bash
 bench --site <site> execute dinext_project_stage_gate.stage_gate.api.ping
 bench --site <site> execute dinext_project_stage_gate.stage_gate.api.get_roadmap_dataset
-```
-
-### Запуск utility для backfill Stage-gate
-
-Этот utility создает уровни checkpoint по умолчанию и переносит старые naming-поля и данные уровней checkpoint в текущую модель:
-
-```bash
-bench --site <site> execute \
-  dinext_project_stage_gate.stage_gate.backfill.backfill_checkpoint_levels_and_names
 ```
 
 ## 📦 Технологии
@@ -94,6 +98,11 @@ bench --site <site> execute \
 
 - `required_apps = ["erpnext", "dinext_projects"]`
 - `doctype_js = {"Project": "public/js/project_stage_gate_project.js"}`
+- `doc_events["Project"]`:
+  - `validate` блокирует смену `governance_model` после создания chain
+  - `after_insert` и `on_update` синхронизируют stage chain и summary-поля
+- `doc_events["Project Stage Instance"]`:
+  - `on_update` и `on_trash` пересчитывают summary-поля проекта
 - экспорт fixtures для:
   - `Role`
   - `Custom Field`
@@ -146,8 +155,10 @@ pre-commit install
 - [`AGENTS.md`](AGENTS.md) — проектная доктрина и правила работы с Frappe
 - [`dinext_project_stage_gate/hooks.py`](dinext_project_stage_gate/hooks.py) — bootstrap приложения, fixtures и client script bindings
 - [`dinext_project_stage_gate/stage_gate/api.py`](dinext_project_stage_gate/stage_gate/api.py) — whitelisted API
+- [`dinext_project_stage_gate/stage_gate/project_hooks.py`](dinext_project_stage_gate/stage_gate/project_hooks.py) — orchestration layer для автоматического provisioning и пересчета summary
 - [`dinext_project_stage_gate/stage_gate/query.py`](dinext_project_stage_gate/stage_gate/query.py) — read-model слой для виджета и отчета
-- [`dinext_project_stage_gate/stage_gate/backfill.py`](dinext_project_stage_gate/stage_gate/backfill.py) — helper для миграции канонических имен и checkpoint levels
+- [`dinext_project_stage_gate/stage_gate/service.py`](dinext_project_stage_gate/stage_gate/service.py) — pure business logic для сборки stage chain и project summary
+- [`dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_stage_instance/test_project_stage_instance.py`](dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_stage_instance/test_project_stage_instance.py) — integration-тесты автосоздания и guard-логики
 
 ## ❤️ Благодарности
 
@@ -185,8 +196,8 @@ pre-commit install
     │           └── echarts.min.js
     ├── stage_gate/
     │   ├── api.py
-    │   ├── backfill.py
     │   ├── permissions.py
+    │   ├── project_hooks.py
     │   ├── query.py
     │   ├── service.py
     │   └── validators.py
@@ -216,7 +227,7 @@ pre-commit install
 Пояснения к структуре:
 
 - `dinext_project_stage_gate/dinext_project_stage_gate/doctype/` содержит metadata-backed определения DocType, контроллеры и тесты.
-- `dinext_project_stage_gate/stage_gate/` содержит тонкий Python-слой service/query/API для кросс-документной логики.
+- `dinext_project_stage_gate/stage_gate/` содержит service/query/API и orchestration hooks для кросс-документной Stage-gate логики.
 - `dinext_project_stage_gate/public/` содержит UI-ассеты формы `Project` и vendored ECharts stub.
 - `dinext_project_stage_gate/fixtures/` хранит экспортированные metadata, необходимые для воспроизведения ролей, прав, workflow, отчетов и custom fields.
 - `dinext_project_stage_gate/tests/` содержит точечные Python unit-тесты для service, query, API, permissions и report-поведения.
@@ -232,6 +243,7 @@ flowchart LR
   CheckpointLevels[ProjectGateCheckpointLevel]
   GateTemplate[StageGateTemplate]
   ProjectDoc[Project]
+  ProjectHooks[stage_gate.project_hooks]
   StageInstances[ProjectStageInstance]
   Checkpoints[ProjectGateCheckpoint]
   Checklist[ProjectGateChecklistItem]
@@ -242,11 +254,14 @@ flowchart LR
   GovernanceModel --> ModelStages
   ModelStages --> StageRegistry
   GateTemplate --> CheckpointLevels
-  ProjectDoc --> StageInstances
-  GovernanceModel --> StageInstances
+  ProjectDoc --> ProjectHooks
+  GovernanceModel --> ProjectHooks
+  ProjectHooks --> StageInstances
+  ProjectHooks --> ProjectDoc
   StageInstances --> Checkpoints
   GateTemplate --> Checkpoints
   Checkpoints --> Checklist
+  StageInstances --> ProjectHooks
   StageInstances --> QueryLayer
   Checkpoints --> QueryLayer
   StageRegistry --> QueryLayer
@@ -257,9 +272,10 @@ flowchart LR
 Основной runtime-поток выглядит так:
 
 1. Metadata DocType определяют модель управления, реестр стадий, уровни checkpoint и ExampleCustomer08 gate.
-2. Проекты ссылаются на модели управления и накапливают transactional stage instances и checkpoints.
-3. `stage_gate.query` собирает read-optimized datasets для виджета проекта и roadmap-отчета.
-4. Клиентский код отрисовывает Stage-gate цепочку на форме `Project` и roadmap chart в Script Report.
+2. При сохранении `Project` hook-слой создает и синхронизирует `Project Stage Instance` и summary-поля проекта.
+3. Изменения самих `Project Stage Instance` также пересчитывают summary проекта через `doc_events`.
+4. `stage_gate.query` собирает read-optimized datasets для виджета проекта и roadmap-отчета.
+5. Клиентский код отрисовывает Stage-gate цепочку на форме `Project` и roadmap chart в Script Report.
 
 ## Лицензия
 

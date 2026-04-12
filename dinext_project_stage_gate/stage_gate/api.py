@@ -9,12 +9,14 @@ def ping():
 
 @frappe.whitelist()
 def get_project_stage_chain(project):
+	frappe.log("get_project_stage_chain")
 	_ensure_permission("Project", doc=project)
 	return query.get_project_stage_chain(project)
 
 
 @frappe.whitelist()
 def get_roadmap_dataset(filters=None):
+	frappe.log("get_roadmap_dataset")
 	_ensure_permission("Project")
 	_ensure_permission("Project Stage Instance")
 	return query.get_roadmap_dataset(_coerce_filters(filters))

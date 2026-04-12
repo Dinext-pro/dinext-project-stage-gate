@@ -44,3 +44,18 @@ class TestStageGateService(unittest.TestCase):
 		self.assertEqual(updated[0]["status"], "Completed")
 		self.assertEqual(updated[1]["status"], "Active")
 
+	def test_prepare_stage_instances_assigns_deterministic_names_and_links(self):
+		chain = [
+			{"project": "PROJ-001", "stage": "Idea", "sequence": 1, "status": "Active"},
+			{"project": "PROJ-001", "stage": "Discovery", "sequence": 2, "status": "Planned"},
+		]
+
+		prepared = service.prepare_stage_instances(chain)
+
+		self.assertEqual(prepared[0]["name"], "PROJ-001-STAGE-001")
+		self.assertEqual(prepared[1]["name"], "PROJ-001-STAGE-002")
+		self.assertIsNone(prepared[0]["previous_stage_instance"])
+		self.assertEqual(prepared[0]["next_stage_instance"], "PROJ-001-STAGE-002")
+		self.assertEqual(prepared[1]["previous_stage_instance"], "PROJ-001-STAGE-001")
+		self.assertIsNone(prepared[1]["next_stage_instance"])
+
