@@ -57,7 +57,7 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Status",
-   "options": "Draft\nIn Review\nApproved\nRejected\nWaived\nBlocked"
+   "options": "Draft\nIn Review\nApproved\nRejected\nCanceled"
   },
   {
    "fieldname": "responsible_user",

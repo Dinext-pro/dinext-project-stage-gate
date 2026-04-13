@@ -103,3 +103,15 @@ class TestStageGateQuery(unittest.TestCase):
 		result = query.get_roadmap_dataset()
 
 		self.assertEqual(result["gates"][0]["checkpoint_level"], "Stage Exit")
+
+	@patch("dinext_project_stage_gate.stage_gate.query.frappe.get_all")
+	def test_get_roadmap_dataset_active_only_keeps_legacy_inflight_statuses(self, get_all):
+		get_all.side_effect = [[], [], []]
+
+		query.get_roadmap_dataset({"active_only": 1})
+
+		project_filters = get_all.call_args_list[0].kwargs["filters"]
+		self.assertEqual(
+			project_filters["stage_gate_status"],
+			["in", ["Active", "Waiting Gate", "Blocked", "Rejected"]],
+		)

@@ -33,6 +33,19 @@ class TestStageGateService(unittest.TestCase):
 		self.assertEqual(summary["current_stage"], "Discovery")
 		self.assertEqual(summary["stage_gate_status"], "Active")
 
+	def test_compute_project_stage_summary_prefers_canceled_stage_over_later_planned_stage(self):
+		stages = [
+			{"name": "PSI-001", "stage": "Idea", "status": "Completed", "gate_result": "Approved"},
+			{"name": "PSI-002", "stage": "Discovery", "status": "Canceled", "gate_result": None},
+			{"name": "PSI-003", "stage": "Delivery", "status": "Planned", "gate_result": None},
+		]
+
+		summary = service.compute_project_stage_summary(stages)
+
+		self.assertEqual(summary["current_stage_instance"], "PSI-002")
+		self.assertEqual(summary["current_stage"], "Discovery")
+		self.assertEqual(summary["stage_gate_status"], "Canceled")
+
 	def test_advance_stage_chain_activates_next_stage(self):
 		stages = [
 			{"name": "PSI-001", "stage": "Idea", "status": "Waiting Gate", "gate_result": "Approved"},

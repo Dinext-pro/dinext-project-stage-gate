@@ -30,15 +30,6 @@
   "docstatus": 0,
   "doctype": "Workflow State",
   "icon": "",
-  "modified": "2026-04-11 20:07:32.190438",
-  "name": "Waived",
-  "style": "Info",
-  "workflow_state_name": "Waived"
- },
- {
-  "docstatus": 0,
-  "doctype": "Workflow State",
-  "icon": "",
   "modified": "2026-04-11 20:07:32.275506",
   "name": "Draft",
   "style": "Warning",
@@ -48,9 +39,9 @@
   "docstatus": 0,
   "doctype": "Workflow State",
   "icon": "",
-  "modified": "2026-04-11 20:07:32.280624",
-  "name": "Blocked",
+  "modified": "2026-04-13 02:47:26.593814",
+  "name": "Canceled",
   "style": "Danger",
-  "workflow_state_name": "Blocked"
+  "workflow_state_name": "Canceled"
  }
 ]
