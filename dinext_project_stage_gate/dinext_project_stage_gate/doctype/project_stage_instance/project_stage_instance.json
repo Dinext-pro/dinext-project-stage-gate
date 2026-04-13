@@ -58,7 +58,7 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Status",
-   "options": "Planned\nActive\nWaiting Gate\nApproved\nRejected\nSkipped\nCompleted"
+   "options": "Planned\nActive\nSkipped\nCompleted\nCanceled"
   },
   {
    "fieldname": "planned_start_date",

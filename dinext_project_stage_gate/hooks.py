@@ -59,7 +59,7 @@ fixtures = [
 			[
 				"name",
 				"in",
-				["Submit for Review", "Approve", "Reject", "Block", "Resume Review", "Revise", "Waive"],
+				["Submit for Review", "Approve", "Reject", "Revise", "Cancel"],
 			],
 		],
 	},
@@ -71,8 +71,7 @@ fixtures = [
 				"In Review",
 				"Approved",
 				"Rejected",
-				"Waived",
-				"Blocked",
+				"Canceled",
 			]],
 		],
 	},

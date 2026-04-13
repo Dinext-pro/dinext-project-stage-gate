@@ -104,14 +104,14 @@ class TestProjectStageInstance(FrappeTestCase):
 		stage_instance = frappe.get_doc(
 			"Project Stage Instance", f"{project.name}-STAGE-001"
 		)
-		stage_instance.status = "Waiting Gate"
+		stage_instance.status = "Canceled"
 		stage_instance.gate_result = "Rejected"
 		stage_instance.save(ignore_permissions=True)
 
 		project.reload()
 		self.assertEqual(project.current_stage_instance, stage_instance.name)
 		self.assertEqual(project.current_stage, stage_instance.stage)
-		self.assertEqual(project.stage_gate_status, "Waiting Gate")
+		self.assertEqual(project.stage_gate_status, "Canceled")
 		self.assertEqual(project.current_gate_result, "Rejected")
 
 	def test_cannot_change_governance_model_after_stage_instances_exist(self):

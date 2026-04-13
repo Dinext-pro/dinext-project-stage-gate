@@ -130,6 +130,7 @@
 	color: var(--gray-800);
 }
 
+.stage-gate-status-canceled,
 .stage-gate-status-rejected,
 .stage-gate-status-blocked {
 	background: var(--red-600);

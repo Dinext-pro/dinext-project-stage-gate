@@ -2,6 +2,9 @@ def ping():
 	return "stage-gate-service"
 
 
+CURRENT_STAGE_STATUSES = {"Active", "Canceled", "Waiting Gate", "Rejected", "Blocked"}
+
+
 def build_stage_chain(project, governance_model):
 	stage_rows = sorted(governance_model.get("stages", []), key=lambda row: row.get("sequence") or 0)
 	chain = []
@@ -40,7 +43,7 @@ def compute_project_stage_summary(stage_instances):
 		(
 			row
 			for row in stage_instances
-			if row.get("status") in {"Active", "Waiting Gate", "Rejected", "Blocked"}
+			if row.get("status") in CURRENT_STAGE_STATUSES
 		),
 		stage_instances[-1] if stage_instances else {},
 	)
