@@ -81,6 +81,49 @@ fixtures = [
 			["name", "in", ["Project Stage Gate Roadmap"]],
 		],
 	},
+	# Demo / test reference data (export with: bench --site <site> export-fixtures --app dinext_project_stage_gate)
+	{
+		"doctype": "Project Stage",
+		"filters": [
+			["stage_code", "in", ["IDEA", "INITIATION", "IMPLEMENTATION", "CLOSURE"]],
+		],
+	},
+	{
+		"doctype": "Project Gate Checkpoint Level",
+		"filters": [
+			[
+				"name",
+				"in",
+				[
+					"Портфельный комитет",
+					"Проектный комитет",
+					"Рабочая группа",
+					"Руководитель проекта",
+				],
+			],
+		],
+	},
+	{
+		"doctype": "Stage Gate Template",
+		"filters": [
+			[
+				"name",
+				"in",
+				[
+					"Шаблон гейта — Идея (портфель)",
+					"Шаблон гейта — Инициирование (проектный комитет)",
+					"Шаблон гейта — Реализация (рабочая группа)",
+					"Шаблон гейта — Завершение (руководитель проекта)",
+				],
+			],
+		],
+	},
+	{
+		"doctype": "Project Governance Model",
+		"filters": [
+			["name", "=", "Тестовая модель управления"],
+		],
+	},
 ]
 
 # Apps

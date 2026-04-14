@@ -48,17 +48,18 @@
   },
   {
    "fieldname": "evidence_type_hint",
-   "fieldtype": "Select",
+   "fieldtype": "Link",
    "label": "Evidence Type Hint",
-   "options": "Task\nIssue\nFile\nMeeting Notes\nAny Document"
+   "link_filters": "[[\"DocType\",\"name\",\"in\",[\"Task\",\"Issue\",\"File\",\"Meeting Notes\",\"Project Deliverable\"]]]",
+   "options": "DocType"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-04-11 19:57:11.257353",
- "modified_by": "ikhmel@dinord.ru",
+ "modified": "2026-04-14 02:25:59.057067",
+ "modified_by": "Administrator",
  "module": "Dinext Project Stage Gate",
  "name": "Stage Gate Template Item",
  "owner": "ikhmel@dinord.ru",

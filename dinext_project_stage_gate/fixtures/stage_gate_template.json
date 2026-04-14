@@ -1,0 +1,189 @@
+[
+ {
+  "applies_to_stage": "Идея",
+  "checkpoint_level": "Портфельный комитет",
+  "docstatus": 0,
+  "doctype": "Stage Gate Template",
+  "enabled": 1,
+  "items": [
+   {
+    "checklist_item": 1,
+    "default_responsible_role": "Dinext_Idea Manager",
+    "description": "Краткое описание проблемы, гипотезы ценности и ожидаемого эффекта",
+    "evidence_type_hint": "File",
+    "is_mandatory": 1,
+    "parent": "Шаблон гейта — Идея (портфель)",
+    "parentfield": "items",
+    "parenttype": "Stage Gate Template",
+    "title": "Обоснование ценности инициативы"
+   },
+   {
+    "checklist_item": 1,
+    "default_responsible_role": "Stage Gate Owner",
+    "description": "Ориентировочные сроки и вовлечённые роли",
+    "evidence_type_hint": "Meeting Notes",
+    "is_mandatory": 0,
+    "parent": "Шаблон гейта — Идея (портфель)",
+    "parentfield": "items",
+    "parenttype": "Stage Gate Template",
+    "title": "Предварительная оценка ресурсов"
+   },
+   {
+    "checklist_item": 1,
+    "default_responsible_role": "Stage Gate Approver",
+    "description": "Решение о включении в портфель приоритетных инициатив",
+    "evidence_type_hint": "Meeting Notes",
+    "is_mandatory": 1,
+    "parent": "Шаблон гейта — Идея (портфель)",
+    "parentfield": "items",
+    "parenttype": "Stage Gate Template",
+    "title": "Согласование с портфелем"
+   }
+  ],
+  "modified": "2026-04-14 02:26:33.990000",
+  "name": "Шаблон гейта — Идея (портфель)"
+ },
+ {
+  "applies_to_stage": "Инициирование",
+  "checkpoint_level": "Проектный комитет",
+  "docstatus": 0,
+  "doctype": "Stage Gate Template",
+  "enabled": 1,
+  "items": [
+   {
+    "checklist_item": 1,
+    "default_responsible_role": "Dinext_Project_Manager",
+    "description": "Цели, границы, ключевые заинтересованные стороны",
+    "evidence_type_hint": "File",
+    "is_mandatory": 1,
+    "parent": "Шаблон гейта — Инициирование (проектный комитет)",
+    "parentfield": "items",
+    "parenttype": "Stage Gate Template",
+    "title": "Устав проекта / charter"
+   },
+   {
+    "checklist_item": 1,
+    "default_responsible_role": "Stage Gate Owner",
+    "description": "Согласованный бюджет и вехи старта",
+    "evidence_type_hint": "Task",
+    "is_mandatory": 1,
+    "parent": "Шаблон гейта — Инициирование (проектный комитет)",
+    "parentfield": "items",
+    "parenttype": "Stage Gate Template",
+    "title": "Бюджет и план первой волны"
+   },
+   {
+    "checklist_item": 1,
+    "default_responsible_role": "Stage Gate Reviewer",
+    "description": "Топ-риски и меры на период инициирования",
+    "evidence_type_hint": "Task",
+    "is_mandatory": 1,
+    "parent": "Шаблон гейта — Инициирование (проектный комитет)",
+    "parentfield": "items",
+    "parenttype": "Stage Gate Template",
+    "title": "Реестр рисков на входе"
+   }
+  ],
+  "modified": "2026-04-14 02:27:26.668886",
+  "name": "Шаблон гейта — Инициирование (проектный комитет)"
+ },
+ {
+  "applies_to_stage": "Реализация",
+  "checkpoint_level": "Рабочая группа",
+  "docstatus": 0,
+  "doctype": "Stage Gate Template",
+  "enabled": 1,
+  "items": [
+   {
+    "checklist_item": 1,
+    "default_responsible_role": "Stage Gate Owner",
+    "description": "Выполнение scope текущего этапа, отклонения",
+    "evidence_type_hint": "Task",
+    "is_mandatory": 1,
+    "parent": "Шаблон гейта — Реализация (рабочая группа)",
+    "parentfield": "items",
+    "parenttype": "Stage Gate Template",
+    "title": "Статус поставки итерации"
+   },
+   {
+    "checklist_item": 1,
+    "default_responsible_role": "Stage Gate Reviewer",
+    "description": "Открытые дефекты, блокеры, план устранения",
+    "evidence_type_hint": "Issue",
+    "is_mandatory": 1,
+    "parent": "Шаблон гейта — Реализация (рабочая группа)",
+    "parentfield": "items",
+    "parenttype": "Stage Gate Template",
+    "title": "Качество и дефекты"
+   },
+   {
+    "checklist_item": 1,
+    "default_responsible_role": "Dinext_Project_Manager",
+    "description": "Ссылка на демо, отчёт, актуальную документацию",
+    "evidence_type_hint": "Meeting Notes",
+    "is_mandatory": 0,
+    "parent": "Шаблон гейта — Реализация (рабочая группа)",
+    "parentfield": "items",
+    "parenttype": "Stage Gate Template",
+    "title": "Демо / артефакты спринта"
+   },
+   {
+    "checklist_item": 1,
+    "default_responsible_role": "Stage Gate Approver",
+    "description": "Подтверждение рабочей группой",
+    "evidence_type_hint": "Project Deliverable",
+    "is_mandatory": 1,
+    "parent": "Шаблон гейта — Реализация (рабочая группа)",
+    "parentfield": "items",
+    "parenttype": "Stage Gate Template",
+    "title": "Готовность к следующей волне работ"
+   }
+  ],
+  "modified": "2026-04-14 02:28:28.088239",
+  "name": "Шаблон гейта — Реализация (рабочая группа)"
+ },
+ {
+  "applies_to_stage": "Завершение",
+  "checkpoint_level": "Руководитель проекта",
+  "docstatus": 0,
+  "doctype": "Stage Gate Template",
+  "enabled": 1,
+  "items": [
+   {
+    "checklist_item": 1,
+    "default_responsible_role": "Stage Gate Approver",
+    "description": "Подписанные акты / подтверждение в системе",
+    "evidence_type_hint": "File",
+    "is_mandatory": 1,
+    "parent": "Шаблон гейта — Завершение (руководитель проекта)",
+    "parentfield": "items",
+    "parenttype": "Stage Gate Template",
+    "title": "Приёмка результатов заказчиком"
+   },
+   {
+    "checklist_item": 1,
+    "default_responsible_role": "Dinext_Project_Manager",
+    "description": "Нет блокирующих задач, бюджет закрыт",
+    "evidence_type_hint": "Task",
+    "is_mandatory": 1,
+    "parent": "Шаблон гейта — Завершение (руководитель проекта)",
+    "parentfield": "items",
+    "parenttype": "Stage Gate Template",
+    "title": "Закрытие финансов и открытых задач"
+   },
+   {
+    "checklist_item": 1,
+    "default_responsible_role": "Stage Gate Owner",
+    "description": "Краткий разбор уроков и рекомендаций",
+    "evidence_type_hint": "Meeting Notes",
+    "is_mandatory": 0,
+    "parent": "Шаблон гейта — Завершение (руководитель проекта)",
+    "parentfield": "items",
+    "parenttype": "Stage Gate Template",
+    "title": "Lessons learned"
+   }
+  ],
+  "modified": "2026-04-14 02:20:22.782564",
+  "name": "Шаблон гейта — Завершение (руководитель проекта)"
+ }
+]
