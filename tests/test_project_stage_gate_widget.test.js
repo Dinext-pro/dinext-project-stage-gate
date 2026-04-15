@@ -61,6 +61,7 @@ function loadWidgetScript() {
 	const context = {
 		__,
 		console,
+		document: {},
 		frappe: {
 			provide(path) {
 				const segments = path.split(".");
@@ -93,7 +94,12 @@ function loadWidgetScript() {
 			set_route() {},
 		},
 		dinext_project_stage_gate: {},
-		$: () => new FakeWidget(),
+		$: (value) => {
+			if (value === context.document) {
+				return { on() {} };
+			}
+			return new FakeWidget();
+		},
 	};
 
 	vm.runInNewContext(script, context);
@@ -205,10 +211,18 @@ test("render_chain translates displayed statuses but preserves raw status class 
 			gate_result: "Approved",
 			checkpoints: [
 				{
+					name: "PGC-001",
 					checkpoint_level: "Stage Exit",
 					status: "In Review",
 				},
 			],
+		},
+		{
+			name: "PSI-002",
+			stage: "Business Case",
+			stage_name: "Business Case",
+			status: "Active",
+			checkpoints: [],
 		},
 	]);
 
@@ -216,4 +230,45 @@ test("render_chain translates displayed statuses but preserves raw status class 
 	assert.match(state.lastHtml, /Ожидание гейта/);
 	assert.match(state.lastHtml, /Одобрено/);
 	assert.match(state.lastHtml, /Stage Exit: На рассмотрении/);
+	assert.match(state.lastHtml, /stage-gate-checkpoint/);
+	assert.match(state.lastHtml, /data-checkpoint="PGC-001"/);
+});
+
+test("render_chain inserts checkpoint diamonds including after last stage", () => {
+	const { project, state } = loadWidgetScript();
+	const widget = {
+		length: 1,
+		html(value) {
+			state.lastHtml = value;
+		},
+		find() {
+			return { on() {} };
+		},
+	};
+
+	project.render_chain(widget, [
+		{
+			name: "PSI-100",
+			stage: "Discovery",
+			stage_name: "Discovery",
+			status: "Active",
+			checkpoints: [
+				{ name: "PGC-100", checkpoint_level: "Gate A", status: "Draft" },
+				{ name: "PGC-101", checkpoint_level: "Gate B", status: "Approved" },
+			],
+		},
+		{
+			name: "PSI-200",
+			stage: "Delivery",
+			stage_name: "Delivery",
+			status: "Planned",
+			checkpoints: [{ name: "PGC-200", checkpoint_level: "Final", status: "Draft" }],
+		},
+	]);
+
+	const checkpoints = state.lastHtml.match(/data-checkpoint="/g) || [];
+	assert.equal(checkpoints.length, 3);
+	assert.match(state.lastHtml, /data-checkpoint="PGC-100"/);
+	assert.match(state.lastHtml, /data-checkpoint="PGC-101"/);
+	assert.match(state.lastHtml, /data-checkpoint="PGC-200"/);
 });

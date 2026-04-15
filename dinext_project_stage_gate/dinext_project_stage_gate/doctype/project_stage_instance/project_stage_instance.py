@@ -3,7 +3,12 @@
 
 from frappe.model.document import Document
 
+from dinext_project_stage_gate.stage_gate.checkpoint_provision import (
+	provision_checkpoint_for_stage_instance,
+)
+
 
 class ProjectStageInstance(Document):
-	pass
+	def after_insert(self):
+		provision_checkpoint_for_stage_instance(self)
 

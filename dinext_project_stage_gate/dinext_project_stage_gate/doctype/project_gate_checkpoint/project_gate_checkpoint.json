@@ -1,7 +1,7 @@
 {
  "actions": [],
  "allow_rename": 1,
- "autoname": "prompt",
+ "autoname": "format: GATE-{project}-{stage_instance}",
  "creation": "2026-04-11 20:04:25.980692",
  "description": "Checkpoint approval for a project stage.",
  "doctype": "DocType",
@@ -13,6 +13,7 @@
   "gate_template",
   "checkpoint_level",
   "status",
+  "gate_due_date",
   "responsible_user",
   "approver_user",
   "approver_role",
@@ -93,16 +94,21 @@
    "label": "Checklist",
    "options": "Project Gate Checklist Item",
    "reqd": 1
+  },
+  {
+   "fieldname": "gate_due_date",
+   "fieldtype": "Date",
+   "label": "Gate Due Date"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-04-11 20:04:25.980692",
- "modified_by": "ikhmel@dinord.ru",
+ "modified": "2026-04-16 01:05:47.765240",
+ "modified_by": "Administrator",
  "module": "Dinext Project Stage Gate",
  "name": "Project Gate Checkpoint",
- "naming_rule": "Set by user",
+ "naming_rule": "Expression",
  "owner": "ikhmel@dinord.ru",
  "permissions": [
   {

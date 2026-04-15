@@ -17,8 +17,6 @@
   "planned_end_date",
   "actual_start_date",
   "actual_end_date",
-  "gate_due_date",
-  "gate_result",
   "previous_stage_instance",
   "next_stage_instance"
  ],
@@ -81,17 +79,6 @@
    "label": "Actual End Date"
   },
   {
-   "fieldname": "gate_due_date",
-   "fieldtype": "Date",
-   "label": "Gate Due Date"
-  },
-  {
-   "fieldname": "gate_result",
-   "fieldtype": "Select",
-   "label": "Gate Result",
-   "options": "Pending\nApproved\nRejected\nWaived"
-  },
-  {
    "fieldname": "previous_stage_instance",
    "fieldtype": "Link",
    "label": "Previous Stage Instance",
@@ -107,8 +94,8 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-04-11 20:00:05.175674",
- "modified_by": "ikhmel@dinord.ru",
+ "modified": "2026-04-16 01:05:03.771005",
+ "modified_by": "Administrator",
  "module": "Dinext Project Stage Gate",
  "name": "Project Stage Instance",
  "naming_rule": "Set by user",

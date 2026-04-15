@@ -48,8 +48,8 @@ bench --site <site> export-fixtures --app dinext_project_stage_gate
 
 1. Создайте или обновите записи `Project Stage`.
 2. Создайте записи `Project Gate Checkpoint Level` для нужных уровней согласования.
-3. Соберите `Project Governance Model` с упорядоченными строками стадий.
-4. Создайте `Stage Gate Template`, связанные с `Project Gate Checkpoint Level`.
+3. Создайте `Stage Gate Template`, связанные с `Project Gate Checkpoint Level`.
+4. Соберите `Project Governance Model` с упорядоченными строками стадий; при необходимости укажите в каждой строке поле **Checkpoint Template** (ссылка на `Stage Gate Template`).
 5. Назначьте модель управления документу `Project`.
 6. Сохраните `Project`.
 
@@ -60,6 +60,8 @@ bench --site <site> export-fixtures --app dinext_project_stage_gate
 3. Создает записи `Project Stage Instance` с детерминированными именами вида `<PROJECT>-STAGE-001`.
 4. Заполняет связи `previous_stage_instance` / `next_stage_instance`.
 5. Обновляет summary-поля на `Project`.
+
+Для каждой созданной `Project Stage Instance`, у которой в соответствующей строке модели управления задан **Checkpoint Template**, создаётся документ `Project Gate Checkpoint` с чек-листом, скопированным из шаблона (имя вида `<PROJECT>-STAGE-001-GATE`). Если шаблон в строке не указан, чекпоинт не создаётся.
 
 Дальше форма `Project` использует whitelisted API для отрисовки уже сохраненной Stage-gate цепочки. Если модель управления не назначена, виджет не показывается.
 
