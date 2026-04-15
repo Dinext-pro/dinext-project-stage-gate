@@ -79,45 +79,74 @@ dinext_project_stage_gate.project.render_chain = function (widget, stages) {
 		return;
 	}
 
-	const items = stages
-		.map((stage, index) => {
-			const status = stage.status || "Planned";
-			const statusLabel = dinext_project_stage_gate.project.translate_status(status);
-			const gateStatus = stage.gate_result || stage.checkpoints?.[0]?.status || "Pending";
-			const gateStatusLabel = dinext_project_stage_gate.project.translate_status(gateStatus);
-			const title = frappe.utils.escape_html(stage.stage_name || stage.stage || __("Unnamed stage"));
-			const stageName = frappe.utils.escape_html(stage.name || "");
-			const tooltipParts = [
-				`${__("Status")}: ${statusLabel}`,
-				`${__("Gate")}: ${gateStatusLabel}`,
-			];
-			const checkpointSummary = (stage.checkpoints || [])
-				.map(
-					(checkpoint) =>
-						`${checkpoint.checkpoint_level || __("Gate")}: ${dinext_project_stage_gate.project.translate_status(checkpoint.status)}`
-				)
-				.join(" | ");
-			if (checkpointSummary) {
-				tooltipParts.push(checkpointSummary);
-			}
-			const tooltip = frappe.utils.escape_html(tooltipParts.join(" | "));
+	const items = [];
+	let orderIndex = 0;
 
-			return `<button type="button" class="stage-gate-node stage-gate-status-${frappe.scrub(
-				status
-			)}" data-stage-instance="${stageName}" title="${tooltip}" aria-label="${title}" style="--stage-order: ${index};">
-				<span class="stage-gate-node-label">${title}</span>
-			</button>`;
-		})
-		.join("");
+	stages.forEach((stage, index) => {
+		const status = stage.status || "Planned";
+		const statusLabel = dinext_project_stage_gate.project.translate_status(status);
+		const gateStatus = stage.gate_result || stage.checkpoints?.[0]?.status || "Pending";
+		const gateStatusLabel = dinext_project_stage_gate.project.translate_status(gateStatus);
+		const title = frappe.utils.escape_html(stage.stage_name || stage.stage || __("Unnamed stage"));
+		const stageName = frappe.utils.escape_html(stage.name || "");
+		const tooltipParts = [`${__("Status")}: ${statusLabel}`, `${__("Gate")}: ${gateStatusLabel}`];
+		const checkpointSummary = (stage.checkpoints || [])
+			.map(
+				(checkpoint) =>
+					`${checkpoint.checkpoint_level || __("Gate")}: ${dinext_project_stage_gate.project.translate_status(checkpoint.status)}`
+			)
+			.join(" | ");
+		if (checkpointSummary) {
+			tooltipParts.push(checkpointSummary);
+		}
+		const tooltip = frappe.utils.escape_html(tooltipParts.join(" | "));
+
+		items.push(`<button type="button" class="stage-gate-node stage-gate-status-${frappe.scrub(
+			status
+		)}" data-stage-instance="${stageName}" title="${tooltip}" aria-label="${title}" style="--stage-order: ${orderIndex};">
+			<span class="stage-gate-node-label">${title}</span>
+		</button>`);
+		orderIndex += 1;
+
+		(stage.checkpoints || []).forEach((checkpoint) => {
+			const checkpointName = frappe.utils.escape_html(checkpoint.name || "");
+			if (!checkpointName) {
+				return;
+			}
+			const checkpointStatus = checkpoint.status || "Draft";
+			const checkpointLevel = checkpoint.checkpoint_level || __("Gate");
+			const checkpointStatusLabel = dinext_project_stage_gate.project.translate_status(checkpointStatus);
+			const checkpointTooltip = frappe.utils.escape_html(
+				`${checkpointLevel}: ${checkpointStatusLabel}`
+			);
+			const checkpointLabel = frappe.utils.escape_html(
+				`${checkpointLevel} (${checkpointStatusLabel})`
+			);
+
+			items.push(`<button type="button" class="stage-gate-checkpoint stage-gate-cp-status-${frappe.scrub(
+				checkpointStatus
+			)}" data-checkpoint="${checkpointName}" title="${checkpointTooltip}" aria-label="${checkpointLabel}" style="--stage-order: ${orderIndex};">
+				<span class="stage-gate-checkpoint-dot" aria-hidden="true"></span>
+			</button>`);
+			orderIndex += 1;
+		});
+	});
 
 	widget.html(
-		`<div class="stage-gate-chain">${items}</div>`
+		`<div class="stage-gate-chain">${items.join("")}</div>`
 	);
 
 	widget.find("[data-stage-instance]").on("click", function () {
 		const stageInstance = $(this).data("stage-instance");
 		if (stageInstance) {
 			frappe.set_route("Form", "Project Stage Instance", stageInstance);
+		}
+	});
+
+	widget.find("[data-checkpoint]").on("click", function () {
+		const checkpointName = $(this).data("checkpoint");
+		if (checkpointName) {
+			frappe.set_route("Form", "Project Gate Checkpoint", checkpointName);
 		}
 	});
 };

@@ -135,7 +135,58 @@ class TestProjectStageInstance(FrappeTestCase):
 			project.flags.ignore_mandatory = True
 			project.save()
 
-	def _make_governance_model(self, label="Primary"):
+	def test_provision_checkpoints_from_governance_checkpoint_template(self):
+		suffix = frappe.generate_hash(length=6)
+		level = self._make_checkpoint_level(f"CP Level {suffix}")
+		template = self._make_stage_gate_template(
+			f"Gate Tpl {suffix}",
+			level.name,
+			["First criterion", "Second criterion"],
+		)
+		governance_model = self._make_governance_model(
+			label="CP", checkpoint_template=template.name
+		)
+		project = self._make_project(governance_model=governance_model.name)
+
+		checkpoints = frappe.get_all(
+			"Project Gate Checkpoint",
+			filters={"project": project.name},
+			fields=["name", "stage_instance", "gate_template", "checkpoint_level"],
+			order_by="name asc",
+		)
+		self.assertEqual(len(checkpoints), 2)
+		for row in checkpoints:
+			self.assertEqual(row.gate_template, template.name)
+			self.assertEqual(row.checkpoint_level, level.name)
+			self.assertTrue(row.name.endswith("-GATE"))
+
+		for row in checkpoints:
+			doc = frappe.get_doc("Project Gate Checkpoint", row.name)
+			self.assertEqual(len(doc.checklist), 2)
+			titles = [c.item_title for c in doc.checklist]
+			self.assertEqual(titles, ["First criterion", "Second criterion"])
+
+	def _make_checkpoint_level(self, name):
+		return frappe.get_doc(
+			{
+				"doctype": "Project Gate Checkpoint Level",
+				"name": name,
+				"enabled": 1,
+			}
+		).insert(ignore_permissions=True)
+
+	def _make_stage_gate_template(self, name, checkpoint_level, item_titles):
+		return frappe.get_doc(
+			{
+				"doctype": "Stage Gate Template",
+				"name": name,
+				"checkpoint_level": checkpoint_level,
+				"enabled": 1,
+				"items": [{"title": t, "is_mandatory": 1} for t in item_titles],
+			}
+		).insert(ignore_permissions=True)
+
+	def _make_governance_model(self, label="Primary", checkpoint_template=None):
 		suffix = frappe.generate_hash(length=6)
 		stage_docs = [
 			self._make_project_stage(f"{label} Idea {suffix}", f"{label[:3].upper()}-IDEA-{suffix}"),
@@ -145,16 +196,21 @@ class TestProjectStageInstance(FrappeTestCase):
 		]
 		self.stage_names = [doc.name for doc in stage_docs]
 
+		stages = [
+			{"stage": stage_docs[0].name, "sequence": 1},
+			{"stage": stage_docs[1].name, "sequence": 2},
+		]
+		if checkpoint_template:
+			for row in stages:
+				row["checkpoint_template"] = checkpoint_template
+
 		return frappe.get_doc(
 			{
 				"doctype": "Project Governance Model",
 				"name": f"{label} Model {suffix}",
 				"company": self.company,
 				"enabled": 1,
-				"stages": [
-					{"stage": stage_docs[0].name, "sequence": 1},
-					{"stage": stage_docs[1].name, "sequence": 2},
-				],
+				"stages": stages,
 			}
 		).insert(ignore_permissions=True)
 
