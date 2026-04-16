@@ -18,7 +18,7 @@ def build_stage_chain(project, governance_model):
 				"governance_model": governance_model.get("name"),
 				"stage": row.get("stage"),
 				"sequence": row.get("sequence") or index,
-				"status": "Active" if index == 1 else "Planned",
+				#"status": "Active" if index == 1 else "Planned",
 				"gate_result": None,
 			}
 		)

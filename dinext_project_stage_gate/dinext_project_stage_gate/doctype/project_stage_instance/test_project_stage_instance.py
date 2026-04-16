@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
+from frappe.utils import getdate
 
 
 class TestProjectStageInstance(FrappeTestCase):
@@ -20,6 +21,7 @@ class TestProjectStageInstance(FrappeTestCase):
 		)
 		self.deletion_guard.start()
 		self.company = frappe.get_all("Company", fields=["name"], limit=1)[0].name
+		self._ensure_company_default_holiday_list()
 
 	def tearDown(self):
 		self.deletion_guard.stop()
@@ -115,6 +117,35 @@ class TestProjectStageInstance(FrappeTestCase):
 		self.assertEqual(project.current_stage, stage_instance.stage)
 		self.assertEqual(project.stage_gate_status, "Canceled")
 		self.assertEqual(project.current_gate_result, "Rejected")
+
+	def test_is_skippable_synced_from_governance_model_stages(self):
+		governance_model = self._make_governance_model(
+			label="Skippable", stage_is_skippable=[1, 0]
+		)
+		project = self._make_project(governance_model=governance_model.name)
+
+		s1 = frappe.get_doc("Project Stage Instance", f"{project.name}-STAGE-001")
+		s2 = frappe.get_doc("Project Stage Instance", f"{project.name}-STAGE-002")
+		self.assertEqual(int(s1.is_skippable or 0), 1)
+		self.assertEqual(int(s2.is_skippable or 0), 0)
+
+	def test_is_skippable_updates_when_governance_stage_row_changes(self):
+		governance_model = self._make_governance_model(
+			label="SkippableResync", stage_is_skippable=[0, 0]
+		)
+		project = self._make_project(governance_model=governance_model.name)
+
+		s2 = frappe.get_doc("Project Stage Instance", f"{project.name}-STAGE-002")
+		self.assertEqual(int(s2.is_skippable or 0), 0)
+
+		gm = frappe.get_doc("Project Governance Model", governance_model.name)
+		gm.stages[1].is_skippable = 1
+		gm.save(ignore_permissions=True)
+
+		s2.reload()
+		s2.save(ignore_permissions=True)
+		s2.reload()
+		self.assertEqual(int(s2.is_skippable or 0), 1)
 
 	def test_change_governance_model_requires_confirmation(self):
 		original_model = self._make_governance_model()
@@ -215,6 +246,81 @@ class TestProjectStageInstance(FrappeTestCase):
 		)
 		self.assertTrue(all(row.status == "Canceled" for row in v1_rows))
 
+	def test_project_planned_dates_use_calendar_and_working_days(self):
+		suffix = frappe.generate_hash(length=6)
+		holiday_list = frappe.get_doc(
+			{
+				"doctype": "Holiday List",
+				"holiday_list_name": f"TEST-SG-HL-{suffix}",
+				"from_date": "2026-01-01",
+				"to_date": "2026-02-28",
+				"holidays": [{"holiday_date": "2026-01-05", "description": "Test holiday"}],
+			}
+		).insert(ignore_permissions=True)
+
+		governance_model = self._make_governance_model(
+			label="Dates", stage_durations=[3, 5]
+		)
+		project = self._make_project(
+			governance_model=governance_model.name,
+			expected_start_date="2026-01-05",
+			holiday_list=holiday_list.name,
+		)
+
+		s1 = frappe.get_doc("Project Stage Instance", f"{project.name}-STAGE-001")
+		s2 = frappe.get_doc("Project Stage Instance", f"{project.name}-STAGE-002")
+
+		self.assertEqual(getdate(s1.planned_start_date), getdate("2026-01-06"))
+		self.assertEqual(getdate(s1.planned_end_date), getdate("2026-01-08"))
+		self.assertEqual(getdate(s2.planned_start_date), getdate("2026-01-09"))
+		self.assertEqual(getdate(s2.planned_end_date), getdate("2026-01-15"))
+
+	def test_project_stage_instance_actual_dates_on_active_and_completed(self):
+		governance_model = self._make_governance_model(label="Actual")
+		project = self._make_project(governance_model=governance_model.name)
+		stage = frappe.get_doc("Project Stage Instance", f"{project.name}-STAGE-002")
+
+		fixed_today = "2026-03-20"
+		with patch(
+			"dinext_project_stage_gate.dinext_project_stage_gate.doctype.project_stage_instance.project_stage_instance.today",
+			return_value=fixed_today,
+		):
+			stage.status = "Active"
+			stage.save(ignore_permissions=True)
+
+		stage.reload()
+		self.assertEqual(getdate(stage.actual_start_date), getdate(fixed_today))
+		self.assertFalse(stage.actual_end_date)
+
+		with patch(
+			"dinext_project_stage_gate.dinext_project_stage_gate.doctype.project_stage_instance.project_stage_instance.today",
+			return_value=fixed_today,
+		):
+			stage.status = "Completed"
+			stage.save(ignore_permissions=True)
+
+		stage.reload()
+		self.assertEqual(getdate(stage.actual_start_date), getdate(fixed_today))
+		self.assertEqual(getdate(stage.actual_end_date), getdate(fixed_today))
+
+	def test_project_stage_instance_actual_dates_respect_manual_values(self):
+		governance_model = self._make_governance_model(label="ManualActual")
+		project = self._make_project(governance_model=governance_model.name)
+		stage = frappe.get_doc("Project Stage Instance", f"{project.name}-STAGE-001")
+
+		stage.actual_start_date = "2026-01-10"
+		stage.actual_end_date = "2026-01-20"
+		with patch(
+			"dinext_project_stage_gate.dinext_project_stage_gate.doctype.project_stage_instance.project_stage_instance.today",
+			return_value="2026-03-01",
+		):
+			stage.status = "Completed"
+			stage.save(ignore_permissions=True)
+
+		stage.reload()
+		self.assertEqual(getdate(stage.actual_start_date), getdate("2026-01-10"))
+		self.assertEqual(getdate(stage.actual_end_date), getdate("2026-01-20"))
+
 	def test_provision_checkpoints_from_governance_checkpoint_template(self):
 		suffix = frappe.generate_hash(length=6)
 		level = self._make_checkpoint_level(f"CP Level {suffix}")
@@ -267,7 +373,13 @@ class TestProjectStageInstance(FrappeTestCase):
 			}
 		).insert(ignore_permissions=True)
 
-	def _make_governance_model(self, label="Primary", checkpoint_template=None):
+	def _make_governance_model(
+		self,
+		label="Primary",
+		checkpoint_template=None,
+		stage_durations=None,
+		stage_is_skippable=None,
+	):
 		suffix = frappe.generate_hash(length=6)
 		stage_docs = [
 			self._make_project_stage(f"{label} Idea {suffix}", f"{label[:3].upper()}-IDEA-{suffix}"),
@@ -281,6 +393,14 @@ class TestProjectStageInstance(FrappeTestCase):
 			{"stage": stage_docs[0].name, "sequence": 1},
 			{"stage": stage_docs[1].name, "sequence": 2},
 		]
+		if stage_durations:
+			for idx, row in enumerate(stages):
+				if idx < len(stage_durations) and stage_durations[idx] is not None:
+					row["expected_duration_days"] = stage_durations[idx]
+		if stage_is_skippable:
+			for idx, row in enumerate(stages):
+				if idx < len(stage_is_skippable) and stage_is_skippable[idx] is not None:
+					row["is_skippable"] = int(stage_is_skippable[idx])
 		if checkpoint_template:
 			for row in stages:
 				row["checkpoint_template"] = checkpoint_template
@@ -305,7 +425,12 @@ class TestProjectStageInstance(FrappeTestCase):
 			}
 		).insert(ignore_permissions=True)
 
-	def _make_project(self, governance_model=None):
+	def _make_project(
+		self,
+		governance_model=None,
+		expected_start_date=None,
+		holiday_list=None,
+	):
 		project = frappe.get_doc(
 			{
 				"doctype": "Project",
@@ -316,6 +441,25 @@ class TestProjectStageInstance(FrappeTestCase):
 				"governance_model": governance_model,
 			}
 		)
+		if expected_start_date:
+			project.expected_start_date = expected_start_date
+		if holiday_list:
+			project.holiday_list = holiday_list
 		project.insert(ignore_permissions=True, ignore_mandatory=True)
 		return project
+
+	def _ensure_company_default_holiday_list(self):
+		if frappe.db.get_value("Company", self.company, "default_holiday_list"):
+			return
+		suffix = frappe.generate_hash(length=6)
+		hl = frappe.get_doc(
+			{
+				"doctype": "Holiday List",
+				"holiday_list_name": f"TEST-SG-DEFAULT-HL-{suffix}",
+				"from_date": "2020-01-01",
+				"to_date": "2035-12-31",
+				"holidays": [],
+			}
+		).insert(ignore_permissions=True)
+		frappe.db.set_value("Company", self.company, "default_holiday_list", hl.name)
 
