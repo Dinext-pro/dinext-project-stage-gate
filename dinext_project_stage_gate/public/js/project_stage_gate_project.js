@@ -2,15 +2,53 @@ frappe.provide("dinext_project_stage_gate.project");
 
 frappe.ui.form.on("Project", {
 	refresh(frm) {
+		frm._sg_prev_governance_model = frm.doc.governance_model;
 		dinext_project_stage_gate.project.refresh_widget(frm);
+	},
+	after_save(frm) {
+		frm._sg_prev_governance_model = frm.doc.governance_model;
+	},
+	governance_model(frm) {
+		if (frm.is_new()) {
+			frm._sg_prev_governance_model = frm.doc.governance_model;
+			return;
+		}
+		const prev = frm._sg_prev_governance_model;
+		const nextVal = frm.doc.governance_model;
+		if (prev === nextVal) {
+			return;
+		}
+		if (!frm.doc.current_stage_instance) {
+			frm._sg_prev_governance_model = nextVal;
+			return;
+		}
+		const message = __(
+			"This will cancel the current stage gate chain: all Project Stage Instances, " +
+				"Project Gate Checkpoints, and checklist items for this project will be set to Canceled. " +
+				"Historical rows stay in the database but are hidden from the active roadmap. " +
+				"You can assign a new Governance Model afterward or leave the project without one. Continue?"
+		);
+		frappe.confirm(
+			message,
+			() => {
+				frm.set_value("confirm_governance_reset", 1).then(() => {
+					frm._sg_prev_governance_model = nextVal;
+				});
+			},
+			() => {
+				frm.set_value("governance_model", prev).then(() => {
+					frm._sg_prev_governance_model = prev;
+				});
+			}
+		);
 	},
 });
 
-$(document).on("form-unload", function (e, frm) {  
-    if (!frm.doc || frm.is_new()) {  
-        return;  
-    }  
-    const page = frm.page.wrapper;
+$(document).on("form-unload", function (e, frm) {
+	if (!frm.doc || frm.is_new()) {
+		return;
+	}
+	const page = frm.page.wrapper;
 	dinext_project_stage_gate.project.remove_widget(page);
 });
 
@@ -46,7 +84,7 @@ dinext_project_stage_gate.project.refresh_widget = async function (frm) {
 		dinext_project_stage_gate.project.render_chain(widget, response.message || []);
 	} catch (error) {
 		console.error("Failed to load Stage-gate widget", error);
-		dinext_project_stage_gate.project.remove_widget(page);		
+		dinext_project_stage_gate.project.remove_widget(page);
 	}
 };
 
@@ -132,9 +170,7 @@ dinext_project_stage_gate.project.render_chain = function (widget, stages) {
 		});
 	});
 
-	widget.html(
-		`<div class="stage-gate-chain">${items.join("")}</div>`
-	);
+	widget.html(`<div class="stage-gate-chain">${items.join("")}</div>`);
 
 	widget.find("[data-stage-instance]").on("click", function () {
 		const stageInstance = $(this).data("stage-instance");
@@ -154,4 +190,3 @@ dinext_project_stage_gate.project.render_chain = function (widget, stages) {
 dinext_project_stage_gate.project.translate_status = function (value) {
 	return value ? __(value) : value;
 };
-

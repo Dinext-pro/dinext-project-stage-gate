@@ -14,7 +14,7 @@
 - Виджет на форме `Project`, подключаемый через `doctype_js`, без отдельного HTML custom field
 - Автоматическое создание `Project Stage Instance` при назначении `Project Governance Model` проекту
 - Автоматическое обновление полей `current_stage_instance`, `current_stage`, `stage_gate_status` и `current_gate_result` на `Project`
-- Защита от смены или очистки `governance_model` после того, как stage chain уже создан
+- Контролируемый сброс цепочки при смене или очистке `governance_model`: подтверждение на форме `Project`, отмена активных `Project Stage Instance` / `Project Gate Checkpoint` / строк чек-листа (статус `Canceled`), версионирование цепочки (`stage_chain_version`), скрытие архивных цепочек из виджета и roadmap
 - Script Report дорожной карты Stage-gate с ленивой загрузкой ECharts
 - Ролевая и permission-модель для `Stage Gate Owner`, `Stage Gate Reviewer`, `Stage Gate Approver` и `Project Governance Admin`
 - Отдельный workflow checkpoint, не изменяющий существующий approval-flow `Project`
@@ -57,7 +57,7 @@ bench --site <site> export-fixtures --app dinext_project_stage_gate
 
 1. Загружает выбранный `Project Governance Model`.
 2. Строит упорядоченную stage chain.
-3. Создает записи `Project Stage Instance` с детерминированными именами вида `<PROJECT>-STAGE-001`.
+3. Создает записи `Project Stage Instance` с детерминированными именами: первая цепочка — `<PROJECT>-STAGE-001`, при повторном назначении модели после сброса — `<PROJECT>-SG<N>-STAGE-001` (N = `stage_chain_version` на `Project`).
 4. Заполняет связи `previous_stage_instance` / `next_stage_instance`.
 5. Обновляет summary-поля на `Project`.
 
@@ -65,7 +65,7 @@ bench --site <site> export-fixtures --app dinext_project_stage_gate
 
 Дальше форма `Project` использует whitelisted API для отрисовки уже сохраненной Stage-gate цепочки. Если модель управления не назначена, виджет не показывается.
 
-Если chain уже создан, приложение блокирует смену или очистку `governance_model`, чтобы не потерять согласования и связанные execution-данные.
+Если цепочка уже создана, смена или очистка `governance_model` требует подтверждения в диалоге на форме `Project`. После подтверждения и сохранения текущая активная цепочка переводится в архив (все связанные исполнительные документы — в статус `Canceled`), номер активной версии цепочки на `Project` увеличивается; при назначенной новой модели создаётся новая цепочка, при пустой модели summary-поля проекта очищаются. Исторические строки остаются в БД, но не попадают в виджет и выборки roadmap для активной версии.
 
 ### Вызов API
 
@@ -101,7 +101,8 @@ bench --site <site> execute dinext_project_stage_gate.stage_gate.api.get_roadmap
 - `required_apps = ["erpnext", "dinext_projects"]`
 - `doctype_js = {"Project": "public/js/project_stage_gate_project.js"}`
 - `doc_events["Project"]`:
-  - `validate` блокирует смену `governance_model` после создания chain
+  - `validate` требует флаг `confirm_governance_reset` при смене/очистке `governance_model`, если есть активная цепочка
+  - `before_save` выполняет отмену активной цепочки и инкремент `stage_chain_version` при подтверждённом сбросе
   - `after_insert` и `on_update` синхронизируют stage chain и summary-поля
 - `doc_events["Project Stage Instance"]`:
   - `on_update` и `on_trash` пересчитывают summary-поля проекта

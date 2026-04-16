@@ -261,6 +261,7 @@ doctype_js = {"Project": "public/js/project_stage_gate_project.js"}
 doc_events = {
 	"Project": {
 		"validate": "dinext_project_stage_gate.stage_gate.project_hooks.validate_project_governance_model_change",
+		"before_save": "dinext_project_stage_gate.stage_gate.project_hooks.before_save_project_governance_reset",
 		"after_insert": "dinext_project_stage_gate.stage_gate.project_hooks.sync_project_stage_chain",
 		"on_update": "dinext_project_stage_gate.stage_gate.project_hooks.sync_project_stage_chain",
 	},

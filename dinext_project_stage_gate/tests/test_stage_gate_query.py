@@ -5,7 +5,9 @@ import unittest
 try:
 	import frappe  # noqa: F401
 except ModuleNotFoundError:
-	sys.modules["frappe"] = types.SimpleNamespace(get_all=None)
+	_frappe_stub = types.SimpleNamespace(get_all=None)
+	_frappe_stub.db = types.SimpleNamespace(get_value=lambda *args, **kwargs: 1)
+	sys.modules["frappe"] = _frappe_stub
 
 from unittest.mock import patch
 
@@ -13,9 +15,10 @@ from dinext_project_stage_gate.stage_gate import query
 
 
 class TestStageGateQuery(unittest.TestCase):
-	@patch("dinext_project_stage_gate.stage_gate.query.frappe.get_all")
+	@patch.object(query.frappe, "get_all")
+	@patch.object(query.frappe.db, "get_value", return_value=1)
 	def test_get_project_stage_chain_uses_stage_name_from_docname_and_checkpoint_level(
-		self, get_all
+		self, _mock_get_value, get_all
 	):
 		get_all.side_effect = [
 			[
@@ -69,6 +72,7 @@ class TestStageGateQuery(unittest.TestCase):
 					"project_manager": "pm@example.com",
 					"custom_project_portfolio": "Portfolio A",
 					"governance_model": "Standard",
+					"stage_chain_version": 1,
 					"current_stage": "Discovery",
 					"stage_gate_status": "Active",
 				}
@@ -80,6 +84,7 @@ class TestStageGateQuery(unittest.TestCase):
 					"stage": "Discovery",
 					"status": "Active",
 					"sequence": 1,
+					"stage_chain_version": 1,
 					"planned_start_date": None,
 					"planned_end_date": None,
 					"actual_start_date": None,
