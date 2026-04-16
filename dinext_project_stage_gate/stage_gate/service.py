@@ -1,3 +1,6 @@
+import frappe
+
+
 def ping():
 	return "stage-gate-service"
 
@@ -22,13 +25,15 @@ def build_stage_chain(project, governance_model):
 	return chain
 
 
-def prepare_stage_instances(stage_chain):
+def prepare_stage_instances(stage_chain, chain_version=1):
+	chain_version = int(chain_version or 1)
 	prepared = []
 	for index, row in enumerate(stage_chain, start=1):
 		item = dict(row)
 		sequence = int(item.get("sequence") or index)
 		item["sequence"] = sequence
-		item["name"] = _build_stage_instance_name(item.get("project"), index)
+		item["stage_chain_version"] = chain_version
+		item["name"] = build_stage_instance_name(item.get("project"), index, chain_version)
 		prepared.append(item)
 
 	for index, row in enumerate(prepared):
@@ -67,6 +72,42 @@ def advance_stage_chain(stage_instances, current_stage_name):
 	return updated
 
 
-def _build_stage_instance_name(project, position):
-	return f"{project}-STAGE-{int(position):03d}"
+def build_stage_instance_name(project, position, chain_version=1):
+	chain_version = int(chain_version or 1)
+	pos = int(position)
+	if chain_version <= 1:
+		return f"{project}-STAGE-{pos:03d}"
+	return f"{project}-SG{chain_version}-STAGE-{pos:03d}"
 
+
+def cancel_stage_gate_chain(project: str, chain_version: int) -> None:
+	"""Cancel checkpoints (and checklist rows) and stage instances for one chain version."""
+	chain_version = int(chain_version or 1)
+	psi_names = frappe.get_all(
+		"Project Stage Instance",
+		filters={"project": project, "stage_chain_version": chain_version},
+		pluck="name",
+	)
+	if not psi_names:
+		return
+
+	cp_names = frappe.get_all(
+		"Project Gate Checkpoint",
+		filters={"stage_instance": ["in", psi_names]},
+		pluck="name",
+	)
+	user = frappe.session.user
+	now = frappe.utils.now()
+	for cp in cp_names:
+		frappe.db.sql(
+			"""
+			update `tabProject Gate Checklist Item`
+			set status='Canceled', modified=%(now)s, modified_by=%(user)s
+			where parenttype=%(pt)s and parent=%(parent)s
+			""",
+			{"now": now, "user": user, "pt": "Project Gate Checkpoint", "parent": cp},
+		)
+		frappe.db.set_value("Project Gate Checkpoint", cp, "status", "Canceled", update_modified=True)
+
+	for psi in psi_names:
+		frappe.db.set_value("Project Stage Instance", psi, "status", "Canceled", update_modified=True)

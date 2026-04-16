@@ -15,6 +15,7 @@ def _project_fields(include_project_manager=False):
 		"customer",
 		"custom_project_portfolio",
 		"governance_model",
+		"stage_chain_version",
 		"current_stage",
 		"stage_gate_status",
 	]
@@ -28,9 +29,10 @@ def ping():
 
 
 def get_project_stage_chain(project_name):
+	active_ver = int(frappe.db.get_value("Project", project_name, "stage_chain_version") or 1)
 	stage_rows = frappe.get_all(
 		"Project Stage Instance",
-		filters={"project": project_name},
+		filters={"project": project_name, "stage_chain_version": active_ver},
 		fields=[
 			"name",
 			"stage",
@@ -58,7 +60,7 @@ def get_project_stage_chain(project_name):
 
 	checkpoint_rows = frappe.get_all(
 		"Project Gate Checkpoint",
-		filters={"project": project_name},
+		filters={"project": project_name, "stage_chain_version": active_ver},
 		fields=[
 			"name",
 			"stage_instance",
@@ -141,6 +143,7 @@ def get_roadmap_dataset(filters=None):
 			"stage",
 			"status",
 			"sequence",
+			"stage_chain_version",
 			"planned_start_date",
 			"planned_end_date",
 			"actual_start_date",
@@ -150,10 +153,16 @@ def get_roadmap_dataset(filters=None):
 		],
 		order_by="project asc, sequence asc",
 	)
+	filtered_stage_rows = []
 	for row in stage_rows:
 		project = project_meta.get(_get(row, "project"), {})
+		want_ver = int(_get(project, "stage_chain_version") or 1)
+		if int(_get(row, "stage_chain_version") or 1) != want_ver:
+			continue
 		row["project_name"] = _get(project, "project_name") or _get(row, "project")
 		row["portfolio"] = _get(project, "custom_project_portfolio")
+		filtered_stage_rows.append(row)
+	stage_rows = filtered_stage_rows
 	stage_instance_names = [_get(row, "name") for row in stage_rows]
 	gate_rows = frappe.get_all(
 		"Project Gate Checkpoint",

@@ -45,6 +45,7 @@ class TestProjectStageInstance(FrappeTestCase):
 				"status",
 				"sequence",
 				"governance_model",
+				"stage_chain_version",
 				"previous_stage_instance",
 				"next_stage_instance",
 			],
@@ -58,6 +59,7 @@ class TestProjectStageInstance(FrappeTestCase):
 		self.assertEqual(stage_instances[0].next_stage_instance, stage_instances[1].name)
 		self.assertEqual(stage_instances[1].previous_stage_instance, stage_instances[0].name)
 		self.assertEqual(stage_instances[1].next_stage_instance, None)
+		self.assertTrue(all(int(row.get("stage_chain_version") or 1) == 1 for row in stage_instances))
 
 		project.reload()
 		self.assertEqual(project.current_stage_instance, stage_instances[0].name)
@@ -114,7 +116,7 @@ class TestProjectStageInstance(FrappeTestCase):
 		self.assertEqual(project.stage_gate_status, "Canceled")
 		self.assertEqual(project.current_gate_result, "Rejected")
 
-	def test_cannot_change_governance_model_after_stage_instances_exist(self):
+	def test_change_governance_model_requires_confirmation(self):
 		original_model = self._make_governance_model()
 		replacement_model = self._make_governance_model(label="Replacement")
 		project = self._make_project(governance_model=original_model.name)
@@ -125,15 +127,93 @@ class TestProjectStageInstance(FrappeTestCase):
 			project.flags.ignore_mandatory = True
 			project.save()
 
-	def test_cannot_clear_governance_model_after_stage_instances_exist(self):
+	def test_change_governance_model_with_confirm_resets_chain(self):
+		suffix = frappe.generate_hash(length=6)
+		level = self._make_checkpoint_level(f"CP Reset {suffix}")
+		template = self._make_stage_gate_template(
+			f"Gate Reset {suffix}",
+			level.name,
+			["Criterion A"],
+		)
+		original_model = self._make_governance_model(
+			label="OrigReset", checkpoint_template=template.name
+		)
+		replacement_model = self._make_governance_model(
+			label="Replacement", checkpoint_template=template.name
+		)
+		project = self._make_project(governance_model=original_model.name)
+
+		old_names = frappe.get_all(
+			"Project Stage Instance",
+			filters={"project": project.name, "stage_chain_version": 1},
+			pluck="name",
+		)
+		self.assertEqual(len(old_names), 2)
+
+		project.governance_model = replacement_model.name
+		project.confirm_governance_reset = 1
+		project.flags.ignore_mandatory = True
+		project.save()
+
+		project.reload()
+		self.assertEqual(int(project.stage_chain_version or 1), 2)
+		self.assertEqual(project.confirm_governance_reset, 0)
+
+		v1_rows = frappe.get_all(
+			"Project Stage Instance",
+			filters={"project": project.name, "stage_chain_version": 1},
+			fields=["status"],
+		)
+		self.assertTrue(v1_rows)
+		self.assertTrue(all(row.status == "Canceled" for row in v1_rows))
+
+		v2_rows = frappe.get_all(
+			"Project Stage Instance",
+			filters={"project": project.name, "stage_chain_version": 2},
+			fields=["name", "stage", "governance_model", "status", "gate_result"],
+			order_by="sequence asc",
+		)
+		self.assertEqual(len(v2_rows), 2)
+		self.assertTrue(all(row.governance_model == replacement_model.name for row in v2_rows))
+		self.assertTrue(v2_rows[0].name.startswith(f"{project.name}-SG2-STAGE-"))
+
+		self.assertNotIn(project.current_stage_instance, old_names)
+		self.assertEqual(project.current_stage_instance, v2_rows[0].name)
+		self.assertEqual(project.current_stage, v2_rows[0].stage)
+		self.assertEqual(project.stage_gate_status, "Active")
+		self.assertEqual(project.current_gate_result, v2_rows[0].gate_result)
+
+		v1_cp = frappe.get_all(
+			"Project Gate Checkpoint",
+			filters={"project": project.name, "stage_chain_version": 1},
+			fields=["status"],
+		)
+		self.assertTrue(v1_cp)
+		self.assertTrue(all(row.status == "Canceled" for row in v1_cp))
+
+	def test_clear_governance_model_with_confirm_cancels_chain(self):
 		governance_model = self._make_governance_model(label="Clear")
 		project = self._make_project(governance_model=governance_model.name)
 
 		project.governance_model = None
+		project.confirm_governance_reset = 1
+		project.flags.ignore_mandatory = True
+		project.save()
 
-		with self.assertRaises(frappe.ValidationError):
-			project.flags.ignore_mandatory = True
-			project.save()
+		project.reload()
+		self.assertEqual(project.governance_model, None)
+		self.assertEqual(int(project.stage_chain_version or 1), 2)
+		self.assertEqual(project.current_stage_instance, None)
+		self.assertEqual(project.current_stage, None)
+		self.assertEqual(project.stage_gate_status, None)
+		self.assertEqual(project.current_gate_result, None)
+
+		v1_rows = frappe.get_all(
+			"Project Stage Instance",
+			filters={"project": project.name, "stage_chain_version": 1},
+			fields=["status"],
+		)
+		self.assertTrue(all(row.status == "Canceled" for row in v1_rows))
 
 	def test_provision_checkpoints_from_governance_checkpoint_template(self):
 		suffix = frappe.generate_hash(length=6)
@@ -162,6 +242,7 @@ class TestProjectStageInstance(FrappeTestCase):
 
 		for row in checkpoints:
 			doc = frappe.get_doc("Project Gate Checkpoint", row.name)
+			self.assertEqual(int(doc.get("stage_chain_version") or 1), 1)
 			self.assertEqual(len(doc.checklist), 2)
 			titles = [c.item_title for c in doc.checklist]
 			self.assertEqual(titles, ["First criterion", "Second criterion"])

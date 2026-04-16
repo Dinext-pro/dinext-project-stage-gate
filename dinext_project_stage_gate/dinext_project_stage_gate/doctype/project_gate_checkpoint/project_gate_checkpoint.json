@@ -10,6 +10,7 @@
  "field_order": [
   "project",
   "stage_instance",
+  "stage_chain_version",
   "gate_template",
   "checkpoint_level",
   "status",
@@ -37,6 +38,13 @@
    "label": "Stage Instance",
    "options": "Project Stage Instance",
    "reqd": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "stage_chain_version",
+   "fieldtype": "Int",
+   "label": "Stage Chain Version",
+   "non_negative": 1
   },
   {
    "fieldname": "gate_template",

@@ -72,3 +72,11 @@ class TestStageGateService(unittest.TestCase):
 		self.assertEqual(prepared[1]["previous_stage_instance"], "PROJ-001-STAGE-001")
 		self.assertIsNone(prepared[1]["next_stage_instance"])
 
+	def test_prepare_stage_instances_chain_version_two_prefixes_names(self):
+		chain = [
+			{"project": "PROJ-001", "stage": "Idea", "sequence": 1, "status": "Active"},
+		]
+		prepared = service.prepare_stage_instances(chain, chain_version=2)
+		self.assertEqual(prepared[0]["name"], "PROJ-001-SG2-STAGE-001")
+		self.assertEqual(prepared[0]["stage_chain_version"], 2)
+
