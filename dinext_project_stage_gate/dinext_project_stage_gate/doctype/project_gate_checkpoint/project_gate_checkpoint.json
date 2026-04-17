@@ -8,28 +8,32 @@
  "editable_grid": 1,
  "engine": "InnoDB",
  "field_order": [
+  "status",
   "project",
   "stage_instance",
   "stage_chain_version",
   "gate_template",
   "checkpoint_level",
-  "status",
-  "gate_due_date",
+  "column_break_oimp",
   "responsible_user",
-  "approver_user",
+  "gate_due_date",
   "approver_role",
+  "approver_user",
+  "column_break_ihso",
   "approval_date",
   "decision_comment",
+  "section_break_xtgl",
   "checklist"
  ],
  "fields": [
   {
    "fieldname": "project",
    "fieldtype": "Link",
+   "hidden": 1,
    "in_list_view": 1,
    "label": "Project",
    "options": "Project",
-   "reqd": 1
+   "set_only_once": 1
   },
   {
    "fieldname": "stage_instance",
@@ -37,12 +41,14 @@
    "in_list_view": 1,
    "label": "Stage Instance",
    "options": "Project Stage Instance",
-   "reqd": 1
+   "reqd": 1,
+   "set_only_once": 1
   },
   {
    "default": "1",
    "fieldname": "stage_chain_version",
    "fieldtype": "Int",
+   "hidden": 1,
    "label": "Stage Chain Version",
    "non_negative": 1
   },
@@ -51,7 +57,8 @@
    "fieldtype": "Link",
    "label": "Gate Template",
    "options": "Stage Gate Template",
-   "reqd": 1
+   "reqd": 1,
+   "set_only_once": 1
   },
   {
    "fieldname": "checkpoint_level",
@@ -66,7 +73,8 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Status",
-   "options": "Draft\nIn Review\nApproved\nRejected\nCanceled"
+   "options": "Draft\nIn Review\nApproved\nRejected\nCanceled",
+   "read_only": 1
   },
   {
    "fieldname": "responsible_user",
@@ -107,12 +115,24 @@
    "fieldname": "gate_due_date",
    "fieldtype": "Date",
    "label": "Gate Due Date"
+  },
+  {
+   "fieldname": "column_break_oimp",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_ihso",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "section_break_xtgl",
+   "fieldtype": "Section Break"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-04-16 01:05:47.765240",
+ "modified": "2026-04-17 03:03:24.732343",
  "modified_by": "Administrator",
  "module": "Dinext Project Stage Gate",
  "name": "Project Gate Checkpoint",

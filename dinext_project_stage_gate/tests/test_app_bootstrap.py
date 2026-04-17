@@ -28,15 +28,20 @@ class TestAppBootstrap(unittest.TestCase):
 				for entry in hooks.fixtures
 			)
 		)
-		self.assertTrue(
-			any(
-				isinstance(entry, dict)
-				and entry.get("doctype") == "Workflow"
-				and ["name", "in", ["Project Gate Checkpoint Workflow"]]
-				in entry.get("filters", [])
-				for entry in hooks.fixtures
-			)
+		wf_entries = [
+			entry
+			for entry in hooks.fixtures
+			if isinstance(entry, dict) and entry.get("doctype") == "Workflow"
+		]
+		self.assertTrue(wf_entries)
+		name_filter = next(
+			f
+			for f in wf_entries[0].get("filters", [])
+			if isinstance(f, (list, tuple)) and len(f) >= 3 and f[0] == "name" and f[1] == "in"
 		)
+		wf_names = name_filter[2]
+		self.assertIn("Project Gate Checkpoint Workflow", wf_names)
+		self.assertIn("Project Stage Workflow", wf_names)
 		self.assertTrue(
 			any(
 				isinstance(entry, dict)
