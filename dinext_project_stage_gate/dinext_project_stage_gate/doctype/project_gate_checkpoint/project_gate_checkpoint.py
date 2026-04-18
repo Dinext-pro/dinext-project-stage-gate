@@ -3,6 +3,7 @@
 
 import frappe
 from frappe.model.document import Document
+from frappe.utils import nowdate
 
 from dinext_project_stage_gate.stage_gate import validators
 
@@ -12,12 +13,24 @@ _TERMINAL_CHECKLIST_STATUSES = frozenset({"Done", "Canceled"})
 class ProjectGateCheckpoint(Document):
 	def validate(self):
 		self._sync_checklist_completed()
+		self._sync_approval_audit_fields()
 		validators.validate_enabled_links(
 			[self.as_dict()],
 			"checkpoint_level",
 			_get_checkpoint_level_status_map([self.checkpoint_level]),
 			label="Checkpoint Level",
 		)
+
+	def on_update(self):
+		self._sync_stage_instance_gate_result_on_approval()
+
+	def _transitioned_to_approved(self):
+		if self.status != "Approved":
+			return False
+		prev = self.get_doc_before_save()
+		if prev and prev.status == "Approved":
+			return False
+		return True
 
 	def _sync_checklist_completed(self):
 		if not self.checklist:
@@ -26,6 +39,21 @@ class ProjectGateCheckpoint(Document):
 		self.checklist_completed = int(
 			all((row.status or "Open") in _TERMINAL_CHECKLIST_STATUSES for row in self.checklist)
 		)
+
+	def _sync_approval_audit_fields(self):
+		if not self._transitioned_to_approved():
+			return
+		self.approver_user = frappe.session.user
+		self.approval_date = nowdate()
+
+	def _sync_stage_instance_gate_result_on_approval(self):
+		if not self._transitioned_to_approved() or not self.stage_instance:
+			return
+		if int(frappe.db.get_value("Project Stage Instance", self.stage_instance, "gate_result") or 0):
+			return
+		psi = frappe.get_doc("Project Stage Instance", self.stage_instance)
+		psi.gate_result = 1
+		psi.save(ignore_permissions=True)
 
 
 def _get_checkpoint_level_status_map(level_names):

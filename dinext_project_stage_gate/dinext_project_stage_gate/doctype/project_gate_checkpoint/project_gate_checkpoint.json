@@ -65,6 +65,7 @@
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Checkpoint Level",
+   "link_filters": "[[\"Project Gate Checkpoint Level\",\"enabled\",\"=\",1]]",
    "options": "Project Gate Checkpoint Level"
   },
   {
@@ -80,6 +81,7 @@
    "fieldname": "responsible_user",
    "fieldtype": "Link",
    "label": "Responsible User",
+   "link_filters": "[[\"User\",\"enabled\",\"=\",1]]",
    "options": "User"
   },
   {
@@ -134,9 +136,10 @@
   }
  ],
  "grid_page_length": 50,
+ "in_create": 1,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-04-18 15:42:16.684386",
+ "modified": "2026-04-18 16:16:18.084244",
  "modified_by": "Administrator",
  "module": "Dinext Project Stage Gate",
  "name": "Project Gate Checkpoint",

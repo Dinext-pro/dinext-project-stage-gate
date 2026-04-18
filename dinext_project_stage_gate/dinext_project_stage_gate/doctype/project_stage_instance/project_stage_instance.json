@@ -25,8 +25,10 @@
   "actual_end_date",
   "section_break_dcyn",
   "previous_stage_instance",
+  "entry_criteria_text",
   "column_break_rrfq",
-  "next_stage_instance"
+  "next_stage_instance",
+  "exit_criteria_text"
  ],
  "fields": [
   {
@@ -42,10 +44,10 @@
   {
    "fieldname": "stage",
    "fieldtype": "Link",
+   "hidden": 1,
    "in_list_view": 1,
    "label": "Stage",
    "options": "Project Stage",
-   "reqd": 1,
    "set_only_once": 1
   },
   {
@@ -154,12 +156,23 @@
    "fieldtype": "Check",
    "hidden": 1,
    "label": "Is Gate Required"
+  },
+  {
+   "fieldname": "entry_criteria_text",
+   "fieldtype": "Small Text",
+   "label": "Entry Criteria"
+  },
+  {
+   "fieldname": "exit_criteria_text",
+   "fieldtype": "Small Text",
+   "label": "Exit Criteria"
   }
  ],
  "grid_page_length": 50,
+ "in_create": 1,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-04-17 02:45:09.358029",
+ "modified": "2026-04-18 16:23:04.436134",
  "modified_by": "Administrator",
  "module": "Dinext Project Stage Gate",
  "name": "Project Stage Instance",
@@ -181,8 +194,32 @@
  ],
  "row_format": "Dynamic",
  "rows_threshold_for_grid_search": 20,
+ "show_title_field_in_link": 1,
  "sort_field": "modified",
  "sort_order": "DESC",
- "states": [],
- "track_changes": 1
+ "states": [
+  {
+   "color": "Blue",
+   "title": "Active"
+  },
+  {
+   "color": "Green",
+   "title": "Completed"
+  },
+  {
+   "color": "Gray",
+   "title": "Skipped"
+  },
+  {
+   "color": "Gray",
+   "title": "Canceled"
+  },
+  {
+   "color": "Gray",
+   "title": "Planned"
+  }
+ ],
+ "title_field": "stage",
+ "track_changes": 1,
+ "translated_doctype": 1
 }
