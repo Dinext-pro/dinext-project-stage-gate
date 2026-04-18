@@ -65,8 +65,34 @@ frappe.query_reports["Project Stage Gate Roadmap"] = {
 
 frappe.provide("dinext_project_stage_gate.roadmap");
 
+dinext_project_stage_gate.roadmap.statusPalette = {
+	stage: {
+		Planned: { fill: "#8f9aa8", stroke: "#738094" },
+		Active: { fill: "#7f95c1", stroke: "#687da8" },
+		Skipped: { fill: "#8190a3", stroke: "#667487" },
+		Completed: { fill: "#739b7f", stroke: "#5f846b" },
+		Canceled: { fill: "#9787b0", stroke: "#7c6d95" },
+	},
+	checkpoint: {
+		Draft: "#8f9aa8",
+		"In Review": "#8ba0c9",
+		Approved: "#739b7f",
+		Rejected: "#c08b8b",
+		Canceled: "#9787b0",
+	},
+};
+
 dinext_project_stage_gate.roadmap.translateStatus = function (value) {
 	return value ? __(value) : value;
+};
+
+dinext_project_stage_gate.roadmap.getStageColors = function (status) {
+	const fallback = { fill: "#8f9aa8", stroke: "#738094" };
+	return dinext_project_stage_gate.roadmap.statusPalette.stage[status] || fallback;
+};
+
+dinext_project_stage_gate.roadmap.getCheckpointColor = function (status) {
+	return dinext_project_stage_gate.roadmap.statusPalette.checkpoint[status] || "#8f9aa8";
 };
 
 dinext_project_stage_gate.roadmap.ensure_assets = function () {
@@ -112,26 +138,40 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 	);
 	const categoryIndexByLabel = Object.fromEntries(categories.map((label, index) => [label, index]));
 
-	const bars = payload.stageBars.map((stage) => ({
-		name: stage.stage,
-		value: [
-			categoryIndexByLabel[projectIndex[stage.project]] ?? 0,
-			stage.actual_start_date || stage.planned_start_date,
-			stage.actual_end_date || stage.planned_end_date,
-			stage.stage,
-			dinext_project_stage_gate.roadmap.translateStatus(stage.status),
-		],
-	}));
+	const bars = payload.stageBars.map(
+		(stage) => {
+			const colors = dinext_project_stage_gate.roadmap.getStageColors(stage.status);
+			return {
+				name: stage.stage,
+				value: [
+					categoryIndexByLabel[projectIndex[stage.project]] ?? 0,
+					stage.actual_start_date || stage.planned_start_date,
+					stage.actual_end_date || stage.planned_end_date,
+					stage.stage,
+					dinext_project_stage_gate.roadmap.translateStatus(stage.status),
+				],
+				itemStyle: {
+					fill: colors.fill,
+					stroke: colors.stroke,
+				},
+			};
+		}
+	);
 	const gates = payload.gates
 		.filter((gate) => gate.approval_date)
-		.map((gate) => ({
-			name: gate.checkpoint_level || __("Gate"),
-			value: [
-				gate.approval_date,
-				categoryIndexByLabel[projectIndex[gate.project]] ?? 0,
-				dinext_project_stage_gate.roadmap.translateStatus(gate.status),
-			],
-		}));
+		.map(
+			(gate) => ({
+				name: gate.checkpoint_level || __("Gate"),
+				value: [
+					gate.approval_date,
+					categoryIndexByLabel[projectIndex[gate.project]] ?? 0,
+					dinext_project_stage_gate.roadmap.translateStatus(gate.status),
+				],
+				itemStyle: {
+					color: dinext_project_stage_gate.roadmap.getCheckpointColor(gate.status),
+				},
+			})
+		);
 
 	chart.setOption({
 		tooltip: {
@@ -164,10 +204,7 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 							width: Math.max(end[0] - start[0], 4),
 							height,
 						},
-						style: api.style({
-							fill: "#7c8cff",
-							stroke: "#5e64ff",
-						}),
+						style: api.style(),
 					};
 				},
 				encode: {
@@ -179,9 +216,6 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 			{
 				type: "scatter",
 				symbolSize: 12,
-				itemStyle: {
-					color: "#ff914d",
-				},
 				data: gates,
 			},
 		],

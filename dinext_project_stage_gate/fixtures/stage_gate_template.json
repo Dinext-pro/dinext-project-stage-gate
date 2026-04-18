@@ -29,7 +29,7 @@
    {
     "description": "Решение о включении в портфель приоритетных инициатив",
     "evidence_type_hint": "Meeting Notes",
-    "is_evidence_mandatory": 1,
+    "is_evidence_mandatory": 0,
     "is_mandatory": 1,
     "parent": "Шаблон гейта — Идея (портфель)",
     "parentfield": "items",
@@ -37,7 +37,7 @@
     "title": "Согласование с портфелем"
    }
   ],
-  "modified": "2026-04-14 02:26:33.990000",
+  "modified": "2026-04-18 16:19:21.582924",
   "name": "Шаблон гейта — Идея (портфель)"
  },
  {

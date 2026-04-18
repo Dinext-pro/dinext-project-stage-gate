@@ -161,16 +161,7 @@ dinext_project_stage_gate.project.render_chain = function (widget, stages) {
 		const gateStatusLabel = dinext_project_stage_gate.project.translate_status(gateStatus);
 		const title = frappe.utils.escape_html(stage.stage_name || stage.stage || __("Unnamed stage"));
 		const stageName = frappe.utils.escape_html(stage.name || "");
-		const tooltipParts = [`${__("Status")}: ${statusLabel}`, `${__("Gate")}: ${gateStatusLabel}`];
-		const checkpointSummary = (stage.checkpoints || [])
-			.map(
-				(checkpoint) =>
-					`${checkpoint.checkpoint_level || __("Gate")}: ${dinext_project_stage_gate.project.translate_status(checkpoint.status)}`
-			)
-			.join(" | ");
-		if (checkpointSummary) {
-			tooltipParts.push(checkpointSummary);
-		}
+		const tooltipParts = [`${__("Status")}: ${statusLabel}`];
 		const tooltip = frappe.utils.escape_html(tooltipParts.join(" | "));
 
 		items.push(`<button type="button" class="stage-gate-node stage-gate-status-${frappe.scrub(
