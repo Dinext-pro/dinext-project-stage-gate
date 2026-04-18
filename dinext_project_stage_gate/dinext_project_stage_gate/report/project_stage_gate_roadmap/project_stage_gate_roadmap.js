@@ -59,8 +59,8 @@ frappe.query_reports["Project Stage Gate Roadmap"] = {
 		dinext_project_stage_gate.roadmap.ensure_theme_observer(report);
 	},
 
-	after_datatable_render(report) {
-		dinext_project_stage_gate.roadmap.render(report);
+	after_datatable_render(_datatable) {
+		dinext_project_stage_gate.roadmap.render(frappe.query_report);
 	},
 };
 
@@ -168,7 +168,7 @@ dinext_project_stage_gate.roadmap.ensure_assets = function () {
 
 	return new Promise((resolve) => {
 		frappe.require(
-			["/assets/dinext_project_stage_gate/js/vendor/echarts.min.js"],
+			["/assets/dinext_common/js/echarts.min.js"],
 			function () {
 				resolve();
 			}
@@ -177,6 +177,10 @@ dinext_project_stage_gate.roadmap.ensure_assets = function () {
 };
 
 dinext_project_stage_gate.roadmap.ensure_chart_mount = function (report) {
+	if (!report?.page?.main) {
+		return null;
+	}
+
 	const wrapper = report.page.main.find(".project-stage-gate-roadmap-chart");
 	if (wrapper.length) {
 		return wrapper;
@@ -188,16 +192,28 @@ dinext_project_stage_gate.roadmap.ensure_chart_mount = function (report) {
 };
 
 dinext_project_stage_gate.roadmap.render = async function (report) {
+	if (!report?.page?.main) {
+		return;
+	}
+
 	await dinext_project_stage_gate.roadmap.ensure_assets();
 	const mount = dinext_project_stage_gate.roadmap.ensure_chart_mount(report);
+	if (!mount?.length) {
+		return;
+	}
+
 	dinext_project_stage_gate.roadmap._last_report = report;
 
 	const dom = mount.get(0);
-	const existing = echarts.getInstanceByDom(dom);
+	const existing =
+		(typeof echarts.getInstanceByDom === "function" && echarts.getInstanceByDom(dom)) ||
+		dom._dinextRoadmapChart ||
+		null;
 	if (existing) {
 		existing.dispose();
 	}
 	const chart = echarts.init(dom);
+	dom._dinextRoadmapChart = chart;
 	const payload = report.raw_data?.message || { projects: [], stageBars: [], gates: [] };
 	const projectIndex = {};
 	const categories = payload.projects.map(

@@ -1,5 +1,14 @@
+import sys
+import types
 import unittest
 from unittest.mock import patch
+
+try:
+	import frappe  # noqa: F401
+except ModuleNotFoundError:
+	_frappe_stub = types.ModuleType("frappe")
+	_frappe_stub._ = lambda value: value
+	sys.modules["frappe"] = _frappe_stub
 
 from dinext_project_stage_gate.dinext_project_stage_gate.report.project_stage_gate_roadmap import (
 	project_stage_gate_roadmap,
