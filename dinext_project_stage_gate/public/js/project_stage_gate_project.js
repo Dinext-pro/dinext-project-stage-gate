@@ -81,7 +81,9 @@ dinext_project_stage_gate.project.refresh_widget = async function (frm) {
 			method: "dinext_project_stage_gate.stage_gate.api.get_project_stage_chain",
 			args: { project: frm.doc.name },
 		});
-		dinext_project_stage_gate.project.render_chain(widget, response.message || []);
+		const stages = response.message || [];
+		dinext_project_stage_gate.project.render_chain(widget, stages);
+		dinext_project_stage_gate.project.add_view_menu_items(frm, stages);
 	} catch (error) {
 		console.error("Failed to load Stage-gate widget", error);
 		dinext_project_stage_gate.project.remove_widget(page);
@@ -92,6 +94,38 @@ dinext_project_stage_gate.project.remove_widget = function (page) {
 	const widget = page.find(".stage-gate-widget-root");
 	if (widget.length) {
 		widget.remove();
+	}
+};
+
+dinext_project_stage_gate.project.add_view_menu_items = function (frm, stages) {
+	if (!frm || !frm.doc || frm.is_new() || !frm.doc.governance_model || !frm.doc.name) {
+		return;
+	}
+	const ver = cint(frm.doc.stage_chain_version) || 1;
+	const filters = {
+		project: frm.doc.name,
+		stage_chain_version: ver,
+	};
+	const has_stages = (stages || []).length > 0;
+	const has_checkpoints = (stages || []).some((s) => (s.checkpoints || []).length > 0);
+
+	if (has_stages && frappe.model.can_read("Project Stage Instance")) {
+		frm.add_custom_button(
+			__("Stage List"),
+			() => {
+				frappe.set_route("List", "Project Stage Instance", { ...filters });
+			},
+			__("View")
+		);
+	}
+	if (has_checkpoints && frappe.model.can_read("Project Gate Checkpoint")) {
+		frm.add_custom_button(
+			__("Gate Checkpoint List"),
+			() => {
+				frappe.set_route("List", "Project Gate Checkpoint", { ...filters });
+			},
+			__("View")
+		);
 	}
 };
 
