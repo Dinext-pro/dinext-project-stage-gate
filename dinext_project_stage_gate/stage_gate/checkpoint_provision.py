@@ -22,6 +22,7 @@ def build_checklist_rows_from_template_items(template_doc: Document) -> list[dic
 		row = {
 			"doctype": "Project Gate Checklist Item",
 			"item_title": (item.get("title") or "").strip(),
+			"description": (item.get("description") or "").strip(),
 			"is_mandatory": 1 if int(item.get("is_mandatory", 1) or 0) else 0,
 			"is_evidence_mandatory": 1 if int(item.get("is_evidence_mandatory", 1) or 0) else 0,
 			"status": "Open",

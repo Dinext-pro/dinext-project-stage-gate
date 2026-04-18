@@ -129,6 +129,21 @@ class TestProjectStageInstance(FrappeTestCase):
 		self.assertEqual(int(s1.is_skippable or 0), 1)
 		self.assertEqual(int(s2.is_skippable or 0), 0)
 
+	def test_stage_instance_criteria_copied_from_governance_model(self):
+		governance_model = self._make_governance_model(
+			label="Criteria",
+			stage_entry_criteria=["Entry A", "Entry B"],
+			stage_exit_criteria=["Exit A", "Exit B"],
+		)
+		project = self._make_project(governance_model=governance_model.name)
+
+		s1 = frappe.get_doc("Project Stage Instance", f"{project.name}-STAGE-001")
+		s2 = frappe.get_doc("Project Stage Instance", f"{project.name}-STAGE-002")
+		self.assertEqual(s1.entry_criteria_text, "Entry A")
+		self.assertEqual(s1.exit_criteria_text, "Exit A")
+		self.assertEqual(s2.entry_criteria_text, "Entry B")
+		self.assertEqual(s2.exit_criteria_text, "Exit B")
+
 	def test_is_skippable_updates_when_governance_stage_row_changes(self):
 		governance_model = self._make_governance_model(
 			label="SkippableResync", stage_is_skippable=[0, 0]
@@ -390,6 +405,8 @@ class TestProjectStageInstance(FrappeTestCase):
 		checkpoint_template=None,
 		stage_durations=None,
 		stage_is_skippable=None,
+		stage_entry_criteria=None,
+		stage_exit_criteria=None,
 	):
 		suffix = frappe.generate_hash(length=6)
 		stage_docs = [
@@ -415,6 +432,14 @@ class TestProjectStageInstance(FrappeTestCase):
 		if checkpoint_template:
 			for row in stages:
 				row["checkpoint_template"] = checkpoint_template
+		if stage_entry_criteria:
+			for idx, row in enumerate(stages):
+				if idx < len(stage_entry_criteria) and stage_entry_criteria[idx] is not None:
+					row["entry_criteria_text"] = stage_entry_criteria[idx]
+		if stage_exit_criteria:
+			for idx, row in enumerate(stages):
+				if idx < len(stage_exit_criteria) and stage_exit_criteria[idx] is not None:
+					row["exit_criteria_text"] = stage_exit_criteria[idx]
 
 		return frappe.get_doc(
 			{

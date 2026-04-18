@@ -20,6 +20,8 @@ def build_stage_chain(project, governance_model):
 				"sequence": row.get("sequence") or index,
 				#"status": "Active" if index == 1 else "Planned",
 				"gate_result": None,
+				"entry_criteria_text": row.get("entry_criteria_text"),
+				"exit_criteria_text": row.get("exit_criteria_text"),
 			}
 		)
 	return chain
