@@ -162,53 +162,61 @@
 }
 
 .stage-gate-status-active {
-	background: var(--blue-600);
+	background: #7f95c1;
 	color: white;
 }
 
 .stage-gate-status-completed,
 .stage-gate-status-approved {
-	background: #176c48;
+	background: #739b7f;
 	color: white;
 }
 
 .stage-gate-status-waiting-gate,
 .stage-gate-status-planned {
-	background: var(--gray-300);
-	color: var(--gray-800);
+	background: #8f9aa8;
+	color: white;
 }
 
-.stage-gate-status-canceled,
 .stage-gate-status-rejected,
 .stage-gate-status-blocked {
-	background: var(--red-600);
+	background: #c08b8b;
 	color: white;
 }
 
 .stage-gate-status-skipped {
-	background: var(--gray-400);
-	color: var(--gray-900);
+	background: #8190a3;
+	color: white;
+}
+
+.stage-gate-status-canceled {
+	background: #9787b0;
+	color: white;
 }
 
 .stage-gate-cp-status-draft,
 .stage-gate-cp-status-pending {
-	background: var(--gray-300);
-	color: var(--gray-800);
+	background: #8f9aa8;
+	color: white;
 }
 
 .stage-gate-cp-status-in-review {
-	background: var(--blue-500);
+	background: #8ba0c9;
 	color: white;
 }
 
 .stage-gate-cp-status-approved {
-	background: #176c48;
+	background: #739b7f;
 	color: white;
 }
 
-.stage-gate-cp-status-rejected,
+.stage-gate-cp-status-rejected {
+	background: #c08b8b;
+	color: white;
+}
+
 .stage-gate-cp-status-canceled {
-	background: var(--red-600);
+	background: #9787b0;
 	color: white;
 }
 
