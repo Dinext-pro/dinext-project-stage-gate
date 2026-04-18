@@ -220,6 +220,71 @@
 	color: white;
 }
 
+[data-theme="dark"] .stage-gate-status-active {
+	background: #4f6fa8;
+	color: white;
+}
+
+[data-theme="dark"] .stage-gate-status-completed,
+[data-theme="dark"] .stage-gate-status-approved {
+	background: #4e7d5c;
+	color: white;
+}
+
+[data-theme="dark"] .stage-gate-status-waiting-gate,
+[data-theme="dark"] .stage-gate-status-planned {
+	background: #6a7d92;
+	color: white;
+}
+
+[data-theme="dark"] .stage-gate-status-rejected,
+[data-theme="dark"] .stage-gate-status-blocked {
+	background: #a85c5c;
+	color: white;
+}
+
+[data-theme="dark"] .stage-gate-status-skipped {
+	background: #5c708a;
+	color: white;
+}
+
+[data-theme="dark"] .stage-gate-status-canceled {
+	background: #6b5b8f;
+	color: white;
+}
+
+[data-theme="dark"] .stage-gate-status-skipped .stage-gate-node-label,
+[data-theme="dark"] .stage-gate-status-canceled .stage-gate-node-label {
+	color: var(--text-muted);
+	opacity: 0.92;
+}
+
+[data-theme="dark"] .stage-gate-cp-status-draft,
+[data-theme="dark"] .stage-gate-cp-status-pending {
+	background: #6a7d92;
+	color: white;
+}
+
+[data-theme="dark"] .stage-gate-cp-status-in-review {
+	background: #5f7fbf;
+	color: white;
+}
+
+[data-theme="dark"] .stage-gate-cp-status-approved {
+	background: #4e7d5c;
+	color: white;
+}
+
+[data-theme="dark"] .stage-gate-cp-status-rejected {
+	background: #a85c5c;
+	color: white;
+}
+
+[data-theme="dark"] .stage-gate-cp-status-canceled {
+	background: #6b5b8f;
+	color: white;
+}
+
 @keyframes stage-gate-node-enter {
 	from {
 		opacity: 0;

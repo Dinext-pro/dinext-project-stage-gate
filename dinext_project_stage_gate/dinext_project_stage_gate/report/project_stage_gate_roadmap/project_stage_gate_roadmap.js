@@ -56,6 +56,7 @@ frappe.query_reports["Project Stage Gate Roadmap"] = {
 
 	onload(report) {
 		dinext_project_stage_gate.roadmap.ensure_chart_mount(report);
+		dinext_project_stage_gate.roadmap.ensure_theme_observer(report);
 	},
 
 	after_datatable_render(report) {
@@ -66,20 +67,48 @@ frappe.query_reports["Project Stage Gate Roadmap"] = {
 frappe.provide("dinext_project_stage_gate.roadmap");
 
 dinext_project_stage_gate.roadmap.statusPalette = {
-	stage: {
-		Planned: { fill: "#8f9aa8", stroke: "#738094" },
-		Active: { fill: "#7f95c1", stroke: "#687da8" },
-		Skipped: { fill: "#8190a3", stroke: "#667487" },
-		Completed: { fill: "#739b7f", stroke: "#5f846b" },
-		Canceled: { fill: "#9787b0", stroke: "#7c6d95" },
+	light: {
+		stage: {
+			Planned: { fill: "#8f9aa8", stroke: "#738094" },
+			Active: { fill: "#7f95c1", stroke: "#687da8" },
+			Skipped: { fill: "#8190a3", stroke: "#667487" },
+			Completed: { fill: "#739b7f", stroke: "#5f846b" },
+			Canceled: { fill: "#9787b0", stroke: "#7c6d95" },
+		},
+		checkpoint: {
+			Draft: "#8f9aa8",
+			"In Review": "#8ba0c9",
+			Approved: "#739b7f",
+			Rejected: "#c08b8b",
+			Canceled: "#9787b0",
+		},
+		fallbackStage: { fill: "#8f9aa8", stroke: "#738094" },
+		fallbackCheckpoint: "#8f9aa8",
 	},
-	checkpoint: {
-		Draft: "#8f9aa8",
-		"In Review": "#8ba0c9",
-		Approved: "#739b7f",
-		Rejected: "#c08b8b",
-		Canceled: "#9787b0",
+	dark: {
+		stage: {
+			Planned: { fill: "#6a7d92", stroke: "#54667a" },
+			Active: { fill: "#4f6fa8", stroke: "#3d5a8a" },
+			Skipped: { fill: "#5c708a", stroke: "#485f7a" },
+			Completed: { fill: "#4e7d5c", stroke: "#3d6a4c" },
+			Canceled: { fill: "#6b5b8f", stroke: "#554570" },
+		},
+		checkpoint: {
+			Draft: "#6a7d92",
+			"In Review": "#5f7fbf",
+			Approved: "#4e7d5c",
+			Rejected: "#a85c5c",
+			Canceled: "#6b5b8f",
+		},
+		fallbackStage: { fill: "#6a7d92", stroke: "#54667a" },
+		fallbackCheckpoint: "#6a7d92",
 	},
+};
+
+dinext_project_stage_gate.roadmap.getActivePalette = function () {
+	const root = document.documentElement;
+	const isDark = root && root.getAttribute("data-theme") === "dark";
+	return isDark ? dinext_project_stage_gate.roadmap.statusPalette.dark : dinext_project_stage_gate.roadmap.statusPalette.light;
 };
 
 dinext_project_stage_gate.roadmap.translateStatus = function (value) {
@@ -87,12 +116,49 @@ dinext_project_stage_gate.roadmap.translateStatus = function (value) {
 };
 
 dinext_project_stage_gate.roadmap.getStageColors = function (status) {
-	const fallback = { fill: "#8f9aa8", stroke: "#738094" };
-	return dinext_project_stage_gate.roadmap.statusPalette.stage[status] || fallback;
+	const palette = dinext_project_stage_gate.roadmap.getActivePalette();
+	return palette.stage[status] || palette.fallbackStage;
 };
 
 dinext_project_stage_gate.roadmap.getCheckpointColor = function (status) {
-	return dinext_project_stage_gate.roadmap.statusPalette.checkpoint[status] || "#8f9aa8";
+	const palette = dinext_project_stage_gate.roadmap.getActivePalette();
+	return palette.checkpoint[status] || palette.fallbackCheckpoint;
+};
+
+dinext_project_stage_gate.roadmap.ensure_theme_observer = function (report) {
+	if (!report || typeof MutationObserver === "undefined") {
+		return;
+	}
+
+	dinext_project_stage_gate.roadmap._last_report = report;
+
+	if (dinext_project_stage_gate.roadmap._theme_observer) {
+		return;
+	}
+
+	const root = document.documentElement;
+	if (!root) {
+		return;
+	}
+
+	let theme = root.getAttribute("data-theme");
+	const observer = new MutationObserver(() => {
+		const next = root.getAttribute("data-theme");
+		if (next === theme) {
+			return;
+		}
+		theme = next;
+
+		const lastReport = dinext_project_stage_gate.roadmap._last_report;
+		if (!lastReport || !lastReport.raw_data) {
+			return;
+		}
+
+		dinext_project_stage_gate.roadmap.render(lastReport);
+	});
+
+	observer.observe(root, { attributes: true, attributeFilter: ["data-theme"] });
+	dinext_project_stage_gate.roadmap._theme_observer = observer;
 };
 
 dinext_project_stage_gate.roadmap.ensure_assets = function () {
@@ -124,7 +190,14 @@ dinext_project_stage_gate.roadmap.ensure_chart_mount = function (report) {
 dinext_project_stage_gate.roadmap.render = async function (report) {
 	await dinext_project_stage_gate.roadmap.ensure_assets();
 	const mount = dinext_project_stage_gate.roadmap.ensure_chart_mount(report);
-	const chart = echarts.init(mount.get(0));
+	dinext_project_stage_gate.roadmap._last_report = report;
+
+	const dom = mount.get(0);
+	const existing = echarts.getInstanceByDom(dom);
+	if (existing) {
+		existing.dispose();
+	}
+	const chart = echarts.init(dom);
 	const payload = report.raw_data?.message || { projects: [], stageBars: [], gates: [] };
 	const projectIndex = {};
 	const categories = payload.projects.map(
