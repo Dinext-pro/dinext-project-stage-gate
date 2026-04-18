@@ -33,6 +33,13 @@ class TestProjectGateCheckpoint(FrappeTestCase):
 		else:
 			frappe.local.flags = self.original_flags
 
+	def test_checklist_description_copied_from_template(self):
+		doc = self._load_provisioned_checkpoint(
+			template_item_descriptions=["Desc for first", "Desc for second"]
+		)
+		self.assertEqual(doc.checklist[0].description, "Desc for first")
+		self.assertEqual(doc.checklist[1].description, "Desc for second")
+
 	def test_checklist_completed_false_when_any_item_open(self):
 		doc = self._load_provisioned_checkpoint()
 		for row in doc.checklist:
@@ -120,7 +127,7 @@ class TestProjectGateCheckpoint(FrappeTestCase):
 			1,
 		)
 
-	def _load_provisioned_checkpoint(self):
+	def _load_provisioned_checkpoint(self, template_item_descriptions=None):
 		suffix = frappe.generate_hash(length=6)
 		level = frappe.get_doc(
 			{
@@ -129,16 +136,21 @@ class TestProjectGateCheckpoint(FrappeTestCase):
 				"enabled": 1,
 			}
 		).insert(ignore_permissions=True)
+		items = [
+			{"title": "First criterion", "is_mandatory": 1, "is_evidence_mandatory": 0},
+			{"title": "Second criterion", "is_mandatory": 1, "is_evidence_mandatory": 0},
+		]
+		if template_item_descriptions:
+			for idx, row in enumerate(items):
+				if idx < len(template_item_descriptions) and template_item_descriptions[idx] is not None:
+					row["description"] = template_item_descriptions[idx]
 		template = frappe.get_doc(
 			{
 				"doctype": "Stage Gate Template",
 				"name": f"Gate Tpl {suffix}",
 				"checkpoint_level": level.name,
 				"enabled": 1,
-				"items": [
-					{"title": "First criterion", "is_mandatory": 1, "is_evidence_mandatory": 0},
-					{"title": "Second criterion", "is_mandatory": 1, "is_evidence_mandatory": 0},
-				],
+				"items": items,
 			}
 		).insert(ignore_permissions=True)
 		stage_a = frappe.get_doc(
