@@ -20,6 +20,8 @@ class ProjectGateCheckpoint(Document):
 			_get_checkpoint_level_status_map([self.checkpoint_level]),
 			label="Checkpoint Level",
 		)
+		if self.is_new():
+			self._set_gate_due_date_from_stage_instance()
 
 	def on_update(self):
 		self._sync_stage_instance_gate_result_on_approval()
@@ -54,6 +56,15 @@ class ProjectGateCheckpoint(Document):
 		psi = frappe.get_doc("Project Stage Instance", self.stage_instance)
 		psi.gate_result = 1
 		psi.save(ignore_permissions=True)
+
+	def _set_gate_due_date_from_stage_instance(self):
+		if not self.stage_instance:
+			return
+		planned_end = frappe.db.get_value(
+			"Project Stage Instance", self.stage_instance, "planned_end_date"
+		)
+		if planned_end:
+			self.gate_due_date = planned_end
 
 
 def _get_checkpoint_level_status_map(level_names):

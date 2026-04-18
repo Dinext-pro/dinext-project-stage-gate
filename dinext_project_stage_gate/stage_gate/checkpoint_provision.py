@@ -90,6 +90,7 @@ def provision_checkpoint_for_stage_instance(stage_instance: Document) -> None:
 		"stage_chain_version": int(stage_instance.get("stage_chain_version") or 1),
 		"gate_template": template_name,
 		"checkpoint_level": template.checkpoint_level,
+		"gate_due_date": stage_instance.get("planned_end_date"),
 		"checklist": checklist_rows,
 	}
 

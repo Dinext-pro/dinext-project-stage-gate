@@ -370,6 +370,8 @@ class TestProjectStageInstance(FrappeTestCase):
 			self.assertEqual(titles, ["First criterion", "Second criterion"])
 			evidence_flags = [int(c.is_evidence_mandatory or 0) for c in doc.checklist]
 			self.assertEqual(evidence_flags, [1, 0])
+			stage = frappe.get_doc("Project Stage Instance", doc.stage_instance)
+			self.assertEqual(getdate(doc.gate_due_date), getdate(stage.planned_end_date))
 
 	def _make_checkpoint_level(self, name):
 		return frappe.get_doc(

@@ -40,6 +40,11 @@ class TestProjectGateCheckpoint(FrappeTestCase):
 		self.assertEqual(doc.checklist[0].description, "Desc for first")
 		self.assertEqual(doc.checklist[1].description, "Desc for second")
 
+	def test_gate_due_date_matches_stage_planned_end_date_on_insert(self):
+		doc = self._load_provisioned_checkpoint()
+		stage = frappe.get_doc("Project Stage Instance", doc.stage_instance)
+		self.assertEqual(getdate(doc.gate_due_date), getdate(stage.planned_end_date))
+
 	def test_checklist_completed_false_when_any_item_open(self):
 		doc = self._load_provisioned_checkpoint()
 		for row in doc.checklist:
