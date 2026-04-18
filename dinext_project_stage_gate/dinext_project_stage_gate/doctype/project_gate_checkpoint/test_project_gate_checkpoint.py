@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
+from frappe.utils import getdate, nowdate
 
 
 class TestProjectGateCheckpoint(FrappeTestCase):
@@ -77,6 +78,48 @@ class TestProjectGateCheckpoint(FrappeTestCase):
 		doc.reload()
 		self.assertEqual(int(doc.checklist_completed or 0), 0)
 
+	def test_sets_approver_on_first_transition_to_approved(self):
+		frappe.set_user("Administrator")
+		doc = self._load_provisioned_checkpoint()
+		frappe.db.set_value(
+			"Project Gate Checkpoint", doc.name, "status", "In Review", update_modified=False
+		)
+		doc = frappe.get_doc("Project Gate Checkpoint", doc.name)
+		doc.status = "Approved"
+		with patch("frappe.model.document.validate_workflow"):
+			doc.save(ignore_permissions=True)
+		doc.reload()
+		self.assertEqual(doc.approver_user, "Administrator")
+		self.assertEqual(getdate(doc.approval_date), getdate(nowdate()))
+		self.assertEqual(
+			int(frappe.db.get_value("Project Stage Instance", doc.stage_instance, "gate_result") or 0),
+			1,
+		)
+
+	def test_does_not_overwrite_approval_metadata_when_already_approved(self):
+		frappe.set_user("Administrator")
+		doc = self._load_provisioned_checkpoint()
+		frappe.db.set_value(
+			"Project Gate Checkpoint", doc.name, "status", "In Review", update_modified=False
+		)
+		doc = frappe.get_doc("Project Gate Checkpoint", doc.name)
+		doc.status = "Approved"
+		with patch("frappe.model.document.validate_workflow"):
+			doc.save(ignore_permissions=True)
+		doc.reload()
+		first_user = doc.approver_user
+		first_date = doc.approval_date
+		doc.decision_comment = "Updated after approval"
+		with patch("frappe.model.document.validate_workflow"):
+			doc.save(ignore_permissions=True)
+		doc.reload()
+		self.assertEqual(doc.approver_user, first_user)
+		self.assertEqual(getdate(doc.approval_date), getdate(first_date))
+		self.assertEqual(
+			int(frappe.db.get_value("Project Stage Instance", doc.stage_instance, "gate_result") or 0),
+			1,
+		)
+
 	def _load_provisioned_checkpoint(self):
 		suffix = frappe.generate_hash(length=6)
 		level = frappe.get_doc(
@@ -142,9 +185,21 @@ class TestProjectGateCheckpoint(FrappeTestCase):
 		)
 		project.insert(ignore_permissions=True, ignore_mandatory=True)
 
-		cp_name = f"{project.name}-STAGE-001-GATE"
-		self.assertTrue(frappe.db.exists("Project Gate Checkpoint", cp_name))
-		return frappe.get_doc("Project Gate Checkpoint", cp_name)
+		checkpoints = frappe.get_all(
+			"Project Gate Checkpoint",
+			filters={"project": project.name},
+			pluck="name",
+			limit=1,
+		)
+		self.assertTrue(
+			checkpoints,
+			msg=(
+				f"No Project Gate Checkpoint for project {project.name!r}; "
+				f"stage instances: "
+				f"{frappe.get_all('Project Stage Instance', filters={'project': project.name}, pluck='name')}"
+			),
+		)
+		return frappe.get_doc("Project Gate Checkpoint", checkpoints[0])
 
 	def _ensure_company_default_holiday_list(self):
 		if frappe.db.get_value("Company", self.company, "default_holiday_list"):
