@@ -18,6 +18,7 @@
 - Script Report дорожной карты Stage-gate с ленивой загрузкой ECharts
 - Ролевая и permission-модель для `Stage Gate Owner`, `Stage Gate Reviewer`, `Stage Gate Approver` и `Project Governance Admin`
 - Отдельный workflow checkpoint, не изменяющий существующий approval-flow `Project`
+- На форме `Project Gate Checkpoint` строки чеклиста с флагом **Is Mandatory** нельзя удалить, пока флаг не снят; кнопка массового удаления **«Удалить все строки»** для таблицы чеклиста скрыта (см. `project_gate_checkpoint.js`)
 
 ## 🚀 Установка
 
@@ -62,6 +63,8 @@ bench --site <site> export-fixtures --app dinext_project_stage_gate
 5. Обновляет summary-поля на `Project`.
 
 Для каждой созданной `Project Stage Instance`, у которой в соответствующей строке модели управления задан **Checkpoint Template**, создаётся документ `Project Gate Checkpoint` с чек-листом, скопированным из шаблона (имя вида `<PROJECT>-STAGE-001-GATE`). Если шаблон в строке не указан, чекпоинт не создаётся.
+
+При редактировании чеклиста на форме `Project Gate Checkpoint` удаление строки с установленным **Is Mandatory** блокируется на клиенте до тех пор, пока флаг не снят; после снятия флага строку можно удалить и сохранить документ одним сохранением. Массовое удаление всех строк таблицы недоступно (кнопка скрыта), чтобы нельзя было обойти эту проверку.
 
 Дальше форма `Project` использует whitelisted API для отрисовки уже сохраненной Stage-gate цепочки. Если модель управления не назначена, виджет не показывается.
 
@@ -161,6 +164,7 @@ pre-commit install
 - [`dinext_project_stage_gate/stage_gate/project_hooks.py`](dinext_project_stage_gate/stage_gate/project_hooks.py) — orchestration layer для автоматического provisioning и пересчета summary
 - [`dinext_project_stage_gate/stage_gate/query.py`](dinext_project_stage_gate/stage_gate/query.py) — read-model слой для виджета и отчета
 - [`dinext_project_stage_gate/stage_gate/service.py`](dinext_project_stage_gate/stage_gate/service.py) — pure business logic для сборки stage chain и project summary
+- [`dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_gate_checkpoint/project_gate_checkpoint.js`](dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_gate_checkpoint/project_gate_checkpoint.js) — клиентская логика чеклиста (удаление обязательных строк, скрытие «Удалить все строки»)
 - [`dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_stage_instance/test_project_stage_instance.py`](dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_stage_instance/test_project_stage_instance.py) — integration-тесты автосоздания и guard-логики
 
 ## ❤️ Благодарности
