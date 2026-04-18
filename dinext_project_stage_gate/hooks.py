@@ -18,8 +18,7 @@ fixtures = [
 					"Stage Gate Owner",
 					"Stage Gate Reviewer",
 					"Stage Gate Approver",
-					"Project Governance Admin",
-					"Dinext_Project_Manager",
+					"Project Governance Admin"
 				],
 			],
 			["disabled", "=", 0],

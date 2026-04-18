@@ -19,6 +19,7 @@
   "gate_due_date",
   "approver_role",
   "approver_user",
+  "checklist_completed",
   "column_break_ihso",
   "approval_date",
   "decision_comment",
@@ -127,12 +128,20 @@
   {
    "fieldname": "section_break_xtgl",
    "fieldtype": "Section Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "checklist_completed",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Checklist Completed",
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-04-17 03:03:24.732343",
+ "modified": "2026-04-18 00:41:55.509065",
  "modified_by": "Administrator",
  "module": "Dinext Project Stage Gate",
  "name": "Project Gate Checkpoint",
