@@ -328,6 +328,7 @@ class TestProjectStageInstance(FrappeTestCase):
 			f"Gate Tpl {suffix}",
 			level.name,
 			["First criterion", "Second criterion"],
+			is_evidence_mandatory_flags=[1, 0],
 		)
 		governance_model = self._make_governance_model(
 			label="CP", checkpoint_template=template.name
@@ -352,6 +353,8 @@ class TestProjectStageInstance(FrappeTestCase):
 			self.assertEqual(len(doc.checklist), 2)
 			titles = [c.item_title for c in doc.checklist]
 			self.assertEqual(titles, ["First criterion", "Second criterion"])
+			evidence_flags = [int(c.is_evidence_mandatory or 0) for c in doc.checklist]
+			self.assertEqual(evidence_flags, [1, 0])
 
 	def _make_checkpoint_level(self, name):
 		return frappe.get_doc(
@@ -362,14 +365,22 @@ class TestProjectStageInstance(FrappeTestCase):
 			}
 		).insert(ignore_permissions=True)
 
-	def _make_stage_gate_template(self, name, checkpoint_level, item_titles):
+	def _make_stage_gate_template(
+		self, name, checkpoint_level, item_titles, is_evidence_mandatory_flags=None
+	):
+		items = []
+		for idx, t in enumerate(item_titles):
+			row = {"title": t, "is_mandatory": 1}
+			if is_evidence_mandatory_flags is not None:
+				row["is_evidence_mandatory"] = int(is_evidence_mandatory_flags[idx])
+			items.append(row)
 		return frappe.get_doc(
 			{
 				"doctype": "Stage Gate Template",
 				"name": name,
 				"checkpoint_level": checkpoint_level,
 				"enabled": 1,
-				"items": [{"title": t, "is_mandatory": 1} for t in item_titles],
+				"items": items,
 			}
 		).insert(ignore_permissions=True)
 
