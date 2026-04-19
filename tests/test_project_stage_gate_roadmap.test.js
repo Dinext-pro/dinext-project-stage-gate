@@ -419,6 +419,7 @@ test("buildChartOptions makes y-axis project labels explicit and readable", () =
 	});
 
 	assert.equal(options.grid.left, 12);
+	assert.equal(options.grid.top, 44);
 	assert.equal(options.grid.right, 28);
 	assert.equal(options.grid.bottom, 44);
 	assert.equal(options.yAxis.type, "category");
@@ -438,9 +439,72 @@ test("buildChartOptions makes y-axis project labels explicit and readable", () =
 	assert.equal(options.xAxis.splitLine.show, true);
 	assert.equal(options.xAxis.minorSplitLine.show, true);
 	assert.equal(options.yAxis.splitLine.show, true);
+	assert.ok(options.toolbox);
+	assert.equal(options.toolbox.top, 4);
+	assert.ok(options.toolbox.top < options.grid.top);
+	assert.ok(options.toolbox.feature.restore);
+	assert.ok(options.toolbox.feature.saveAsImage);
+	assert.ok(options.toolbox.feature.myShowAllData);
 	assert.equal(options.series[0].clip, true);
 	assert.equal(options.series[1].symbolSize, 22);
 	assert.equal(options.series[1].itemStyle.borderWidth, 2);
+});
+
+test("getFullHorizontalViewport spans full visible timeline from bars and gates", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const viewport = roadmap.getFullHorizontalViewport({
+		bars: [
+			{ value: [0, "2026-02-01", "2026-02-28"] },
+			{ value: [1, "2026-01-15", "2026-03-15"] },
+		],
+		gates: [{ value: ["2026-03-20", 0] }],
+		fromDate: "2026-01-01",
+		toDate: "2026-04-01",
+	});
+
+	assert.equal(viewport.startValue, "2026-01-15");
+	assert.equal(viewport.endValue, "2026-03-20");
+});
+
+test("getFullHorizontalViewport falls back to filter range when dataset is empty", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const viewport = roadmap.getFullHorizontalViewport({
+		bars: [],
+		gates: [],
+		fromDate: "2026-01-01",
+		toDate: "2026-04-01",
+	});
+
+	assert.equal(viewport.startValue, "2026-01-01");
+	assert.equal(viewport.endValue, "2026-04-01");
+});
+
+test("getFullVerticalViewport expands y-axis to all categories", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const viewport = roadmap.getFullVerticalViewport(["A", "B", "C", "D"]);
+	assert.equal(viewport.startValue, 0);
+	assert.equal(viewport.endValue, 3);
+});
+
+test("buildShowAllDataZoomConfig updates all x and y zoom entries consistently", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const dataZoom = roadmap.buildShowAllDataZoomConfig({
+		categories: ["A", "B", "C"],
+		bars: [{ value: [0, "2026-01-01", "2026-02-01"] }],
+		gates: [{ value: ["2026-03-01", 1] }],
+		fromDate: "2025-12-01",
+		toDate: "2026-04-01",
+	});
+
+	assert.equal(dataZoom.length, 4);
+	assert.equal(dataZoom[0].startValue, "2026-01-01");
+	assert.equal(dataZoom[1].endValue, "2026-03-01");
+	assert.equal(dataZoom[2].startValue, 0);
+	assert.equal(dataZoom[3].endValue, 2);
 });
 
 test("wrapAxisLabel splits long project names into at most two lines", () => {
