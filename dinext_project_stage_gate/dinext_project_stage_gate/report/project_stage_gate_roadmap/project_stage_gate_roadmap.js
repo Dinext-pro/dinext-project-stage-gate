@@ -71,11 +71,15 @@ frappe.provide("dinext_project_stage_gate.roadmap");
 dinext_project_stage_gate.roadmap.statusPalette = {
 	light: {
 		stage: {
-			Planned: { fill: "#8f9aa8", stroke: "#738094" },
-			Active: { fill: "#7f95c1", stroke: "#687da8" },
-			Skipped: { fill: "#8190a3", stroke: "#667487" },
-			Completed: { fill: "#739b7f", stroke: "#5f846b" },
-			Canceled: { fill: "#9787b0", stroke: "#7c6d95" },
+			// Keep report colors aligned with the Project widget status classes.
+			Planned: { fill: "#8f9aa8", stroke: "#8f9aa8" },
+			"Waiting Gate": { fill: "#8f9aa8", stroke: "#8f9aa8" },
+			Active: { fill: "#7f95c1", stroke: "#7f95c1" },
+			Skipped: { fill: "#b6b9bd", stroke: "#b6b9bd" },
+			Completed: { fill: "#739b7f", stroke: "#739b7f" },
+			Rejected: { fill: "#c08b8b", stroke: "#c08b8b" },
+			Blocked: { fill: "#c08b8b", stroke: "#c08b8b" },
+			Canceled: { fill: "#9787b0", stroke: "#9787b0" },
 		},
 		checkpoint: {
 			Draft: "#8f9aa8",
@@ -84,16 +88,19 @@ dinext_project_stage_gate.roadmap.statusPalette = {
 			Rejected: "#c08b8b",
 			Canceled: "#9787b0",
 		},
-		fallbackStage: { fill: "#8f9aa8", stroke: "#738094" },
+		fallbackStage: { fill: "#8f9aa8", stroke: "#8f9aa8" },
 		fallbackCheckpoint: "#8f9aa8",
 	},
 	dark: {
 		stage: {
-			Planned: { fill: "#6a7d92", stroke: "#54667a" },
-			Active: { fill: "#4f6fa8", stroke: "#3d5a8a" },
-			Skipped: { fill: "#5c708a", stroke: "#485f7a" },
-			Completed: { fill: "#4e7d5c", stroke: "#3d6a4c" },
-			Canceled: { fill: "#6b5b8f", stroke: "#554570" },
+			Planned: { fill: "#636f7c", stroke: "#636f7c" },
+			"Waiting Gate": { fill: "#636f7c", stroke: "#636f7c" },
+			Active: { fill: "#4f6fa8", stroke: "#4f6fa8" },
+			Skipped: { fill: "#5c708a", stroke: "#5c708a" },
+			Completed: { fill: "#4e7d5c", stroke: "#4e7d5c" },
+			Rejected: { fill: "#a85c5c", stroke: "#a85c5c" },
+			Blocked: { fill: "#a85c5c", stroke: "#a85c5c" },
+			Canceled: { fill: "#6b5b8f", stroke: "#6b5b8f" },
 		},
 		checkpoint: {
 			Draft: "#6a7d92",
@@ -102,7 +109,7 @@ dinext_project_stage_gate.roadmap.statusPalette = {
 			Rejected: "#a85c5c",
 			Canceled: "#6b5b8f",
 		},
-		fallbackStage: { fill: "#6a7d92", stroke: "#54667a" },
+		fallbackStage: { fill: "#636f7c", stroke: "#636f7c" },
 		fallbackCheckpoint: "#6a7d92",
 	},
 };
@@ -147,12 +154,11 @@ dinext_project_stage_gate.roadmap.getContrastTextColor = function (fill) {
 
 dinext_project_stage_gate.roadmap.getStageItemStyle = function (stage) {
 	const fallback = dinext_project_stage_gate.roadmap.getStageColors(stage.status);
-	const fill = stage.color || fallback.fill;
 	return {
-		fill,
+		fill: fallback.fill,
 		stroke: fallback.stroke,
 		lineWidth: 1,
-		textColor: dinext_project_stage_gate.roadmap.getContrastTextColor(fill),
+		textColor: dinext_project_stage_gate.roadmap.getContrastTextColor(fallback.fill),
 	};
 };
 
@@ -178,6 +184,33 @@ dinext_project_stage_gate.roadmap.getDisplayDate = function (actualValue, planne
 	}
 
 	return normalize(plannedValue);
+};
+
+dinext_project_stage_gate.roadmap.getStageDisplayRange = function (stage) {
+	const plannedStart = dinext_project_stage_gate.roadmap.getDisplayDate(
+		null,
+		stage.planned_start_date
+	);
+	const plannedEnd = dinext_project_stage_gate.roadmap.getDisplayDate(null, stage.planned_end_date);
+	const actualStart = dinext_project_stage_gate.roadmap.getDisplayDate(
+		stage.actual_start_date,
+		null
+	);
+	const actualEnd = dinext_project_stage_gate.roadmap.getDisplayDate(stage.actual_end_date, null);
+
+	const actualStartMs = dinext_project_stage_gate.roadmap._parseTimeMs(actualStart);
+	const actualEndMs = dinext_project_stage_gate.roadmap._parseTimeMs(actualEnd);
+
+	// Stage instances auto-fill actual dates on status changes, often as a single timestamp.
+	// For roadmap bars we need a visible interval; otherwise colors collapse into near-invisible lines.
+	if (Number.isFinite(actualStartMs) && Number.isFinite(actualEndMs) && actualEndMs > actualStartMs) {
+		return { start: actualStart, end: actualEnd };
+	}
+
+	return {
+		start: plannedStart || actualStart || actualEnd,
+		end: plannedEnd || actualEnd || actualStart,
+	};
 };
 
 /** Parse report date value to UTC ms (date-only strings treated as UTC midnight). */
@@ -353,20 +386,15 @@ dinext_project_stage_gate.roadmap.prepareSeriesData = function (payload, options
 	const bars = (safe.stageBars || []).map((stage) => {
 		const colors = dinext_project_stage_gate.roadmap.getStageItemStyle(stage);
 		const stageLabel = stage.stage_name || stage.stage;
+		const range = dinext_project_stage_gate.roadmap.getStageDisplayRange(stage);
 		return {
 			name: stageLabel,
 			docType: "Project Stage Instance",
 			docName: stage.name,
 			value: [
 				categoryIndexByLabel[projectIndex[stage.project]] ?? 0,
-				dinext_project_stage_gate.roadmap.getDisplayDate(
-					stage.actual_start_date,
-					stage.planned_start_date
-				),
-				dinext_project_stage_gate.roadmap.getDisplayDate(
-					stage.actual_end_date,
-					stage.planned_end_date
-				),
+				range.start,
+				range.end,
 				stageLabel,
 				dinext_project_stage_gate.roadmap.translateStatus(stage.status),
 				Number(stage.sequence) || 0,
