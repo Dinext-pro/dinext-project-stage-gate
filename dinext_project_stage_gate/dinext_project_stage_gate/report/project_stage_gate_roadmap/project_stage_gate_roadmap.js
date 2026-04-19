@@ -152,13 +152,35 @@ dinext_project_stage_gate.roadmap.getContrastTextColor = function (fill) {
 	return luminance > 0.6 ? "#1f2937" : "#ffffff";
 };
 
+dinext_project_stage_gate.roadmap.getThemeVariableColor = function (variableName, fallback) {
+	if (
+		typeof getComputedStyle !== "function" ||
+		!document ||
+		!document.documentElement ||
+		!variableName
+	) {
+		return fallback;
+	}
+
+	const value = getComputedStyle(document.documentElement).getPropertyValue(variableName).trim();
+	return value || fallback;
+};
+
+dinext_project_stage_gate.roadmap.isDimmedStageStatus = function (status) {
+	return status === "Skipped" || status === "Canceled";
+};
+
 dinext_project_stage_gate.roadmap.getStageItemStyle = function (stage) {
 	const fallback = dinext_project_stage_gate.roadmap.getStageColors(stage.status);
+	const isDimmed = dinext_project_stage_gate.roadmap.isDimmedStageStatus(stage.status);
 	return {
 		fill: fallback.fill,
 		stroke: fallback.stroke,
 		lineWidth: 1,
-		textColor: dinext_project_stage_gate.roadmap.getContrastTextColor(fallback.fill),
+		textColor: isDimmed
+			? dinext_project_stage_gate.roadmap.getThemeVariableColor("--text-muted", "#7c7c7c")
+			: dinext_project_stage_gate.roadmap.getContrastTextColor(fallback.fill),
+		textOpacity: isDimmed ? 0.6 : 1,
 	};
 };
 
@@ -519,6 +541,7 @@ dinext_project_stage_gate.roadmap.buildStageBarGraphic = function ({
 	stroke,
 	lineWidth,
 	textColor,
+	textOpacity,
 }) {
 	const points = dinext_project_stage_gate.roadmap.buildStageBarChevronPoints(
 		startX,
@@ -547,6 +570,7 @@ dinext_project_stage_gate.roadmap.buildStageBarGraphic = function ({
 				y: centerY,
 				text: label,
 				fill: textColor || "#ffffff",
+						opacity: textOpacity ?? 1,
 				fontSize: 11,
 				fontWeight: 600,
 				align: "center",
@@ -633,6 +657,7 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 						stroke,
 						lineWidth,
 						textColor: itemStyle.textColor,
+						textOpacity: itemStyle.textOpacity,
 					});
 				},
 				encode: {

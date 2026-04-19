@@ -26,6 +26,16 @@ function loadRoadmapScript() {
 				},
 			},
 		},
+		getComputedStyle(target) {
+			return {
+				getPropertyValue(name) {
+					if (name !== "--text-muted") {
+						return "";
+					}
+					return target?.getAttribute?.("data-theme") === "dark" ? "#c7c7c7" : "#7c7c7c";
+				},
+			};
+		},
 		frappe: {
 			query_reports: {},
 			datetime: {
@@ -202,6 +212,32 @@ test("prepareSeriesData uses widget status palette instead of per-stage color ov
 	assert.equal(bars[0].value[3], "Discovery");
 	assert.equal(bars[0].itemStyle.color, "#8f9aa8");
 	assert.equal(bars[0].itemStyle.borderColor, "#8f9aa8");
+});
+
+test("getStageItemStyle switches palette with theme exactly like widget", () => {
+	const { roadmap, context } = loadRoadmapScript();
+
+	context.document.documentElement.getAttribute = () => null;
+	const lightStyle = roadmap.getStageItemStyle({ status: "Active" });
+
+	context.document.documentElement.getAttribute = () => "dark";
+	const darkStyle = roadmap.getStageItemStyle({ status: "Active" });
+
+	assert.equal(lightStyle.fill, "#7f95c1");
+	assert.equal(darkStyle.fill, "#4f6fa8");
+});
+
+test("getStageItemStyle dims skipped and canceled stage text like widget", () => {
+	const { roadmap, context } = loadRoadmapScript();
+
+	context.document.documentElement.getAttribute = () => "dark";
+	const skipped = roadmap.getStageItemStyle({ status: "Skipped" });
+	const canceled = roadmap.getStageItemStyle({ status: "Canceled" });
+
+	assert.equal(skipped.textColor, "#c7c7c7");
+	assert.equal(skipped.textOpacity, 0.6);
+	assert.equal(canceled.textColor, "#c7c7c7");
+	assert.equal(canceled.textOpacity, 0.6);
 });
 
 test("prepareSeriesData prefers actual dates and falls back to planned checkpoint due date", () => {
