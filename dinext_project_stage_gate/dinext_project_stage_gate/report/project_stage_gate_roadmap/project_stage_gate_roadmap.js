@@ -257,6 +257,145 @@ dinext_project_stage_gate.roadmap._formatDateForChart = function (ms) {
 	return `${y}-${m}-${day}`;
 };
 
+dinext_project_stage_gate.roadmap._addUtcMonths = function (value, months) {
+	const time = dinext_project_stage_gate.roadmap._parseTimeMs(value);
+	if (!Number.isFinite(time)) {
+		return NaN;
+	}
+	const date = new Date(time);
+	return Date.UTC(
+		date.getUTCFullYear(),
+		date.getUTCMonth() + months,
+		date.getUTCDate(),
+		date.getUTCHours(),
+		date.getUTCMinutes(),
+		date.getUTCSeconds(),
+		date.getUTCMilliseconds()
+	);
+};
+
+dinext_project_stage_gate.roadmap.getDefaultVerticalViewport = function (categories, visibleRows = 10) {
+	const totalRows = Array.isArray(categories) ? categories.length : 0;
+	if (!totalRows) {
+		return { startValue: 0, endValue: 0 };
+	}
+	return {
+		startValue: 0,
+		endValue: Math.min(totalRows, visibleRows) - 1,
+	};
+};
+
+dinext_project_stage_gate.roadmap.getDefaultHorizontalViewport = function ({
+	today,
+	fromDate,
+	toDate,
+	monthsBack = 3,
+	monthsForward = 9,
+} = {}) {
+	const fallbackToday =
+		today || frappe?.datetime?.get_today?.() || new Date().toISOString().slice(0, 10);
+	const fromTime = dinext_project_stage_gate.roadmap._parseTimeMs(fromDate);
+	const toTime = dinext_project_stage_gate.roadmap._parseTimeMs(toDate);
+	let lowerBound = fromTime;
+	let upperBound = toTime;
+
+	if (Number.isFinite(lowerBound) && Number.isFinite(upperBound) && lowerBound > upperBound) {
+		[lowerBound, upperBound] = [upperBound, lowerBound];
+	}
+
+	let startTime = dinext_project_stage_gate.roadmap._addUtcMonths(fallbackToday, -monthsBack);
+	let endTime = dinext_project_stage_gate.roadmap._addUtcMonths(fallbackToday, monthsForward);
+
+	if (Number.isFinite(lowerBound)) {
+		startTime = Math.max(startTime, lowerBound);
+	}
+	if (Number.isFinite(upperBound)) {
+		endTime = Math.min(endTime, upperBound);
+	}
+
+	if (!Number.isFinite(startTime) && Number.isFinite(lowerBound)) {
+		startTime = lowerBound;
+	}
+	if (!Number.isFinite(endTime) && Number.isFinite(upperBound)) {
+		endTime = upperBound;
+	}
+	if (!Number.isFinite(startTime) && Number.isFinite(endTime)) {
+		startTime = endTime;
+	}
+	if (!Number.isFinite(endTime) && Number.isFinite(startTime)) {
+		endTime = startTime;
+	}
+
+	if (endTime < startTime) {
+		if (Number.isFinite(lowerBound) && Number.isFinite(upperBound)) {
+			startTime = lowerBound;
+			endTime = upperBound;
+		} else if (Number.isFinite(lowerBound)) {
+			startTime = lowerBound;
+			endTime = lowerBound;
+		} else if (Number.isFinite(upperBound)) {
+			startTime = upperBound;
+			endTime = upperBound;
+		}
+	}
+
+	return {
+		startValue: dinext_project_stage_gate.roadmap._formatDateForChart(startTime),
+		endValue: dinext_project_stage_gate.roadmap._formatDateForChart(endTime),
+	};
+};
+
+dinext_project_stage_gate.roadmap.buildDataZoomConfig = function ({
+	categories,
+	fromDate,
+	toDate,
+	today,
+} = {}) {
+	const horizontal = dinext_project_stage_gate.roadmap.getDefaultHorizontalViewport({
+		today,
+		fromDate,
+		toDate,
+	});
+	const vertical = dinext_project_stage_gate.roadmap.getDefaultVerticalViewport(categories);
+
+	return [
+		{
+			type: "inside",
+			xAxisIndex: 0,
+			filterMode: "none",
+			startValue: horizontal.startValue,
+			endValue: horizontal.endValue,
+		},
+		{
+			type: "slider",
+			xAxisIndex: 0,
+			filterMode: "none",
+			height: 18,
+			bottom: 8,
+			startValue: horizontal.startValue,
+			endValue: horizontal.endValue,
+		},
+		{
+			type: "inside",
+			yAxisIndex: 0,
+			filterMode: "none",
+			startValue: vertical.startValue,
+			endValue: vertical.endValue,
+		},
+		{
+			type: "slider",
+			yAxisIndex: 0,
+			filterMode: "none",
+			width: 14,
+			right: 8,
+			top: 16,
+			bottom: 40,
+			startValue: vertical.startValue,
+			endValue: vertical.endValue,
+		},
+	];
+};
+
 dinext_project_stage_gate.roadmap.isStrictlyWithinDisplayRange = function (value, options) {
 	const time = dinext_project_stage_gate.roadmap._parseTimeMs(value);
 	if (!Number.isFinite(time)) {
@@ -612,12 +751,27 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 	const chart = echarts.init(dom);
 	dom._dinextRoadmapChart = chart;
 	const payload = report.raw_data?.message || { projects: [], stageBars: [], gates: [] };
+	const fromDate = report.get_filter_value?.("from_date");
+	const toDate = report.get_filter_value?.("to_date");
 	const { categories, bars, gates } = dinext_project_stage_gate.roadmap.prepareSeriesData(payload, {
-		fromDate: report.get_filter_value?.("from_date"),
-		toDate: report.get_filter_value?.("to_date"),
+		fromDate,
+		toDate,
+	});
+	const dataZoom = dinext_project_stage_gate.roadmap.buildDataZoomConfig({
+		categories,
+		fromDate,
+		toDate,
+		today: frappe?.datetime?.get_today?.(),
 	});
 
 	chart.setOption({
+		grid: {
+			containLabel: true,
+			top: 16,
+			right: 40,
+			bottom: 48,
+			left: 16,
+		},
 		tooltip: {
 			trigger: "item",
 			formatter(params) {
@@ -632,6 +786,7 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 			type: "category",
 			data: categories,
 		},
+		dataZoom,
 		series: [
 			{
 				type: "custom",
