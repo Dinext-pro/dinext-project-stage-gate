@@ -236,6 +236,15 @@ class TestProjectStageInstance(FrappeTestCase):
 		)
 		self.assertTrue(v1_cp)
 		self.assertTrue(all(row.status == "Canceled" for row in v1_cp))
+		for checkpoint_name in frappe.get_all(
+			"Project Gate Checkpoint",
+			filters={"project": project.name, "stage_chain_version": 1},
+			pluck="name",
+		):
+			checkpoint = frappe.get_doc("Project Gate Checkpoint", checkpoint_name)
+			self.assertEqual(int(checkpoint.checklist_completed or 0), 1)
+			self.assertTrue(checkpoint.checklist)
+			self.assertTrue(all(row.status == "Canceled" for row in checkpoint.checklist))
 
 	def test_clear_governance_model_with_confirm_cancels_chain(self):
 		governance_model = self._make_governance_model(label="Clear")

@@ -98,17 +98,16 @@ def cancel_stage_gate_chain(project: str, chain_version: int) -> None:
 		filters={"stage_instance": ["in", psi_names]},
 		pluck="name",
 	)
-	user = frappe.session.user
-	now = frappe.utils.now()
 	for cp in cp_names:
-		frappe.db.sql(
-			"""
-			update `tabProject Gate Checklist Item`
-			set status='Canceled', modified=%(now)s, modified_by=%(user)s
-			where parenttype=%(pt)s and parent=%(parent)s
-			""",
-			{"now": now, "user": user, "pt": "Project Gate Checkpoint", "parent": cp},
-		)
+		checkpoint = frappe.get_doc("Project Gate Checkpoint", cp)
+		checklist_updated = False
+		for row in checkpoint.checklist or []:
+			if row.status == "Canceled":
+				continue
+			row.status = "Canceled"
+			checklist_updated = True
+		if checklist_updated:
+			checkpoint.save(ignore_permissions=True)
 		frappe.db.set_value("Project Gate Checkpoint", cp, "status", "Canceled", update_modified=True)
 
 	for psi in psi_names:
