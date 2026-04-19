@@ -40,13 +40,13 @@ frappe.query_reports["Project Stage Gate Roadmap"] = {
 			fieldname: "from_date",
 			label: __("From"),
 			fieldtype: "Date",
-			default: frappe.datetime.add_months(frappe.datetime.get_today(), -6),
+			default: frappe.datetime.add_months(frappe.datetime.get_today(), -12),
 		},
 		{
 			fieldname: "to_date",
 			label: __("To"),
 			fieldtype: "Date",
-			default: frappe.datetime.add_months(frappe.datetime.get_today(), 12),
+			default: frappe.datetime.add_months(frappe.datetime.get_today(), 36),
 		},
 		{
 			fieldname: "active_only",
@@ -127,6 +127,97 @@ dinext_project_stage_gate.roadmap.getEChartsThemeName = function () {
 
 dinext_project_stage_gate.roadmap.translateStatus = function (value) {
 	return value ? __(value) : value;
+};
+
+dinext_project_stage_gate.roadmap.chartMonthLabels = [
+	"янв",
+	"фев",
+	"мар",
+	"апр",
+	"май",
+	"июн",
+	"июл",
+	"авг",
+	"сен",
+	"окт",
+	"ноя",
+	"дек",
+];
+
+dinext_project_stage_gate.roadmap.X_AXIS_MONTH_ONLY_THRESHOLD_DAYS = 100;
+
+dinext_project_stage_gate.roadmap.formatXAxisLabel = function (value, options = {}) {
+	const time = dinext_project_stage_gate.roadmap._parseTimeMs(value);
+	if (!Number.isFinite(time)) {
+		return String(value ?? "");
+	}
+
+	const date = new Date(time);
+	const monthLabel =
+		dinext_project_stage_gate.roadmap.chartMonthLabels[date.getUTCMonth()] ||
+		String(date.getUTCMonth() + 1);
+	if (options.monthOnly) {
+		return `${monthLabel} ${date.getUTCFullYear()}`;
+	}
+	const day = date.getUTCDate();
+	return day === 1 ? `${monthLabel} ${date.getUTCFullYear()}` : `${day} ${monthLabel}`;
+};
+
+dinext_project_stage_gate.roadmap.getHorizontalRangeFromDataZoom = function (dataZoom) {
+	const zoomEntries = Array.isArray(dataZoom) ? dataZoom : [];
+	const horizontalZoom = zoomEntries.find(
+		(zoom) => zoom && zoom.xAxisIndex === 0 && zoom.startValue != null && zoom.endValue != null
+	);
+	if (!horizontalZoom) {
+		return {};
+	}
+	return {
+		startValue: horizontalZoom.startValue,
+		endValue: horizontalZoom.endValue,
+	};
+};
+
+dinext_project_stage_gate.roadmap.shouldUseMonthOnlyXAxisLabels = function (
+	{ startValue, endValue } = {},
+	thresholdDays = dinext_project_stage_gate.roadmap.X_AXIS_MONTH_ONLY_THRESHOLD_DAYS
+) {
+	const startTime = dinext_project_stage_gate.roadmap._parseTimeMs(startValue);
+	const endTime = dinext_project_stage_gate.roadmap._parseTimeMs(endValue);
+	if (!Number.isFinite(startTime) || !Number.isFinite(endTime) || endTime <= startTime) {
+		return false;
+	}
+	const visibleDays = (endTime - startTime) / (24 * 60 * 60 * 1000);
+	return visibleDays >= thresholdDays;
+};
+
+dinext_project_stage_gate.roadmap.getMonthOnlyXAxisLabelsForDataZoom = function (dataZoom) {
+	return dinext_project_stage_gate.roadmap.shouldUseMonthOnlyXAxisLabels(
+		dinext_project_stage_gate.roadmap.getHorizontalRangeFromDataZoom(dataZoom)
+	);
+};
+
+dinext_project_stage_gate.roadmap.updateXAxisLabelDensity = function (chart) {
+	if (!chart || typeof chart.getOption !== "function" || typeof chart.setOption !== "function") {
+		return;
+	}
+	const monthOnly = dinext_project_stage_gate.roadmap.getMonthOnlyXAxisLabelsForDataZoom(
+		chart.getOption()?.dataZoom
+	);
+	if (chart._dinextMonthOnlyXAxisLabels === monthOnly) {
+		return;
+	}
+	chart._dinextMonthOnlyXAxisLabels = monthOnly;
+	chart.setOption({
+		xAxis: {
+			axisLabel: {
+				formatter(value) {
+					return dinext_project_stage_gate.roadmap.formatXAxisLabel(value, {
+						monthOnly,
+					});
+				},
+			},
+		},
+	});
 };
 
 dinext_project_stage_gate.roadmap.getStageColors = function (status) {
@@ -351,6 +442,9 @@ dinext_project_stage_gate.roadmap.getStageDisplayRange = function (stage) {
 dinext_project_stage_gate.roadmap._parseTimeMs = function (value) {
 	if (value == null || value === "") {
 		return NaN;
+	}
+	if (typeof value === "number") {
+		return Number.isFinite(value) ? value : NaN;
 	}
 	if (value instanceof Date) {
 		return value.getTime();
@@ -599,6 +693,7 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 	gates,
 	dataZoom,
 	onShowAllData,
+	monthOnlyXAxisLabels = false,
 } = {}) {
 	const gridLineColor = dinext_project_stage_gate.roadmap.getThemeVariableColor(
 		"--border-color",
@@ -626,7 +721,9 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 			top: 4,
 			itemSize: 16,
 			feature: {
-				restore: {},
+				restore: {
+					title: __("Restore"),
+				},
 				myShowAllData: {
 					show: true,
 					title: __("Show All"),
@@ -636,6 +733,7 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 					},
 				},
 				saveAsImage: {
+					title: __("Save as Image"),
 					name: "project-stage-gate-roadmap",
 					pixelRatio: 2,
 					backgroundColor: dinext_project_stage_gate.roadmap.getThemeVariableColor(
@@ -647,6 +745,13 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 		},
 		xAxis: {
 			type: "time",
+			axisLabel: {
+				formatter(value) {
+					return dinext_project_stage_gate.roadmap.formatXAxisLabel(value, {
+						monthOnly: monthOnlyXAxisLabels,
+					});
+				},
+			},
 			splitLine: {
 				show: true,
 				lineStyle: {
@@ -1124,6 +1229,8 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 		toDate,
 		today: frappe?.datetime?.get_today?.(),
 	});
+	const monthOnlyXAxisLabels =
+		dinext_project_stage_gate.roadmap.getMonthOnlyXAxisLabelsForDataZoom(dataZoom);
 
 	chart.setOption(
 		dinext_project_stage_gate.roadmap.buildChartOptions({
@@ -1131,13 +1238,19 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 			bars,
 			gates,
 			dataZoom,
+			monthOnlyXAxisLabels,
 			onShowAllData() {
 				chart.setOption({
 					dataZoom: showAllDataZoom,
 				});
+				dinext_project_stage_gate.roadmap.updateXAxisLabelDensity(chart);
 			},
 		})
 	);
+	chart._dinextMonthOnlyXAxisLabels = monthOnlyXAxisLabels;
+	chart.on("datazoom", () => {
+		dinext_project_stage_gate.roadmap.updateXAxisLabelDensity(chart);
+	});
 
 	dinext_project_stage_gate.roadmap.attachChartClickNavigation(chart);
 };
