@@ -26,6 +26,13 @@ def _project_fields():
 	]
 
 
+def _get_permission_aware_list(doctype, **kwargs):
+	get_list = getattr(frappe, "get_list", None)
+	if callable(get_list):
+		return get_list(doctype, **kwargs)
+	return frappe.get_all(doctype, **kwargs)
+
+
 def _getdate(value):
 	utils = getattr(frappe, "utils", None)
 	if utils and hasattr(utils, "getdate"):
@@ -221,7 +228,7 @@ def get_roadmap_dataset(filters=None):
 	if filters.get("active_only"):
 		project_filters["stage_gate_status"] = ["in", ["Active", "Waiting Gate", "Blocked", "Rejected"]]
 
-	project_rows = frappe.get_all(
+	project_rows = _get_permission_aware_list(
 		"Project",
 		filters=project_filters,
 		fields=_project_fields(),
@@ -255,7 +262,7 @@ def get_roadmap_dataset(filters=None):
 		stage_filters["planned_start_date"] = ["<=", filters["to_date"]]
 	elif not has_user_from and not has_user_to:
 		stage_filters["planned_start_date"] = ["<=", range_end]
-	stage_rows = frappe.get_all(
+	stage_rows = _get_permission_aware_list(
 		"Project Stage Instance",
 		filters=stage_filters,
 		fields=[
