@@ -34,7 +34,6 @@
   {
    "fieldname": "project",
    "fieldtype": "Link",
-   "hidden": 1,
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Project",
@@ -172,7 +171,7 @@
  "in_create": 1,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-04-18 16:23:04.436134",
+ "modified": "2026-04-20 00:07:35.160871",
  "modified_by": "Administrator",
  "module": "Dinext Project Stage Gate",
  "name": "Project Stage Instance",

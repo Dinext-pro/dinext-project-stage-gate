@@ -394,6 +394,8 @@ test("buildDataZoomConfig returns slider and inside zoom for both axes", () => {
 	assert.equal(dataZoom[2].endValue, 9);
 	assert.equal(dataZoom[0].startValue, "2025-10-01");
 	assert.equal(dataZoom[0].endValue, "2026-10-01");
+	assert.equal(dataZoom[1].height, 24);
+	assert.equal(dataZoom[3].width, 18);
 });
 
 test("getEChartsThemeName uses the standard dark theme only for dark mode", () => {
@@ -416,14 +418,135 @@ test("buildChartOptions makes y-axis project labels explicit and readable", () =
 		dataZoom: [],
 	});
 
-	assert.equal(options.grid.left, 160);
+	assert.equal(options.grid.left, 12);
+	assert.equal(options.grid.right, 28);
+	assert.equal(options.grid.bottom, 44);
 	assert.equal(options.yAxis.type, "category");
 	assert.equal(options.yAxis.data.length, 2);
 	assert.equal(options.yAxis.axisLabel.show, true);
 	assert.equal(options.yAxis.axisLabel.interval, 0);
-	assert.equal(options.yAxis.axisLabel.width, 140);
-	assert.equal(options.yAxis.axisLabel.overflow, "truncate");
+	assert.equal(options.yAxis.axisLabel.width, 176);
+	assert.equal(options.yAxis.axisLabel.fontSize, 11);
+	assert.equal(options.yAxis.axisLabel.lineHeight, 14);
+	assert.equal(options.yAxis.axisLabel.align, "right");
+	assert.equal(options.yAxis.axisLabel.margin, 12);
+	assert.equal(typeof options.yAxis.axisLabel.formatter, "function");
+	assert.match(
+		options.yAxis.axisLabel.formatter("Лукойл: Внедрение CRM и Service Desk"),
+		/\n/
+	);
+	assert.equal(options.xAxis.splitLine.show, true);
+	assert.equal(options.xAxis.minorSplitLine.show, true);
+	assert.equal(options.yAxis.splitLine.show, true);
 	assert.equal(options.series[0].clip, true);
+	assert.equal(options.series[1].symbolSize, 22);
+	assert.equal(options.series[1].itemStyle.borderWidth, 2);
+});
+
+test("wrapAxisLabel splits long project names into at most two lines", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const wrapped = roadmap.wrapAxisLabel("Лукойл: Внедрение CRM и Service Desk");
+	assert.match(wrapped, /\n/);
+	assert.equal(wrapped.split("\n").length, 2);
+	assert.ok(wrapped.split("\n")[0].length > 16);
+
+	const shortLabel = roadmap.wrapAxisLabel("Короткое имя");
+	assert.equal(shortLabel, "Короткое имя");
+});
+
+test("buildStageBarGraphic scales label font size down for shorter visible bars", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const compact = roadmap.buildStageBarGraphic({
+		startX: 10,
+		endX: 110,
+		centerY: 40,
+		height: 18,
+		label: "Discovery",
+		fill: "#abcdef",
+		stroke: "#123456",
+		lineWidth: 2,
+		textColor: "#ffffff",
+	});
+	const spacious = roadmap.buildStageBarGraphic({
+		startX: 10,
+		endX: 260,
+		centerY: 40,
+		height: 18,
+		label: "Discovery",
+		fill: "#abcdef",
+		stroke: "#123456",
+		lineWidth: 2,
+		textColor: "#ffffff",
+	});
+
+	assert.equal(compact.children[1].style.fontSize, 10);
+	assert.equal(spacious.children[1].style.fontSize, 12);
+});
+
+test("buildStageBarGraphic hides stage text when the visible bar is too narrow", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const graphic = roadmap.buildStageBarGraphic({
+		startX: 10,
+		endX: 58,
+		centerY: 40,
+		height: 18,
+		label: "Discovery",
+		fill: "#abcdef",
+		stroke: "#123456",
+		lineWidth: 2,
+		textColor: "#ffffff",
+	});
+
+	assert.equal(graphic.children.length, 1);
+});
+
+test("formatTooltip renders stage details without duplicating the stage name", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const tooltip = roadmap.formatTooltip({
+		name: "Реализация",
+		data: { docType: "Project Stage Instance" },
+		value: [0, "2026-01-01", "2026-02-01", "Реализация", "Active"],
+	});
+
+	assert.equal(
+		tooltip,
+		["Реализация", "Active", "2026-01-01 - 2026-02-01"].join("<br>")
+	);
+});
+
+test("prepareSeriesData adds outlined checkpoint styling for contrast", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const { gates } = roadmap.prepareSeriesData({
+		projects: [{ name: "PRJ-1", project_name: "Alpha" }],
+		stageBars: [],
+		gates: [
+			{
+				name: "PGC-20",
+				project: "PRJ-1",
+				approval_date: "2026-02-15",
+				status: "Approved",
+				checkpoint_level: "Gate 1",
+			},
+		],
+	});
+
+	assert.equal(gates[0].itemStyle.borderWidth, 2);
+	assert.ok(gates[0].itemStyle.shadowBlur >= 6);
+	assert.ok(gates[0].itemStyle.borderColor);
+});
+
+test("calculateChartHeight scales with row count but stays within sensible bounds", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	assert.equal(roadmap.calculateChartHeight([]), 420);
+	assert.equal(roadmap.calculateChartHeight(new Array(6).fill("row")), 420);
+	assert.equal(roadmap.calculateChartHeight(new Array(14).fill("row")), 520);
+	assert.equal(roadmap.calculateChartHeight(new Array(40).fill("row")), 680);
 });
 
 test("navigateFromChartItem calls set_route when doc present and can_read", () => {
