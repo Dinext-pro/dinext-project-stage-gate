@@ -40,11 +40,13 @@ frappe.query_reports["Project Stage Gate Roadmap"] = {
 			fieldname: "from_date",
 			label: __("From"),
 			fieldtype: "Date",
+			default: frappe.datetime.add_months(frappe.datetime.get_today(), -6),
 		},
 		{
 			fieldname: "to_date",
 			label: __("To"),
 			fieldtype: "Date",
+			default: frappe.datetime.add_months(frappe.datetime.get_today(), 12),
 		},
 		{
 			fieldname: "active_only",
@@ -123,6 +125,75 @@ dinext_project_stage_gate.roadmap.getStageColors = function (status) {
 dinext_project_stage_gate.roadmap.getCheckpointColor = function (status) {
 	const palette = dinext_project_stage_gate.roadmap.getActivePalette();
 	return palette.checkpoint[status] || palette.fallbackCheckpoint;
+};
+
+/** Parse report date value to UTC ms (date-only strings treated as UTC midnight). */
+dinext_project_stage_gate.roadmap._parseTimeMs = function (value) {
+	if (value == null || value === "") {
+		return NaN;
+	}
+	if (value instanceof Date) {
+		return value.getTime();
+	}
+	const s = String(value).trim();
+	const iso = /^\d{4}-\d{2}-\d{2}$/.test(s) ? `${s}T00:00:00.000Z` : s;
+	const t = Date.parse(iso);
+	return Number.isFinite(t) ? t : NaN;
+};
+
+dinext_project_stage_gate.roadmap._formatDateForChart = function (ms) {
+	const d = new Date(ms);
+	const y = d.getUTCFullYear();
+	const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+	const day = String(d.getUTCDate()).padStart(2, "0");
+	return `${y}-${m}-${day}`;
+};
+
+/**
+ * When every stage on a row shares the same start/end, intervals stack in the chart as one shape.
+ * Split the shared range into equal slices by sequence so each stage is visible (like the widget chain).
+ */
+dinext_project_stage_gate.roadmap.normalizeIdenticalStageRanges = function (bars) {
+	if (!bars || !bars.length) {
+		return;
+	}
+	const byRow = {};
+	bars.forEach((bar) => {
+		const row = bar.value[0];
+		(byRow[row] ??= []).push(bar);
+	});
+	Object.values(byRow).forEach((rowBars) => {
+		if (rowBars.length <= 1) {
+			return;
+		}
+		rowBars.sort((a, b) => (a.value[5] ?? 0) - (b.value[5] ?? 0));
+		const tStart = dinext_project_stage_gate.roadmap._parseTimeMs(rowBars[0].value[1]);
+		const tEnd = dinext_project_stage_gate.roadmap._parseTimeMs(rowBars[0].value[2]);
+		if (!Number.isFinite(tStart) || !Number.isFinite(tEnd) || tEnd <= tStart) {
+			return;
+		}
+		const sameWindow = rowBars.every((b) => {
+			const s = dinext_project_stage_gate.roadmap._parseTimeMs(b.value[1]);
+			const e = dinext_project_stage_gate.roadmap._parseTimeMs(b.value[2]);
+			return s === tStart && e === tEnd;
+		});
+		if (!sameWindow) {
+			return;
+		}
+		const n = rowBars.length;
+		const span = tEnd - tStart;
+		const slice = span / n;
+		const innerGap = Math.min(slice * 0.06, 2 * 86400000);
+		rowBars.forEach((bar, i) => {
+			let s = tStart + i * slice + (i === 0 ? 0 : innerGap / 2);
+			let e = tStart + (i + 1) * slice - (i === n - 1 ? 0 : innerGap / 2);
+			if (e <= s) {
+				e = s + 86400000;
+			}
+			bar.value[1] = dinext_project_stage_gate.roadmap._formatDateForChart(s);
+			bar.value[2] = dinext_project_stage_gate.roadmap._formatDateForChart(e);
+		});
+	});
 };
 
 dinext_project_stage_gate.roadmap.ensure_theme_observer = function (report) {
@@ -216,15 +287,11 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 	dom._dinextRoadmapChart = chart;
 	const payload = report.raw_data?.message || { projects: [], stageBars: [], gates: [] };
 	const projectIndex = {};
-	const categories = payload.projects.map(
-		(project) => {
-			const label = `${project.custom_project_portfolio || __("No Portfolio")} / ${
-				project.project_name || project.name
-			}`;
-			projectIndex[project.name] = label;
-			return label;
-		}
-	);
+	const categories = payload.projects.map((project) => {
+		const label = project.project_name || project.name;
+		projectIndex[project.name] = label;
+		return label;
+	});
 	const categoryIndexByLabel = Object.fromEntries(categories.map((label, index) => [label, index]));
 
 	const bars = payload.stageBars.map(
@@ -238,14 +305,17 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 					stage.actual_end_date || stage.planned_end_date,
 					stage.stage,
 					dinext_project_stage_gate.roadmap.translateStatus(stage.status),
+					Number(stage.sequence) || 0,
 				],
 				itemStyle: {
-					fill: colors.fill,
-					stroke: colors.stroke,
+					color: colors.fill,
+					borderColor: colors.stroke,
+					borderWidth: 1,
 				},
 			};
 		}
 	);
+	dinext_project_stage_gate.roadmap.normalizeIdenticalStageRanges(bars);
 	const gates = payload.gates
 		.filter((gate) => gate.approval_date)
 		.map(
@@ -285,15 +355,38 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 					const start = api.coord([api.value(1), categoryIndex]);
 					const end = api.coord([api.value(2), categoryIndex]);
 					const height = api.size([0, 1])[1] * 0.5;
+					const width = Math.max(end[0] - start[0], 4);
+					const x0 = start[0];
+					const x1 = end[0];
+					const yc = start[1];
+					const MAX_INSET = 14;
+					const inset = Math.min(MAX_INSET, Math.max(0, (width - 1) / 2));
+					const tip = inset;
+					const notch = inset;
+					const points = [
+						[x0, yc - height / 2],
+						[x1 - tip, yc - height / 2],
+						[x1, yc],
+						[x1 - tip, yc + height / 2],
+						[x0, yc + height / 2],
+						[x0 + notch, yc],
+					];
+					const fromApi = api.style();
+					const itemStyle = params.data?.itemStyle || {};
+					const fill = fromApi.fill || fromApi.color || itemStyle.color || itemStyle.fill;
+					const stroke =
+						fromApi.stroke || fromApi.borderColor || itemStyle.borderColor || itemStyle.stroke;
+					const lineWidth =
+						fromApi.lineWidth ?? fromApi.borderWidth ?? itemStyle.borderWidth ?? 1;
 					return {
-						type: "rect",
-						shape: {
-							x: start[0],
-							y: start[1] - height / 2,
-							width: Math.max(end[0] - start[0], 4),
-							height,
+						type: "polygon",
+						shape: { points },
+						style: {
+							...fromApi,
+							fill,
+							stroke,
+							lineWidth,
 						},
-						style: api.style(),
 					};
 				},
 				encode: {
@@ -304,7 +397,12 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 			},
 			{
 				type: "scatter",
-				symbolSize: 12,
+				symbol: "diamond",
+				symbolSize: 20,
+				encode: {
+					x: 0,
+					y: 1,
+				},
 				data: gates,
 			},
 		],

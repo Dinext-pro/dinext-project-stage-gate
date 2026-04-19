@@ -1,6 +1,7 @@
 import sys
 import types
 import unittest
+from datetime import date
 
 try:
 	import frappe  # noqa: F401
@@ -12,6 +13,8 @@ except ModuleNotFoundError:
 	sys.modules["frappe"] = _frappe_stub
 
 from unittest.mock import patch
+
+from frappe.utils import add_months
 
 from dinext_project_stage_gate.stage_gate import query
 
@@ -62,8 +65,9 @@ class TestStageGateQuery(unittest.TestCase):
 		self.assertEqual(result[0]["stage_name"], "Discovery")
 		self.assertEqual(result[0]["checkpoints"][0]["checkpoint_level"], "Stage Exit")
 
+	@patch.object(query, "_today", return_value=date(2026, 4, 19))
 	@patch("dinext_project_stage_gate.stage_gate.query.frappe.get_all")
-	def test_get_roadmap_dataset_returns_checkpoint_level_field(self, get_all):
+	def test_get_roadmap_dataset_returns_checkpoint_level_field(self, get_all, _mock_today):
 		get_all.side_effect = [
 			[
 				{
@@ -128,8 +132,16 @@ class TestStageGateQuery(unittest.TestCase):
 		self.assertEqual(result["gates"][0]["checkpoint_level"], "Stage Exit")
 		self.assertEqual(result["projects"][0]["project_manager"], "Project Manager")
 
+		stage_call = get_all.call_args_list[3]
+		self.assertEqual(stage_call.args[0], "Project Stage Instance")
+		stage_filters = stage_call.kwargs["filters"]
+		t0 = date(2026, 4, 19)
+		self.assertEqual(stage_filters["planned_end_date"], [">=", add_months(t0, -6)])
+		self.assertEqual(stage_filters["planned_start_date"], ["<=", add_months(t0, 12)])
+
+	@patch.object(query, "_today", return_value=date(2026, 4, 19))
 	@patch("dinext_project_stage_gate.stage_gate.query.frappe.get_all")
-	def test_get_roadmap_dataset_active_only_keeps_legacy_inflight_statuses(self, get_all):
+	def test_get_roadmap_dataset_active_only_keeps_legacy_inflight_statuses(self, get_all, _mock_today):
 		get_all.side_effect = [[], [], []]
 
 		query.get_roadmap_dataset({"active_only": 1})
@@ -245,3 +257,17 @@ class TestStageGateQuery(unittest.TestCase):
 		result = query.get_roadmap_dataset({"project_manager": "pm@example.com"})
 
 		self.assertEqual([project["name"] for project in result["projects"]], ["PROJ-001"])
+
+	@patch.object(query, "_today", return_value=date(2026, 4, 19))
+	@patch("dinext_project_stage_gate.stage_gate.query.frappe.get_all")
+	def test_get_roadmap_dataset_default_range_applies_stage_date_filters(self, get_all, _mock_today):
+		get_all.side_effect = [[], [], []]
+
+		query.get_roadmap_dataset({})
+
+		stage_call = get_all.call_args_list[1]
+		self.assertEqual(stage_call.args[0], "Project Stage Instance")
+		stage_filters = stage_call.kwargs["filters"]
+		t0 = date(2026, 4, 19)
+		self.assertEqual(stage_filters["planned_end_date"], [">=", add_months(t0, -6)])
+		self.assertEqual(stage_filters["planned_start_date"], ["<=", add_months(t0, 12)])

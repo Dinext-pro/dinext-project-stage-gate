@@ -1,6 +1,7 @@
 from datetime import date
 
 import frappe
+from frappe.utils import add_months
 
 PROJECT_MANAGER_ROLE = "Руководитель проекта"
 
@@ -47,7 +48,7 @@ def _resolve_report_range(filters):
 	today_date = _today()
 
 	if from_date is None and to_date is None:
-		return today_date, today_date
+		return add_months(today_date, -6), add_months(today_date, 12)
 
 	range_start = from_date or today_date
 	range_end = to_date or today_date
@@ -244,10 +245,16 @@ def get_roadmap_dataset(filters=None):
 
 	project_meta = {_get(row, "name"): row for row in project_rows}
 	stage_filters = {"project": ["in", project_names]} if project_names else {"project": ["in", [""]]}
-	if filters.get("from_date"):
+	has_user_from = bool(filters.get("from_date"))
+	has_user_to = bool(filters.get("to_date"))
+	if has_user_from:
 		stage_filters["planned_end_date"] = [">=", filters["from_date"]]
-	if filters.get("to_date"):
+	elif not has_user_from and not has_user_to:
+		stage_filters["planned_end_date"] = [">=", range_start]
+	if has_user_to:
 		stage_filters["planned_start_date"] = ["<=", filters["to_date"]]
+	elif not has_user_from and not has_user_to:
+		stage_filters["planned_start_date"] = ["<=", range_end]
 	stage_rows = frappe.get_all(
 		"Project Stage Instance",
 		filters=stage_filters,
