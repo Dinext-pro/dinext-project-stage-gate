@@ -854,6 +854,7 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 		},
 		yAxis: {
 			type: "category",
+			triggerEvent: true,
 			data: categories || [],
 			splitLine: {
 				show: true,
@@ -1088,14 +1089,19 @@ dinext_project_stage_gate.roadmap.ensure_chart_mount = function (report) {
  * Build categories, stage bars, and gate markers from report payload (for chart and tests).
  * @param {{ projects?: unknown[], stageBars?: unknown[], gates?: unknown[] }} payload
  * @param {{ fromDate?: string, toDate?: string }} [options]
- * @returns {{ categories: string[], bars: object[], gates: object[] }}
+ * @returns {{ categories: string[], bars: object[], gates: object[], projectDocsByLabel: Record<string, { docType: string, docName: string }> }}
  */
 dinext_project_stage_gate.roadmap.prepareSeriesData = function (payload, options) {
 	const safe = payload || { projects: [], stageBars: [], gates: [] };
 	const projectIndex = {};
+	const projectDocsByLabel = {};
 	const categories = (safe.projects || []).map((project) => {
 		const label = project.project_name || project.name;
 		projectIndex[project.name] = label;
+		projectDocsByLabel[label] = {
+			docType: "Project",
+			docName: project.name,
+		};
 		return label;
 	});
 	const categoryIndexByLabel = Object.fromEntries(categories.map((label, index) => [label, index]));
@@ -1151,7 +1157,7 @@ dinext_project_stage_gate.roadmap.prepareSeriesData = function (payload, options
 			},
 		}));
 
-	return { categories, bars, gates };
+	return { categories, bars, gates, projectDocsByLabel };
 };
 
 /**
@@ -1169,18 +1175,42 @@ dinext_project_stage_gate.roadmap.navigateFromChartItem = function (data) {
 	frappe.set_route("Form", data.docType, data.docName);
 };
 
-dinext_project_stage_gate.roadmap._chartClickHandler = function (params) {
-	dinext_project_stage_gate.roadmap.navigateFromChartItem(params.data);
+dinext_project_stage_gate.roadmap._getAxisNavigationTarget = function (params, projectDocsByLabel) {
+	if (params?.componentType !== "yAxis") {
+		return null;
+	}
+	const label = params.value || params.name;
+	if (!label || !projectDocsByLabel) {
+		return null;
+	}
+	return projectDocsByLabel[label] || null;
 };
 
-dinext_project_stage_gate.roadmap.attachChartClickNavigation = function (chart) {
+dinext_project_stage_gate.roadmap._chartClickHandler = function (params, projectDocsByLabel) {
+	const axisTarget = dinext_project_stage_gate.roadmap._getAxisNavigationTarget(
+		params,
+		projectDocsByLabel
+	);
+	dinext_project_stage_gate.roadmap.navigateFromChartItem(axisTarget || params?.data);
+};
+
+dinext_project_stage_gate.roadmap.attachChartClickNavigation = function (chart, projectDocsByLabel) {
 	if (!chart || typeof chart.on !== "function") {
 		return;
 	}
-	if (typeof chart.off === "function" && dinext_project_stage_gate.roadmap._chartClickHandler) {
-		chart.off("click", dinext_project_stage_gate.roadmap._chartClickHandler);
+	chart._dinextProjectDocsByLabel = projectDocsByLabel || {};
+	if (!chart._dinextChartClickHandler) {
+		chart._dinextChartClickHandler = function (params) {
+			dinext_project_stage_gate.roadmap._chartClickHandler(
+				params,
+				chart._dinextProjectDocsByLabel
+			);
+		};
 	}
-	chart.on("click", dinext_project_stage_gate.roadmap._chartClickHandler);
+	if (typeof chart.off === "function") {
+		chart.off("click", chart._dinextChartClickHandler);
+	}
+	chart.on("click", chart._dinextChartClickHandler);
 };
 
 /**
@@ -1335,10 +1365,11 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 	const payload = report.raw_data?.message || { projects: [], stageBars: [], gates: [] };
 	const fromDate = report.get_filter_value?.("from_date");
 	const toDate = report.get_filter_value?.("to_date");
-	const { categories, bars, gates } = dinext_project_stage_gate.roadmap.prepareSeriesData(payload, {
-		fromDate,
-		toDate,
-	});
+	const { categories, bars, gates, projectDocsByLabel } =
+		dinext_project_stage_gate.roadmap.prepareSeriesData(payload, {
+			fromDate,
+			toDate,
+		});
 	const showAllDataZoom = dinext_project_stage_gate.roadmap.buildShowAllDataZoomConfig({
 		categories,
 		bars,
@@ -1386,6 +1417,6 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 		dinext_project_stage_gate.roadmap.updateXAxisLabelDensity(chart);
 	});
 
-	dinext_project_stage_gate.roadmap.attachChartClickNavigation(chart);
+	dinext_project_stage_gate.roadmap.attachChartClickNavigation(chart, projectDocsByLabel);
 };
 
