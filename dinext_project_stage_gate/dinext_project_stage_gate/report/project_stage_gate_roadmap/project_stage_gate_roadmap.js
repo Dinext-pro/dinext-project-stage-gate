@@ -499,8 +499,8 @@ dinext_project_stage_gate.roadmap.getDefaultHorizontalViewport = function ({
 	today,
 	fromDate,
 	toDate,
-	monthsBack = 3,
-	monthsForward = 9,
+	monthsBack = 0,
+	monthsForward = 12,
 } = {}) {
 	const fallbackToday =
 		today || frappe?.datetime?.get_today?.() || new Date().toISOString().slice(0, 10);
