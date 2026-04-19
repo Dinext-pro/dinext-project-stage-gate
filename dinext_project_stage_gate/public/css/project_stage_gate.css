@@ -185,7 +185,7 @@
 }
 
 .stage-gate-status-skipped {
-	background: #8190a3;
+	background: #b6b9bd;
 	color: white;
 }
 
@@ -233,7 +233,7 @@
 
 [data-theme="dark"] .stage-gate-status-waiting-gate,
 [data-theme="dark"] .stage-gate-status-planned {
-	background: #6a7d92;
+	background: #636f7c;
 	color: white;
 }
 
@@ -253,10 +253,10 @@
 	color: white;
 }
 
-[data-theme="dark"] .stage-gate-status-skipped .stage-gate-node-label,
-[data-theme="dark"] .stage-gate-status-canceled .stage-gate-node-label {
+.stage-gate-status-skipped .stage-gate-node-label,
+.stage-gate-status-canceled .stage-gate-node-label {
 	color: var(--text-muted);
-	opacity: 0.92;
+	opacity: 0.6;
 }
 
 [data-theme="dark"] .stage-gate-cp-status-draft,
