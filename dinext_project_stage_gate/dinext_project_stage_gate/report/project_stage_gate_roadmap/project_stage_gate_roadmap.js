@@ -262,6 +262,92 @@ dinext_project_stage_gate.roadmap.ensure_chart_mount = function (report) {
 	return chart;
 };
 
+/**
+ * Build categories, stage bars, and gate markers from report payload (for chart and tests).
+ * @param {{ projects?: unknown[], stageBars?: unknown[], gates?: unknown[] }} payload
+ * @returns {{ categories: string[], bars: object[], gates: object[] }}
+ */
+dinext_project_stage_gate.roadmap.prepareSeriesData = function (payload) {
+	const safe = payload || { projects: [], stageBars: [], gates: [] };
+	const projectIndex = {};
+	const categories = (safe.projects || []).map((project) => {
+		const label = project.project_name || project.name;
+		projectIndex[project.name] = label;
+		return label;
+	});
+	const categoryIndexByLabel = Object.fromEntries(categories.map((label, index) => [label, index]));
+
+	const bars = (safe.stageBars || []).map((stage) => {
+		const colors = dinext_project_stage_gate.roadmap.getStageColors(stage.status);
+		return {
+			name: stage.stage,
+			docType: "Project Stage Instance",
+			docName: stage.name,
+			value: [
+				categoryIndexByLabel[projectIndex[stage.project]] ?? 0,
+				stage.actual_start_date || stage.planned_start_date,
+				stage.actual_end_date || stage.planned_end_date,
+				stage.stage,
+				dinext_project_stage_gate.roadmap.translateStatus(stage.status),
+				Number(stage.sequence) || 0,
+			],
+			itemStyle: {
+				color: colors.fill,
+				borderColor: colors.stroke,
+				borderWidth: 1,
+			},
+		};
+	});
+	dinext_project_stage_gate.roadmap.normalizeIdenticalStageRanges(bars);
+
+	const gates = (safe.gates || [])
+		.filter((gate) => gate.approval_date && gate.name)
+		.map((gate) => ({
+			name: gate.checkpoint_level || __("Gate"),
+			docType: "Project Gate Checkpoint",
+			docName: gate.name,
+			value: [
+				gate.approval_date,
+				categoryIndexByLabel[projectIndex[gate.project]] ?? 0,
+				dinext_project_stage_gate.roadmap.translateStatus(gate.status),
+			],
+			itemStyle: {
+				color: dinext_project_stage_gate.roadmap.getCheckpointColor(gate.status),
+			},
+		}));
+
+	return { categories, bars, gates };
+};
+
+/**
+ * Open linked DocType form from chart item data (same pattern as project stage widget).
+ * @param {{ docType?: string, docName?: string } | null | undefined} data
+ */
+dinext_project_stage_gate.roadmap.navigateFromChartItem = function (data) {
+	if (!data || !data.docName || !data.docType) {
+		return;
+	}
+	if (frappe.model && typeof frappe.model.can_read === "function" && !frappe.model.can_read(data.docType)) {
+		frappe.msgprint(__("You do not have permission to open this document."));
+		return;
+	}
+	frappe.set_route("Form", data.docType, data.docName);
+};
+
+dinext_project_stage_gate.roadmap._chartClickHandler = function (params) {
+	dinext_project_stage_gate.roadmap.navigateFromChartItem(params.data);
+};
+
+dinext_project_stage_gate.roadmap.attachChartClickNavigation = function (chart) {
+	if (!chart || typeof chart.on !== "function") {
+		return;
+	}
+	if (typeof chart.off === "function" && dinext_project_stage_gate.roadmap._chartClickHandler) {
+		chart.off("click", dinext_project_stage_gate.roadmap._chartClickHandler);
+	}
+	chart.on("click", dinext_project_stage_gate.roadmap._chartClickHandler);
+};
+
 dinext_project_stage_gate.roadmap.render = async function (report) {
 	if (!report?.page?.main) {
 		return;
@@ -286,51 +372,7 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 	const chart = echarts.init(dom);
 	dom._dinextRoadmapChart = chart;
 	const payload = report.raw_data?.message || { projects: [], stageBars: [], gates: [] };
-	const projectIndex = {};
-	const categories = payload.projects.map((project) => {
-		const label = project.project_name || project.name;
-		projectIndex[project.name] = label;
-		return label;
-	});
-	const categoryIndexByLabel = Object.fromEntries(categories.map((label, index) => [label, index]));
-
-	const bars = payload.stageBars.map(
-		(stage) => {
-			const colors = dinext_project_stage_gate.roadmap.getStageColors(stage.status);
-			return {
-				name: stage.stage,
-				value: [
-					categoryIndexByLabel[projectIndex[stage.project]] ?? 0,
-					stage.actual_start_date || stage.planned_start_date,
-					stage.actual_end_date || stage.planned_end_date,
-					stage.stage,
-					dinext_project_stage_gate.roadmap.translateStatus(stage.status),
-					Number(stage.sequence) || 0,
-				],
-				itemStyle: {
-					color: colors.fill,
-					borderColor: colors.stroke,
-					borderWidth: 1,
-				},
-			};
-		}
-	);
-	dinext_project_stage_gate.roadmap.normalizeIdenticalStageRanges(bars);
-	const gates = payload.gates
-		.filter((gate) => gate.approval_date)
-		.map(
-			(gate) => ({
-				name: gate.checkpoint_level || __("Gate"),
-				value: [
-					gate.approval_date,
-					categoryIndexByLabel[projectIndex[gate.project]] ?? 0,
-					dinext_project_stage_gate.roadmap.translateStatus(gate.status),
-				],
-				itemStyle: {
-					color: dinext_project_stage_gate.roadmap.getCheckpointColor(gate.status),
-				},
-			})
-		);
+	const { categories, bars, gates } = dinext_project_stage_gate.roadmap.prepareSeriesData(payload);
 
 	chart.setOption({
 		tooltip: {
@@ -407,5 +449,7 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 			},
 		],
 	});
+
+	dinext_project_stage_gate.roadmap.attachChartClickNavigation(chart);
 };
 
