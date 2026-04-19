@@ -144,7 +144,11 @@ dinext_project_stage_gate.roadmap.chartMonthLabels = [
 	"дек",
 ];
 
-dinext_project_stage_gate.roadmap.X_AXIS_MONTH_ONLY_THRESHOLD_DAYS = 100;
+dinext_project_stage_gate.roadmap.X_AXIS_MONTH_ONLY_THRESHOLD_DAYS = 45;
+dinext_project_stage_gate.roadmap.ROADMAP_INTRO_ANIMATION_DURATION_MS = 420;
+dinext_project_stage_gate.roadmap.ROADMAP_STAGE_INTRO_ANIMATION_MAX_SPREAD_MS = 420;
+dinext_project_stage_gate.roadmap.ROADMAP_GATE_INTRO_ANIMATION_MAX_SPREAD_MS = 180;
+dinext_project_stage_gate.roadmap.ROADMAP_INTRO_ANIMATION_EASING = "cubicOut";
 
 dinext_project_stage_gate.roadmap.formatXAxisLabel = function (value, options = {}) {
 	const time = dinext_project_stage_gate.roadmap._parseTimeMs(value);
@@ -687,6 +691,72 @@ dinext_project_stage_gate.roadmap.buildDataZoomConfig = function ({
 	];
 };
 
+dinext_project_stage_gate.roadmap.getRoadmapIntroAnimationTimeMs = function (entry, kind) {
+	if (kind === "bar") {
+		return dinext_project_stage_gate.roadmap._parseTimeMs(entry?.value?.[1]);
+	}
+	if (kind === "gate") {
+		return dinext_project_stage_gate.roadmap._parseTimeMs(entry?.value?.[0]);
+	}
+	return NaN;
+};
+
+dinext_project_stage_gate.roadmap.buildRoadmapIntroAnimationDelaySeries = function (
+	entries,
+	maxSpreadMs
+) {
+	const delays = new Array(entries.length).fill(0);
+	if (entries.length <= 1) {
+		return delays;
+	}
+
+	const safeMaxSpread = Math.max(0, Number(maxSpreadMs) || 0);
+	entries
+		.map((entry, originalIndex) => ({
+			originalIndex,
+			timeMs: entry.timeMs,
+		}))
+		.sort((left, right) => {
+			const leftHasTime = Number.isFinite(left.timeMs);
+			const rightHasTime = Number.isFinite(right.timeMs);
+			if (leftHasTime && rightHasTime && left.timeMs !== right.timeMs) {
+				return left.timeMs - right.timeMs;
+			}
+			if (leftHasTime !== rightHasTime) {
+				return leftHasTime ? -1 : 1;
+			}
+			return left.originalIndex - right.originalIndex;
+		})
+		.forEach((entry, orderIndex, sortedEntries) => {
+			const progress = sortedEntries.length <= 1 ? 0 : orderIndex / (sortedEntries.length - 1);
+			delays[entry.originalIndex] = Math.round(progress * safeMaxSpread);
+		});
+
+	return delays;
+};
+
+dinext_project_stage_gate.roadmap.buildSequentialIntroAnimationDelays = function ({
+	bars,
+	gates,
+} = {}) {
+	const safeBars = Array.isArray(bars) ? bars : [];
+	const safeGates = Array.isArray(gates) ? gates : [];
+	const barDelays = dinext_project_stage_gate.roadmap.buildRoadmapIntroAnimationDelaySeries(
+		safeBars.map((bar) => ({
+			timeMs: dinext_project_stage_gate.roadmap.getRoadmapIntroAnimationTimeMs(bar, "bar"),
+		})),
+		dinext_project_stage_gate.roadmap.ROADMAP_STAGE_INTRO_ANIMATION_MAX_SPREAD_MS
+	);
+	const gateDelays = dinext_project_stage_gate.roadmap.buildRoadmapIntroAnimationDelaySeries(
+		safeGates.map((gate) => ({
+			timeMs: dinext_project_stage_gate.roadmap.getRoadmapIntroAnimationTimeMs(gate, "gate"),
+		})),
+		dinext_project_stage_gate.roadmap.ROADMAP_GATE_INTRO_ANIMATION_MAX_SPREAD_MS
+	);
+
+	return { barDelays, gateDelays };
+};
+
 dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 	categories,
 	bars,
@@ -703,8 +773,19 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 		"--border-color",
 		"rgba(148, 163, 184, 0.18)"
 	);
+	const introAnimationDelays = dinext_project_stage_gate.roadmap.buildSequentialIntroAnimationDelays({
+		bars,
+		gates,
+	});
+	const introAnimationDuration =
+		dinext_project_stage_gate.roadmap.ROADMAP_INTRO_ANIMATION_DURATION_MS;
+	const introAnimationEasing = dinext_project_stage_gate.roadmap.ROADMAP_INTRO_ANIMATION_EASING;
 
 	return {
+		animation: true,
+		animationDurationUpdate: 0,
+		animationEasing: introAnimationEasing,
+		animationEasingUpdate: "linear",
 		grid: {
 			containLabel: true,
 			top: 44,
@@ -800,6 +881,16 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 			{
 				type: "custom",
 				clip: true,
+				animationDuration: introAnimationDuration,
+				animationDurationUpdate: 0,
+				animationEasing: introAnimationEasing,
+				animationEasingUpdate: "linear",
+				animationDelay(dataIndex) {
+					return introAnimationDelays.barDelays[dataIndex] ?? 0;
+				},
+				animationDelayUpdate() {
+					return 0;
+				},
 				renderItem(params, api) {
 					const categoryIndex = api.value(0);
 					const start = api.coord([api.value(1), categoryIndex]);
@@ -823,6 +914,9 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 						lineWidth,
 						textColor: itemStyle.textColor,
 						textOpacity: itemStyle.textOpacity,
+						animationDelay: introAnimationDelays.barDelays[params.dataIndex] ?? 0,
+						animationDuration: introAnimationDuration,
+						animationEasing: introAnimationEasing,
 					});
 				},
 				encode: {
@@ -835,6 +929,16 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 				type: "scatter",
 				symbol: "diamond",
 				symbolSize: 22,
+				animationDuration: introAnimationDuration,
+				animationDurationUpdate: 0,
+				animationEasing: introAnimationEasing,
+				animationEasingUpdate: "linear",
+				animationDelay(dataIndex) {
+					return introAnimationDelays.gateDelays[dataIndex] ?? 0;
+				},
+				animationDelayUpdate() {
+					return 0;
+				},
 				itemStyle: {
 					borderWidth: 2,
 				},
@@ -1133,10 +1237,19 @@ dinext_project_stage_gate.roadmap.buildStageBarGraphic = function ({
 	lineWidth,
 	textColor,
 	textOpacity,
+	animationDelay = 0,
+	animationDuration = dinext_project_stage_gate.roadmap.ROADMAP_INTRO_ANIMATION_DURATION_MS,
+	animationEasing = dinext_project_stage_gate.roadmap.ROADMAP_INTRO_ANIMATION_EASING,
 }) {
 	const points = dinext_project_stage_gate.roadmap.buildStageBarChevronPoints(
 		startX,
 		endX,
+		centerY,
+		height
+	);
+	const collapsedPoints = dinext_project_stage_gate.roadmap.buildStageBarChevronPoints(
+		startX,
+		startX,
 		centerY,
 		height
 	);
@@ -1145,6 +1258,16 @@ dinext_project_stage_gate.roadmap.buildStageBarGraphic = function ({
 		{
 			type: "polygon",
 			shape: { points },
+			enterFrom: {
+				shape: { points: collapsedPoints },
+				style: { opacity: 0 },
+			},
+			enterAnimation: {
+				delay: animationDelay,
+				duration: animationDuration,
+				easing: animationEasing,
+			},
+			transition: "all",
 			style: {
 				fill,
 				stroke,
@@ -1176,6 +1299,17 @@ dinext_project_stage_gate.roadmap.buildStageBarGraphic = function ({
 				width: Math.max(span - 28, 24),
 				overflow: "truncate",
 			},
+			enterFrom: {
+				style: {
+					opacity: 0,
+				},
+			},
+			enterAnimation: {
+				delay: animationDelay,
+				duration: animationDuration,
+				easing: animationEasing,
+			},
+			transition: "all",
 			silent: true,
 		});
 	}
