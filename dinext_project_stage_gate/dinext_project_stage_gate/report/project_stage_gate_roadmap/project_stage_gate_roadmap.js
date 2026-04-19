@@ -457,6 +457,91 @@ dinext_project_stage_gate.roadmap.getDefaultHorizontalViewport = function ({
 	};
 };
 
+dinext_project_stage_gate.roadmap.getFullHorizontalViewport = function ({
+	bars,
+	gates,
+	fromDate,
+	toDate,
+} = {}) {
+	const times = [];
+
+	(bars || []).forEach((bar) => {
+		const value = bar?.value || [];
+		[value[1], value[2]].forEach((point) => {
+			const time = dinext_project_stage_gate.roadmap._parseTimeMs(point);
+			if (Number.isFinite(time)) {
+				times.push(time);
+			}
+		});
+	});
+
+	(gates || []).forEach((gate) => {
+		const time = dinext_project_stage_gate.roadmap._parseTimeMs(gate?.value?.[0]);
+		if (Number.isFinite(time)) {
+			times.push(time);
+		}
+	});
+
+	if (!times.length) {
+		return {
+			startValue: fromDate,
+			endValue: toDate,
+		};
+	}
+
+	return {
+		startValue: dinext_project_stage_gate.roadmap._formatDateForChart(Math.min(...times)),
+		endValue: dinext_project_stage_gate.roadmap._formatDateForChart(Math.max(...times)),
+	};
+};
+
+dinext_project_stage_gate.roadmap.getFullVerticalViewport = function (categories) {
+	const totalRows = Array.isArray(categories) ? categories.length : 0;
+	if (!totalRows) {
+		return { startValue: 0, endValue: 0 };
+	}
+
+	return {
+		startValue: 0,
+		endValue: totalRows - 1,
+	};
+};
+
+dinext_project_stage_gate.roadmap.buildShowAllDataZoomConfig = function ({
+	categories,
+	bars,
+	gates,
+	fromDate,
+	toDate,
+} = {}) {
+	const horizontal = dinext_project_stage_gate.roadmap.getFullHorizontalViewport({
+		bars,
+		gates,
+		fromDate,
+		toDate,
+	});
+	const vertical = dinext_project_stage_gate.roadmap.getFullVerticalViewport(categories);
+
+	return [
+		{
+			startValue: horizontal.startValue,
+			endValue: horizontal.endValue,
+		},
+		{
+			startValue: horizontal.startValue,
+			endValue: horizontal.endValue,
+		},
+		{
+			startValue: vertical.startValue,
+			endValue: vertical.endValue,
+		},
+		{
+			startValue: vertical.startValue,
+			endValue: vertical.endValue,
+		},
+	];
+};
+
 dinext_project_stage_gate.roadmap.buildDataZoomConfig = function ({
 	categories,
 	fromDate,
@@ -500,7 +585,7 @@ dinext_project_stage_gate.roadmap.buildDataZoomConfig = function ({
 			filterMode: "none",
 			width: 18,
 			right: 4,
-			top: 12,
+			top: 44,
 			bottom: 36,
 			startValue: vertical.startValue,
 			endValue: vertical.endValue,
@@ -513,6 +598,7 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 	bars,
 	gates,
 	dataZoom,
+	onShowAllData,
 } = {}) {
 	const gridLineColor = dinext_project_stage_gate.roadmap.getThemeVariableColor(
 		"--border-color",
@@ -526,7 +612,7 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 	return {
 		grid: {
 			containLabel: true,
-			top: 12,
+			top: 44,
 			right: 28,
 			bottom: 44,
 			left: 12,
@@ -534,6 +620,30 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 		tooltip: {
 			trigger: "item",
 			formatter: dinext_project_stage_gate.roadmap.formatTooltip,
+		},
+		toolbox: {
+			right: 8,
+			top: 4,
+			itemSize: 16,
+			feature: {
+				restore: {},
+				myShowAllData: {
+					show: true,
+					title: __("Show All"),
+					icon: "path://M3 8h18M8 3v18M16 3v18M3 16h18",
+					onclick() {
+						onShowAllData?.();
+					},
+				},
+				saveAsImage: {
+					name: "project-stage-gate-roadmap",
+					pixelRatio: 2,
+					backgroundColor: dinext_project_stage_gate.roadmap.getThemeVariableColor(
+						"--card-bg",
+						"#ffffff"
+					),
+				},
+			},
 		},
 		xAxis: {
 			type: "time",
@@ -760,7 +870,7 @@ dinext_project_stage_gate.roadmap.ensure_chart_mount = function (report) {
 		return wrapper;
 	}
 
-	const chart = $('<div class="project-stage-gate-roadmap-chart" style="height: 420px; margin: 16px 0;"></div>');
+	const chart = $('<div class="project-stage-gate-roadmap-chart" style="height: 420px; margin: 0 0 16px 0;"></div>');
 	report.page.main.prepend(chart);
 	return chart;
 };
@@ -990,6 +1100,13 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 		fromDate,
 		toDate,
 	});
+	const showAllDataZoom = dinext_project_stage_gate.roadmap.buildShowAllDataZoomConfig({
+		categories,
+		bars,
+		gates,
+		fromDate,
+		toDate,
+	});
 	const dom = mount.get(0);
 	dom.style.height = `${dinext_project_stage_gate.roadmap.calculateChartHeight(categories)}px`;
 	const existing =
@@ -1014,6 +1131,11 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 			bars,
 			gates,
 			dataZoom,
+			onShowAllData() {
+				chart.setOption({
+					dataZoom: showAllDataZoom,
+				});
+			},
 		})
 	);
 
