@@ -396,6 +396,35 @@ test("buildDataZoomConfig returns slider and inside zoom for both axes", () => {
 	assert.equal(dataZoom[0].endValue, "2026-10-01");
 });
 
+test("getEChartsThemeName uses the standard dark theme only for dark mode", () => {
+	const { roadmap, context } = loadRoadmapScript();
+
+	context.document.documentElement.getAttribute = () => "dark";
+	assert.equal(roadmap.getEChartsThemeName(), "dark");
+
+	context.document.documentElement.getAttribute = () => "light";
+	assert.equal(roadmap.getEChartsThemeName(), undefined);
+});
+
+test("buildChartOptions makes y-axis project labels explicit and readable", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const options = roadmap.buildChartOptions({
+		categories: ["Very long project name", "Another long project name"],
+		bars: [],
+		gates: [],
+		dataZoom: [],
+	});
+
+	assert.equal(options.grid.left, 160);
+	assert.equal(options.yAxis.type, "category");
+	assert.equal(options.yAxis.data.length, 2);
+	assert.equal(options.yAxis.axisLabel.show, true);
+	assert.equal(options.yAxis.axisLabel.interval, 0);
+	assert.equal(options.yAxis.axisLabel.width, 140);
+	assert.equal(options.yAxis.axisLabel.overflow, "truncate");
+});
+
 test("navigateFromChartItem calls set_route when doc present and can_read", () => {
 	const { roadmap, state } = loadRoadmapScript();
 
