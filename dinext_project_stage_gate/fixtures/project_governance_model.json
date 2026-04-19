@@ -5,7 +5,7 @@
   "docstatus": 0,
   "doctype": "Project Governance Model",
   "enabled": 1,
-  "modified": "2026-04-14 02:20:43.160418",
+  "modified": "2026-04-19 01:29:17.314887",
   "name": "Тестовая модель управления",
   "stages": [
    {
@@ -25,7 +25,7 @@
     "entry_criteria_text": "Идея утверждена, есть спонсор",
     "exit_criteria_text": "Устав и бюджет утверждены проектным комитетом",
     "expected_duration_days": 21,
-    "is_skippable": 0,
+    "is_skippable": 1,
     "parent": "Тестовая модель управления",
     "parentfield": "stages",
     "parenttype": "Project Governance Model",

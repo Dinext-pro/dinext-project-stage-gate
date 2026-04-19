@@ -423,6 +423,7 @@ test("buildChartOptions makes y-axis project labels explicit and readable", () =
 	assert.equal(options.yAxis.axisLabel.interval, 0);
 	assert.equal(options.yAxis.axisLabel.width, 140);
 	assert.equal(options.yAxis.axisLabel.overflow, "truncate");
+	assert.equal(options.series[0].clip, true);
 });
 
 test("navigateFromChartItem calls set_route when doc present and can_read", () => {

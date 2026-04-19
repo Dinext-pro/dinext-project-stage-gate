@@ -439,6 +439,7 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 		series: [
 			{
 				type: "custom",
+				clip: true,
 				renderItem(params, api) {
 					const categoryIndex = api.value(0);
 					const start = api.coord([api.value(1), categoryIndex]);
