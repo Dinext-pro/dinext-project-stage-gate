@@ -427,6 +427,7 @@ test("buildChartOptions makes y-axis project labels explicit and readable", () =
 	assert.equal(options.grid.bottom, 44);
 	assert.equal(options.yAxis.type, "category");
 	assert.equal(options.yAxis.data.length, 2);
+	assert.equal(options.yAxis.triggerEvent, true);
 	assert.equal(options.yAxis.axisLabel.show, true);
 	assert.equal(options.yAxis.axisLabel.interval, 0);
 	assert.equal(options.yAxis.axisLabel.width, 176);
@@ -830,4 +831,26 @@ test("attachChartClickNavigation registers click and replacing handler does not 
 
 	chart.onCalls[1].handler({ data: { docType: "Project Stage Instance", docName: "PSI-1" } });
 	assert.deepEqual(state.setRouteCalls, [["Form", "Project Stage Instance", "PSI-1"]]);
+});
+
+test("attachChartClickNavigation opens project form from y-axis label click", () => {
+	const { roadmap, state } = loadRoadmapScript();
+
+	const chart = {
+		offCalls: [],
+		onCalls: [],
+		off(event, handler) {
+			this.offCalls.push({ event, handler });
+		},
+		on(event, handler) {
+			this.onCalls.push({ event, handler });
+		},
+	};
+
+	roadmap.attachChartClickNavigation(chart, {
+		Alpha: { docType: "Project", docName: "PRJ-1" },
+	});
+
+	chart.onCalls[0].handler({ componentType: "yAxis", value: "Alpha" });
+	assert.deepEqual(state.setRouteCalls, [["Form", "Project", "PRJ-1"]]);
 });
