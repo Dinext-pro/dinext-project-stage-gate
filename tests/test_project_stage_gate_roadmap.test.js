@@ -148,6 +148,9 @@ test("buildStageBarGraphic includes text label and uses explicit stage colors", 
 	assert.equal(graphic.children[0].style.stroke, "#123456");
 	assert.equal(graphic.children[1].type, "text");
 	assert.equal(graphic.children[1].style.text, "Discovery");
+	assert.equal(graphic.children[0].enterAnimation.duration, roadmap.ROADMAP_INTRO_ANIMATION_DURATION_MS);
+	assert.equal(graphic.children[0].enterFrom.style.opacity, 0);
+	assert.equal(graphic.children[0].transition, "all");
 });
 
 test("prepareSeriesData attaches docType and docName for stages and gates", () => {
@@ -469,6 +472,113 @@ test("buildChartOptions can force month-year labels for wide horizontal ranges",
 
 	assert.equal(options.xAxis.axisLabel.formatter("2026-01-01"), "янв 2026");
 	assert.equal(options.xAxis.axisLabel.formatter("2026-01-15"), "янв 2026");
+});
+
+test("buildSequentialIntroAnimationDelays orders stages and gates left to right", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const delays = roadmap.buildSequentialIntroAnimationDelays({
+		bars: [
+			{ value: [0, "2026-02-01", "2026-02-28"] },
+			{ value: [0, "2026-03-01", "2026-03-15"] },
+		],
+		gates: [{ value: ["2026-01-15", 0] }, { value: ["2026-04-01", 0] }],
+	});
+
+	assert.deepEqual(Array.from(delays.barDelays), [
+		0,
+		roadmap.ROADMAP_STAGE_INTRO_ANIMATION_MAX_SPREAD_MS,
+	]);
+	assert.deepEqual(Array.from(delays.gateDelays), [
+		0,
+		roadmap.ROADMAP_GATE_INTRO_ANIMATION_MAX_SPREAD_MS,
+	]);
+});
+
+test("buildSequentialIntroAnimationDelays keeps stable order for identical and invalid dates", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const delays = roadmap.buildSequentialIntroAnimationDelays({
+		bars: [
+			{ value: [0, "2026-02-01", "2026-02-28"] },
+			{ value: [0, "invalid-date", "2026-03-15"] },
+		],
+		gates: [{ value: ["2026-02-01", 0] }, { value: ["invalid-date", 0] }],
+	});
+
+	assert.deepEqual(Array.from(delays.barDelays), [
+		0,
+		roadmap.ROADMAP_STAGE_INTRO_ANIMATION_MAX_SPREAD_MS,
+	]);
+	assert.deepEqual(Array.from(delays.gateDelays), [
+		0,
+		roadmap.ROADMAP_GATE_INTRO_ANIMATION_MAX_SPREAD_MS,
+	]);
+});
+
+test("buildSequentialIntroAnimationDelays keeps checkpoint cascade within a short max spread", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const delays = roadmap.buildSequentialIntroAnimationDelays({
+		bars: [],
+		gates: new Array(8).fill(null).map((_, index) => ({
+			value: [`2026-01-${String(index + 1).padStart(2, "0")}`, 0],
+		})),
+	});
+
+	assert.equal(delays.gateDelays[0], 0);
+	assert.ok(
+		delays.gateDelays[delays.gateDelays.length - 1] <=
+			roadmap.ROADMAP_GATE_INTRO_ANIMATION_MAX_SPREAD_MS
+	);
+});
+
+test("buildSequentialIntroAnimationDelays returns empty delay lists for empty data", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const delays = roadmap.buildSequentialIntroAnimationDelays({
+		bars: [],
+		gates: [],
+	});
+
+	assert.deepEqual(
+		{
+			barDelays: Array.from(delays.barDelays),
+			gateDelays: Array.from(delays.gateDelays),
+		},
+		{
+			barDelays: [],
+			gateDelays: [],
+		}
+	);
+});
+
+test("buildChartOptions adds intro animation config for stages and gates", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const options = roadmap.buildChartOptions({
+		categories: ["Project A"],
+		bars: [
+			{ value: [0, "2026-02-01", "2026-02-28"] },
+			{ value: [0, "2026-03-01", "2026-03-31"] },
+		],
+		gates: [{ value: ["2026-01-15", 0] }],
+		dataZoom: [],
+	});
+
+	assert.equal(options.animation, true);
+	assert.equal(options.animationDurationUpdate, 0);
+	assert.equal(options.series[0].type, "custom");
+	assert.equal(options.series[0].animationDuration, roadmap.ROADMAP_INTRO_ANIMATION_DURATION_MS);
+	assert.equal(options.series[0].animationDurationUpdate, 0);
+	assert.equal(typeof options.series[0].animationDelay, "function");
+	assert.equal(options.series[0].animationDelay(0), 0);
+	assert.equal(options.series[0].animationDelay(1), roadmap.ROADMAP_STAGE_INTRO_ANIMATION_MAX_SPREAD_MS);
+	assert.equal(options.series[1].type, "scatter");
+	assert.equal(options.series[1].animationDuration, roadmap.ROADMAP_INTRO_ANIMATION_DURATION_MS);
+	assert.equal(options.series[1].animationDurationUpdate, 0);
+	assert.equal(typeof options.series[1].animationDelay, "function");
+	assert.equal(options.series[1].animationDelay(0), 0);
 });
 
 test("getFullHorizontalViewport spans full visible timeline from bars and gates", () => {
