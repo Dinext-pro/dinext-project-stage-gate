@@ -479,8 +479,7 @@ dinext_project_stage_gate.roadmap.attachChartClickNavigation = function (chart) 
 dinext_project_stage_gate.roadmap.buildStageBarChevronPoints = function (startX, endX, centerY, barHeight) {
 	const MIN_PIXEL_SPAN = 4;
 	const MIN_TIP = 2;
-	const TIP_FRACTION = 0.045;
-	const ABS_MAX_TIP = 28;
+	const DEFAULT_TIP = 14;
 
 	const xLeft = Math.min(startX, endX);
 	let x0 = xLeft;
@@ -494,7 +493,8 @@ dinext_project_stage_gate.roadmap.buildStageBarChevronPoints = function (startX,
 	const halfH = barHeight / 2;
 	const yc = centerY;
 
-	let tip = Math.min(ABS_MAX_TIP, Math.max(MIN_TIP, span * TIP_FRACTION));
+	// Keep chevron angle stable across stage durations, matching the fixed skew used in the widget.
+	let tip = DEFAULT_TIP;
 	const maxTipForSpan = Math.max(MIN_TIP, (span - 2) / 2);
 	tip = Math.min(tip, maxTipForSpan);
 	const notch = tip;

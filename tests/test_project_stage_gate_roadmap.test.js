@@ -94,16 +94,16 @@ test("buildStageBarChevronPoints expands zero span and keeps tip inside bar", ()
 	assert.ok(pts[1][0] > x0, "top edge should extend past left edge");
 });
 
-test("buildStageBarChevronPoints uses larger tip on wide bars than old fixed 14px cap", () => {
+test("buildStageBarChevronPoints keeps the same chevron depth for short and wide bars", () => {
 	const { roadmap } = loadRoadmapScript();
-	const pts = roadmap.buildStageBarChevronPoints(0, 800, 40, 16);
-	const x0 = pts[0][0];
-	const x1 = pts[2][0];
-	const tipDepth = x1 - pts[1][0];
-	assert.equal(x0, 0);
-	assert.equal(x1, 800);
-	assert.ok(tipDepth > 14, "wide bar should get a deeper chevron than legacy MAX_INSET 14");
-	assert.ok(tipDepth <= 28, "tip should respect ABS_MAX_TIP");
+
+	const shortPts = roadmap.buildStageBarChevronPoints(0, 120, 40, 16);
+	const widePts = roadmap.buildStageBarChevronPoints(0, 800, 40, 16);
+	const shortTipDepth = shortPts[2][0] - shortPts[1][0];
+	const wideTipDepth = widePts[2][0] - widePts[1][0];
+
+	assert.equal(shortTipDepth, 14);
+	assert.equal(wideTipDepth, 14);
 });
 
 test("buildStageBarChevronPoints handles inverted x (end before start)", () => {
