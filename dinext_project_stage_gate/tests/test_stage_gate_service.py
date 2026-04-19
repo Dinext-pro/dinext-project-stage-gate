@@ -1,4 +1,6 @@
 import unittest
+from types import SimpleNamespace
+from unittest.mock import MagicMock, call, patch
 
 from dinext_project_stage_gate.stage_gate import service
 
@@ -79,4 +81,32 @@ class TestStageGateService(unittest.TestCase):
 		prepared = service.prepare_stage_instances(chain, chain_version=2)
 		self.assertEqual(prepared[0]["name"], "PROJ-001-SG2-STAGE-001")
 		self.assertEqual(prepared[0]["stage_chain_version"], 2)
+
+	def test_cancel_stage_gate_chain_updates_checkpoints_via_document_api(self):
+		checkpoint = SimpleNamespace(
+			checklist=[
+				SimpleNamespace(status="Open"),
+				SimpleNamespace(status="Done"),
+			]
+		)
+		checkpoint.save = MagicMock()
+
+		with (
+			patch.object(service.frappe, "get_all", side_effect=[["PSI-001"], ["CP-001"]]),
+			patch.object(service.frappe, "get_doc", return_value=checkpoint) as get_doc,
+			patch.object(service.frappe.db, "set_value") as set_value,
+			patch.object(service.frappe.db, "sql") as sql,
+		):
+			service.cancel_stage_gate_chain("PROJ-001", 1)
+
+		get_doc.assert_called_once_with("Project Gate Checkpoint", "CP-001")
+		self.assertEqual([row.status for row in checkpoint.checklist], ["Canceled", "Canceled"])
+		checkpoint.save.assert_called_once_with(ignore_permissions=True)
+		sql.assert_not_called()
+		set_value.assert_has_calls(
+			[
+				call("Project Gate Checkpoint", "CP-001", "status", "Canceled", update_modified=True),
+				call("Project Stage Instance", "PSI-001", "status", "Canceled", update_modified=True),
+			]
+		)
 
