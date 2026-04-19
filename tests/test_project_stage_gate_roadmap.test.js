@@ -370,7 +370,7 @@ test("getDefaultHorizontalViewport clamps the target year window to active repor
 		toDate: "2026-08-15",
 	});
 
-	assert.equal(viewport.startValue, "2025-11-15");
+	assert.equal(viewport.startValue, "2026-01-01");
 	assert.equal(viewport.endValue, "2026-08-15");
 });
 
@@ -395,8 +395,8 @@ test("buildDataZoomConfig returns slider and inside zoom for both axes", () => {
 	assert.equal(dataZoom[3].yAxisIndex, 0);
 	assert.equal(dataZoom[2].startValue, 0);
 	assert.equal(dataZoom[2].endValue, 9);
-	assert.equal(dataZoom[0].startValue, "2025-10-01");
-	assert.equal(dataZoom[0].endValue, "2026-10-01");
+	assert.equal(dataZoom[0].startValue, "2026-01-01");
+	assert.equal(dataZoom[0].endValue, "2026-12-31");
 	assert.equal(dataZoom[1].height, 24);
 	assert.equal(dataZoom[3].width, 18);
 });
