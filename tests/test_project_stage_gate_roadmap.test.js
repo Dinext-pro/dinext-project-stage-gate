@@ -346,6 +346,56 @@ test("prepareSeriesData skips gates without approval_date or without name", () =
 	assert.equal(gates[0].docName, "PGC-2");
 });
 
+test("getDefaultVerticalViewport shows first 10 project rows by default", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const defaultViewport = roadmap.getDefaultVerticalViewport(new Array(15).fill("row"));
+	assert.equal(defaultViewport.startValue, 0);
+	assert.equal(defaultViewport.endValue, 9);
+
+	const compactViewport = roadmap.getDefaultVerticalViewport(["A", "B", "C"]);
+	assert.equal(compactViewport.startValue, 0);
+	assert.equal(compactViewport.endValue, 2);
+});
+
+test("getDefaultHorizontalViewport clamps the target year window to active report filters", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const viewport = roadmap.getDefaultHorizontalViewport({
+		today: "2026-01-01",
+		fromDate: "2025-11-15",
+		toDate: "2026-08-15",
+	});
+
+	assert.equal(viewport.startValue, "2025-11-15");
+	assert.equal(viewport.endValue, "2026-08-15");
+});
+
+test("buildDataZoomConfig returns slider and inside zoom for both axes", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const dataZoom = roadmap.buildDataZoomConfig({
+		categories: new Array(12).fill("row"),
+		fromDate: "2025-10-01",
+		toDate: "2026-12-31",
+		today: "2026-01-01",
+	});
+
+	assert.equal(dataZoom.length, 4);
+	assert.equal(dataZoom[0].type, "inside");
+	assert.equal(dataZoom[0].xAxisIndex, 0);
+	assert.equal(dataZoom[1].type, "slider");
+	assert.equal(dataZoom[1].xAxisIndex, 0);
+	assert.equal(dataZoom[2].type, "inside");
+	assert.equal(dataZoom[2].yAxisIndex, 0);
+	assert.equal(dataZoom[3].type, "slider");
+	assert.equal(dataZoom[3].yAxisIndex, 0);
+	assert.equal(dataZoom[2].startValue, 0);
+	assert.equal(dataZoom[2].endValue, 9);
+	assert.equal(dataZoom[0].startValue, "2025-10-01");
+	assert.equal(dataZoom[0].endValue, "2026-10-01");
+});
+
 test("navigateFromChartItem calls set_route when doc present and can_read", () => {
 	const { roadmap, state } = loadRoadmapScript();
 
