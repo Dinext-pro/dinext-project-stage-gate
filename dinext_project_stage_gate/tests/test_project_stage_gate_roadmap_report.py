@@ -19,7 +19,11 @@ class TestProjectStageGateRoadmapReport(unittest.TestCase):
 	@patch(
 		"dinext_project_stage_gate.dinext_project_stage_gate.report.project_stage_gate_roadmap.project_stage_gate_roadmap.query.get_roadmap_dataset"
 	)
-	def test_execute_returns_dataset_in_message_and_summary(self, get_roadmap_dataset):
+	@patch(
+		"dinext_project_stage_gate.dinext_project_stage_gate.report.project_stage_gate_roadmap.project_stage_gate_roadmap._",
+		side_effect=lambda value: value,
+	)
+	def test_execute_returns_dataset_in_message_and_summary(self, _translate, get_roadmap_dataset):
 		get_roadmap_dataset.return_value = {
 			"projects": [{"name": "PROJ-001", "project_name": "Alpha"}],
 			"stageBars": [{"name": "PSI-001"}],
