@@ -177,7 +177,7 @@ test("prepareSeriesData attaches docType and docName for stages and gates", () =
 	assert.equal(gates[0].docName, "PGC-20");
 });
 
-test("prepareSeriesData uses stage display name and explicit stage color when provided", () => {
+test("prepareSeriesData uses widget status palette instead of per-stage color override", () => {
 	const { roadmap } = loadRoadmapScript();
 
 	const { bars } = roadmap.prepareSeriesData({
@@ -189,7 +189,7 @@ test("prepareSeriesData uses stage display name and explicit stage color when pr
 				stage: "DISC",
 				stage_name: "Discovery",
 				color: "#abcdef",
-				status: "Active",
+				status: "Waiting Gate",
 				sequence: 1,
 				planned_start_date: "2026-02-01",
 				planned_end_date: "2026-02-28",
@@ -200,7 +200,8 @@ test("prepareSeriesData uses stage display name and explicit stage color when pr
 
 	assert.equal(bars[0].name, "Discovery");
 	assert.equal(bars[0].value[3], "Discovery");
-	assert.equal(bars[0].itemStyle.color, "#abcdef");
+	assert.equal(bars[0].itemStyle.color, "#8f9aa8");
+	assert.equal(bars[0].itemStyle.borderColor, "#8f9aa8");
 });
 
 test("prepareSeriesData prefers actual dates and falls back to planned checkpoint due date", () => {
@@ -240,6 +241,32 @@ test("prepareSeriesData prefers actual dates and falls back to planned checkpoin
 	assert.equal(bars[0].value[2], "2026-02-20");
 	assert.equal(gates.length, 1);
 	assert.equal(gates[0].value[0], "2026-02-18");
+});
+
+test("prepareSeriesData keeps planned stage interval when actual dates collapse to a single day", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const { bars } = roadmap.prepareSeriesData({
+		projects: [{ name: "PRJ-1", project_name: "Alpha" }],
+		stageBars: [
+			{
+				name: "PSI-10",
+				project: "PRJ-1",
+				stage: "Discovery",
+				status: "Completed",
+				sequence: 1,
+				planned_start_date: "2026-02-01",
+				planned_end_date: "2026-02-28",
+				actual_start_date: "2026-02-20",
+				actual_end_date: "2026-02-20",
+			},
+		],
+		gates: [],
+	});
+
+	assert.equal(bars[0].value[1], "2026-02-01");
+	assert.equal(bars[0].value[2], "2026-02-28");
+	assert.equal(bars[0].itemStyle.color, "#739b7f");
 });
 
 test("prepareSeriesData excludes gates on or outside display boundaries", () => {
