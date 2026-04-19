@@ -120,6 +120,11 @@ dinext_project_stage_gate.roadmap.getActivePalette = function () {
 	return isDark ? dinext_project_stage_gate.roadmap.statusPalette.dark : dinext_project_stage_gate.roadmap.statusPalette.light;
 };
 
+dinext_project_stage_gate.roadmap.getEChartsThemeName = function () {
+	const root = document.documentElement;
+	return root && root.getAttribute("data-theme") === "dark" ? "dark" : undefined;
+};
+
 dinext_project_stage_gate.roadmap.translateStatus = function (value) {
 	return value ? __(value) : value;
 };
@@ -394,6 +399,89 @@ dinext_project_stage_gate.roadmap.buildDataZoomConfig = function ({
 			endValue: vertical.endValue,
 		},
 	];
+};
+
+dinext_project_stage_gate.roadmap.buildChartOptions = function ({
+	categories,
+	bars,
+	gates,
+	dataZoom,
+} = {}) {
+	return {
+		grid: {
+			containLabel: true,
+			top: 16,
+			right: 40,
+			bottom: 48,
+			left: 160,
+		},
+		tooltip: {
+			trigger: "item",
+			formatter(params) {
+				const value = params.value || [];
+				return [params.name, value[3] || value[2] || "", value[4] || ""].filter(Boolean).join("<br>");
+			},
+		},
+		xAxis: {
+			type: "time",
+		},
+		yAxis: {
+			type: "category",
+			data: categories || [],
+			axisLabel: {
+				show: true,
+				interval: 0,
+				width: 140,
+				overflow: "truncate",
+			},
+		},
+		dataZoom: dataZoom || [],
+		series: [
+			{
+				type: "custom",
+				renderItem(params, api) {
+					const categoryIndex = api.value(0);
+					const start = api.coord([api.value(1), categoryIndex]);
+					const end = api.coord([api.value(2), categoryIndex]);
+					const height = api.size([0, 1])[1] * 0.5;
+					const fromApi = api.style();
+					const itemStyle = params.data?.itemStyle || {};
+					const fill = fromApi.fill || fromApi.color || itemStyle.color || itemStyle.fill;
+					const stroke =
+						fromApi.stroke || fromApi.borderColor || itemStyle.borderColor || itemStyle.stroke;
+					const lineWidth =
+						fromApi.lineWidth ?? fromApi.borderWidth ?? itemStyle.borderWidth ?? 1;
+					return dinext_project_stage_gate.roadmap.buildStageBarGraphic({
+						startX: start[0],
+						endX: end[0],
+						centerY: start[1],
+						height,
+						label: params.data?.name || api.value(3),
+						fill,
+						stroke,
+						lineWidth,
+						textColor: itemStyle.textColor,
+						textOpacity: itemStyle.textOpacity,
+					});
+				},
+				encode: {
+					x: [1, 2],
+					y: 0,
+				},
+				data: bars || [],
+			},
+			{
+				type: "scatter",
+				symbol: "diamond",
+				symbolSize: 20,
+				encode: {
+					x: 0,
+					y: 1,
+				},
+				data: gates || [],
+			},
+		],
+	};
 };
 
 dinext_project_stage_gate.roadmap.isStrictlyWithinDisplayRange = function (value, options) {
@@ -748,7 +836,7 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 	if (existing) {
 		existing.dispose();
 	}
-	const chart = echarts.init(dom);
+	const chart = echarts.init(dom, dinext_project_stage_gate.roadmap.getEChartsThemeName());
 	dom._dinextRoadmapChart = chart;
 	const payload = report.raw_data?.message || { projects: [], stageBars: [], gates: [] };
 	const fromDate = report.get_filter_value?.("from_date");
@@ -764,75 +852,14 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 		today: frappe?.datetime?.get_today?.(),
 	});
 
-	chart.setOption({
-		grid: {
-			containLabel: true,
-			top: 16,
-			right: 40,
-			bottom: 48,
-			left: 16,
-		},
-		tooltip: {
-			trigger: "item",
-			formatter(params) {
-				const value = params.value || [];
-				return [params.name, value[3] || value[2] || "", value[4] || ""].filter(Boolean).join("<br>");
-			},
-		},
-		xAxis: {
-			type: "time",
-		},
-		yAxis: {
-			type: "category",
-			data: categories,
-		},
-		dataZoom,
-		series: [
-			{
-				type: "custom",
-				renderItem(params, api) {
-					const categoryIndex = api.value(0);
-					const start = api.coord([api.value(1), categoryIndex]);
-					const end = api.coord([api.value(2), categoryIndex]);
-					const height = api.size([0, 1])[1] * 0.5;
-					const fromApi = api.style();
-					const itemStyle = params.data?.itemStyle || {};
-					const fill = fromApi.fill || fromApi.color || itemStyle.color || itemStyle.fill;
-					const stroke =
-						fromApi.stroke || fromApi.borderColor || itemStyle.borderColor || itemStyle.stroke;
-					const lineWidth =
-						fromApi.lineWidth ?? fromApi.borderWidth ?? itemStyle.borderWidth ?? 1;
-					return dinext_project_stage_gate.roadmap.buildStageBarGraphic({
-						startX: start[0],
-						endX: end[0],
-						centerY: start[1],
-						height,
-						label: params.data?.name || api.value(3),
-						fill,
-						stroke,
-						lineWidth,
-						textColor: itemStyle.textColor,
-						textOpacity: itemStyle.textOpacity,
-					});
-				},
-				encode: {
-					x: [1, 2],
-					y: 0,
-				},
-				data: bars,
-			},
-			{
-				type: "scatter",
-				symbol: "diamond",
-				symbolSize: 20,
-				encode: {
-					x: 0,
-					y: 1,
-				},
-				data: gates,
-			},
-		],
-	});
+	chart.setOption(
+		dinext_project_stage_gate.roadmap.buildChartOptions({
+			categories,
+			bars,
+			gates,
+			dataZoom,
+		})
+	);
 
 	dinext_project_stage_gate.roadmap.attachChartClickNavigation(chart);
 };
