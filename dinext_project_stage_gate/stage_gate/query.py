@@ -275,13 +275,25 @@ def get_roadmap_dataset(filters=None):
 		order_by="project asc, sequence asc",
 	)
 	filtered_stage_rows = []
+	stage_names = {_get(row, "stage") for row in stage_rows if _get(row, "stage")}
+	stage_meta = {
+		_get(row, "name"): row
+		for row in frappe.get_all(
+			"Project Stage",
+			filters={"name": ["in", list(stage_names)]} if stage_names else {},
+			fields=["name", "color"],
+		)
+	}
 	for row in stage_rows:
 		project = project_meta.get(_get(row, "project"), {})
 		want_ver = int(_get(project, "stage_chain_version") or 1)
 		if int(_get(row, "stage_chain_version") or 1) != want_ver:
 			continue
+		stage = stage_meta.get(_get(row, "stage"), {})
 		row["project_name"] = _get(project, "project_name") or _get(row, "project")
 		row["portfolio"] = _get(project, "custom_project_portfolio")
+		row["stage_name"] = _get(stage, "name", _get(row, "stage"))
+		row["color"] = _get(stage, "color")
 		filtered_stage_rows.append(row)
 	stage_rows = filtered_stage_rows
 	stage_instance_names = [_get(row, "name") for row in stage_rows]
@@ -296,6 +308,7 @@ def get_roadmap_dataset(filters=None):
 			"stage_instance",
 			"status",
 			"approval_date",
+			"gate_due_date",
 			"checkpoint_level",
 		],
 		order_by="project asc, creation asc",

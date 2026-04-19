@@ -122,9 +122,62 @@ dinext_project_stage_gate.roadmap.getStageColors = function (status) {
 	return palette.stage[status] || palette.fallbackStage;
 };
 
+dinext_project_stage_gate.roadmap.getContrastTextColor = function (fill) {
+	if (!fill || typeof fill !== "string" || !fill.startsWith("#")) {
+		return "#ffffff";
+	}
+
+	let hex = fill.slice(1);
+	if (hex.length === 3) {
+		hex = hex
+			.split("")
+			.map((part) => part + part)
+			.join("");
+	}
+	if (hex.length !== 6) {
+		return "#ffffff";
+	}
+
+	const r = Number.parseInt(hex.slice(0, 2), 16);
+	const g = Number.parseInt(hex.slice(2, 4), 16);
+	const b = Number.parseInt(hex.slice(4, 6), 16);
+	const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+	return luminance > 0.6 ? "#1f2937" : "#ffffff";
+};
+
+dinext_project_stage_gate.roadmap.getStageItemStyle = function (stage) {
+	const fallback = dinext_project_stage_gate.roadmap.getStageColors(stage.status);
+	const fill = stage.color || fallback.fill;
+	return {
+		fill,
+		stroke: fallback.stroke,
+		lineWidth: 1,
+		textColor: dinext_project_stage_gate.roadmap.getContrastTextColor(fill),
+	};
+};
+
 dinext_project_stage_gate.roadmap.getCheckpointColor = function (status) {
 	const palette = dinext_project_stage_gate.roadmap.getActivePalette();
 	return palette.checkpoint[status] || palette.fallbackCheckpoint;
+};
+
+dinext_project_stage_gate.roadmap.getDisplayDate = function (actualValue, plannedValue) {
+	const normalize = (value) => {
+		if (value == null) {
+			return undefined;
+		}
+		if (typeof value === "string" && value.trim() === "") {
+			return undefined;
+		}
+		return value;
+	};
+
+	const actual = normalize(actualValue);
+	if (actual !== undefined) {
+		return actual;
+	}
+
+	return normalize(plannedValue);
 };
 
 /** Parse report date value to UTC ms (date-only strings treated as UTC midnight). */
@@ -147,6 +200,25 @@ dinext_project_stage_gate.roadmap._formatDateForChart = function (ms) {
 	const m = String(d.getUTCMonth() + 1).padStart(2, "0");
 	const day = String(d.getUTCDate()).padStart(2, "0");
 	return `${y}-${m}-${day}`;
+};
+
+dinext_project_stage_gate.roadmap.isStrictlyWithinDisplayRange = function (value, options) {
+	const time = dinext_project_stage_gate.roadmap._parseTimeMs(value);
+	if (!Number.isFinite(time)) {
+		return false;
+	}
+
+	const fromTime = dinext_project_stage_gate.roadmap._parseTimeMs(options?.fromDate);
+	if (Number.isFinite(fromTime) && time <= fromTime) {
+		return false;
+	}
+
+	const toTime = dinext_project_stage_gate.roadmap._parseTimeMs(options?.toDate);
+	if (Number.isFinite(toTime) && time >= toTime) {
+		return false;
+	}
+
+	return true;
 };
 
 /**
@@ -265,9 +337,10 @@ dinext_project_stage_gate.roadmap.ensure_chart_mount = function (report) {
 /**
  * Build categories, stage bars, and gate markers from report payload (for chart and tests).
  * @param {{ projects?: unknown[], stageBars?: unknown[], gates?: unknown[] }} payload
+ * @param {{ fromDate?: string, toDate?: string }} [options]
  * @returns {{ categories: string[], bars: object[], gates: object[] }}
  */
-dinext_project_stage_gate.roadmap.prepareSeriesData = function (payload) {
+dinext_project_stage_gate.roadmap.prepareSeriesData = function (payload, options) {
 	const safe = payload || { projects: [], stageBars: [], gates: [] };
 	const projectIndex = {};
 	const categories = (safe.projects || []).map((project) => {
@@ -278,36 +351,53 @@ dinext_project_stage_gate.roadmap.prepareSeriesData = function (payload) {
 	const categoryIndexByLabel = Object.fromEntries(categories.map((label, index) => [label, index]));
 
 	const bars = (safe.stageBars || []).map((stage) => {
-		const colors = dinext_project_stage_gate.roadmap.getStageColors(stage.status);
+		const colors = dinext_project_stage_gate.roadmap.getStageItemStyle(stage);
+		const stageLabel = stage.stage_name || stage.stage;
 		return {
-			name: stage.stage,
+			name: stageLabel,
 			docType: "Project Stage Instance",
 			docName: stage.name,
 			value: [
 				categoryIndexByLabel[projectIndex[stage.project]] ?? 0,
-				stage.actual_start_date || stage.planned_start_date,
-				stage.actual_end_date || stage.planned_end_date,
-				stage.stage,
+				dinext_project_stage_gate.roadmap.getDisplayDate(
+					stage.actual_start_date,
+					stage.planned_start_date
+				),
+				dinext_project_stage_gate.roadmap.getDisplayDate(
+					stage.actual_end_date,
+					stage.planned_end_date
+				),
+				stageLabel,
 				dinext_project_stage_gate.roadmap.translateStatus(stage.status),
 				Number(stage.sequence) || 0,
 			],
 			itemStyle: {
 				color: colors.fill,
 				borderColor: colors.stroke,
-				borderWidth: 1,
+				borderWidth: colors.lineWidth,
+				textColor: colors.textColor,
 			},
 		};
 	});
 	dinext_project_stage_gate.roadmap.normalizeIdenticalStageRanges(bars);
 
 	const gates = (safe.gates || [])
-		.filter((gate) => gate.approval_date && gate.name)
+		.filter((gate) => {
+			const displayDate = dinext_project_stage_gate.roadmap.getDisplayDate(
+				gate.approval_date,
+				gate.gate_due_date
+			);
+			return (
+				Boolean(gate.name) &&
+				dinext_project_stage_gate.roadmap.isStrictlyWithinDisplayRange(displayDate, options)
+			);
+		})
 		.map((gate) => ({
 			name: gate.checkpoint_level || __("Gate"),
 			docType: "Project Gate Checkpoint",
 			docName: gate.name,
 			value: [
-				gate.approval_date,
+				dinext_project_stage_gate.roadmap.getDisplayDate(gate.approval_date, gate.gate_due_date),
 				categoryIndexByLabel[projectIndex[gate.project]] ?? 0,
 				dinext_project_stage_gate.roadmap.translateStatus(gate.status),
 			],
@@ -348,6 +438,104 @@ dinext_project_stage_gate.roadmap.attachChartClickNavigation = function (chart) 
 	chart.on("click", dinext_project_stage_gate.roadmap._chartClickHandler);
 };
 
+/**
+ * Pixel coordinates for a horizontal stage bar chevron (right-pointing tip).
+ * Normalizes near-zero or inverted axis spans so inset/tip math matches the real span.
+ *
+ * @param {number} startX - api.coord x for interval start
+ * @param {number} endX - api.coord x for interval end
+ * @param {number} centerY - category band center y
+ * @param {number} barHeight - full vertical thickness of the bar in px
+ * @returns {number[][]} polygon points for ECharts custom series
+ */
+dinext_project_stage_gate.roadmap.buildStageBarChevronPoints = function (startX, endX, centerY, barHeight) {
+	const MIN_PIXEL_SPAN = 4;
+	const MIN_TIP = 2;
+	const TIP_FRACTION = 0.045;
+	const ABS_MAX_TIP = 28;
+
+	const xLeft = Math.min(startX, endX);
+	let x0 = xLeft;
+	let x1 = Math.max(startX, endX);
+	let span = x1 - x0;
+	if (span < MIN_PIXEL_SPAN) {
+		x1 = x0 + MIN_PIXEL_SPAN;
+		span = MIN_PIXEL_SPAN;
+	}
+
+	const halfH = barHeight / 2;
+	const yc = centerY;
+
+	let tip = Math.min(ABS_MAX_TIP, Math.max(MIN_TIP, span * TIP_FRACTION));
+	const maxTipForSpan = Math.max(MIN_TIP, (span - 2) / 2);
+	tip = Math.min(tip, maxTipForSpan);
+	const notch = tip;
+
+	return [
+		[x0, yc - halfH],
+		[x1 - tip, yc - halfH],
+		[x1, yc],
+		[x1 - tip, yc + halfH],
+		[x0, yc + halfH],
+		[x0 + notch, yc],
+	];
+};
+
+dinext_project_stage_gate.roadmap.buildStageBarGraphic = function ({
+	startX,
+	endX,
+	centerY,
+	height,
+	label,
+	fill,
+	stroke,
+	lineWidth,
+	textColor,
+}) {
+	const points = dinext_project_stage_gate.roadmap.buildStageBarChevronPoints(
+		startX,
+		endX,
+		centerY,
+		height
+	);
+	const span = Math.max(Math.abs(endX - startX), 4);
+	const children = [
+		{
+			type: "polygon",
+			shape: { points },
+			style: {
+				fill,
+				stroke,
+				lineWidth,
+			},
+		},
+	];
+
+	if (label && span >= 72) {
+		children.push({
+			type: "text",
+			style: {
+				x: Math.min(startX, endX) + span / 2,
+				y: centerY,
+				text: label,
+				fill: textColor || "#ffffff",
+				fontSize: 11,
+				fontWeight: 600,
+				align: "center",
+				verticalAlign: "middle",
+				width: Math.max(span - 28, 24),
+				overflow: "truncate",
+			},
+			silent: true,
+		});
+	}
+
+	return {
+		type: "group",
+		children,
+	};
+};
+
 dinext_project_stage_gate.roadmap.render = async function (report) {
 	if (!report?.page?.main) {
 		return;
@@ -372,7 +560,10 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 	const chart = echarts.init(dom);
 	dom._dinextRoadmapChart = chart;
 	const payload = report.raw_data?.message || { projects: [], stageBars: [], gates: [] };
-	const { categories, bars, gates } = dinext_project_stage_gate.roadmap.prepareSeriesData(payload);
+	const { categories, bars, gates } = dinext_project_stage_gate.roadmap.prepareSeriesData(payload, {
+		fromDate: report.get_filter_value?.("from_date"),
+		toDate: report.get_filter_value?.("to_date"),
+	});
 
 	chart.setOption({
 		tooltip: {
@@ -397,22 +588,6 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 					const start = api.coord([api.value(1), categoryIndex]);
 					const end = api.coord([api.value(2), categoryIndex]);
 					const height = api.size([0, 1])[1] * 0.5;
-					const width = Math.max(end[0] - start[0], 4);
-					const x0 = start[0];
-					const x1 = end[0];
-					const yc = start[1];
-					const MAX_INSET = 14;
-					const inset = Math.min(MAX_INSET, Math.max(0, (width - 1) / 2));
-					const tip = inset;
-					const notch = inset;
-					const points = [
-						[x0, yc - height / 2],
-						[x1 - tip, yc - height / 2],
-						[x1, yc],
-						[x1 - tip, yc + height / 2],
-						[x0, yc + height / 2],
-						[x0 + notch, yc],
-					];
 					const fromApi = api.style();
 					const itemStyle = params.data?.itemStyle || {};
 					const fill = fromApi.fill || fromApi.color || itemStyle.color || itemStyle.fill;
@@ -420,16 +595,17 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 						fromApi.stroke || fromApi.borderColor || itemStyle.borderColor || itemStyle.stroke;
 					const lineWidth =
 						fromApi.lineWidth ?? fromApi.borderWidth ?? itemStyle.borderWidth ?? 1;
-					return {
-						type: "polygon",
-						shape: { points },
-						style: {
-							...fromApi,
-							fill,
-							stroke,
-							lineWidth,
-						},
-					};
+					return dinext_project_stage_gate.roadmap.buildStageBarGraphic({
+						startX: start[0],
+						endX: end[0],
+						centerY: start[1],
+						height,
+						label: params.data?.name || api.value(3),
+						fill,
+						stroke,
+						lineWidth,
+						textColor: itemStyle.textColor,
+					});
 				},
 				encode: {
 					x: [1, 2],
