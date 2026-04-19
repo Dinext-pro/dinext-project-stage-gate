@@ -443,11 +443,32 @@ test("buildChartOptions makes y-axis project labels explicit and readable", () =
 	assert.equal(options.toolbox.top, 4);
 	assert.ok(options.toolbox.top < options.grid.top);
 	assert.ok(options.toolbox.feature.restore);
+	assert.equal(options.toolbox.feature.restore.title, "Restore");
 	assert.ok(options.toolbox.feature.saveAsImage);
+	assert.equal(options.toolbox.feature.saveAsImage.title, "Save as Image");
 	assert.ok(options.toolbox.feature.myShowAllData);
+	assert.equal(options.toolbox.feature.myShowAllData.title, "Show All");
+	assert.equal(typeof options.xAxis.axisLabel.formatter, "function");
+	assert.equal(options.xAxis.axisLabel.formatter("2026-01-01"), "янв 2026");
+	assert.equal(options.xAxis.axisLabel.formatter("2026-01-15"), "15 янв");
 	assert.equal(options.series[0].clip, true);
 	assert.equal(options.series[1].symbolSize, 22);
 	assert.equal(options.series[1].itemStyle.borderWidth, 2);
+});
+
+test("buildChartOptions can force month-year labels for wide horizontal ranges", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const options = roadmap.buildChartOptions({
+		categories: ["Project A"],
+		bars: [],
+		gates: [],
+		dataZoom: [],
+		monthOnlyXAxisLabels: true,
+	});
+
+	assert.equal(options.xAxis.axisLabel.formatter("2026-01-01"), "янв 2026");
+	assert.equal(options.xAxis.axisLabel.formatter("2026-01-15"), "янв 2026");
 });
 
 test("getFullHorizontalViewport spans full visible timeline from bars and gates", () => {
@@ -517,6 +538,33 @@ test("wrapAxisLabel splits long project names into at most two lines", () => {
 
 	const shortLabel = roadmap.wrapAxisLabel("Короткое имя");
 	assert.equal(shortLabel, "Короткое имя");
+});
+
+test("formatXAxisLabel formats numeric timestamps as localized strings", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	assert.equal(roadmap.formatXAxisLabel(Date.UTC(2026, 0, 1)), "янв 2026");
+	assert.equal(roadmap.formatXAxisLabel(Date.UTC(2026, 0, 15)), "15 янв");
+	assert.equal(roadmap.formatXAxisLabel(Date.UTC(2026, 0, 15), { monthOnly: true }), "янв 2026");
+});
+
+test("shouldUseMonthOnlyXAxisLabels switches to compact month labels for wide ranges", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	assert.equal(
+		roadmap.shouldUseMonthOnlyXAxisLabels({
+			startValue: "2026-01-01",
+			endValue: "2026-04-01",
+		}),
+		true
+	);
+	assert.equal(
+		roadmap.shouldUseMonthOnlyXAxisLabels({
+			startValue: "2026-01-01",
+			endValue: "2026-01-20",
+		}),
+		false
+	);
 });
 
 test("buildStageBarGraphic scales label font size down for shorter visible bars", () => {
