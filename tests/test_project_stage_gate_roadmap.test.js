@@ -6,7 +6,7 @@ const vm = require("node:vm");
 const ROADMAP_SCRIPT_PATH =
 	"/home/frappe/frappe-bench/apps/dinext_project_stage_gate/dinext_project_stage_gate/dinext_project_stage_gate/report/project_stage_gate_roadmap/project_stage_gate_roadmap.js";
 
-function loadRoadmapScript() {
+function loadRoadmapScript(translations = {}) {
 	const script = fs.readFileSync(ROADMAP_SCRIPT_PATH, "utf8");
 
 	const state = {
@@ -16,7 +16,9 @@ function loadRoadmapScript() {
 
 	const context = {
 		__(value) {
-			return value;
+			return Object.prototype.hasOwnProperty.call(translations, value)
+				? translations[value]
+				: value;
 		},
 		console,
 		document: {
@@ -412,7 +414,9 @@ test("getEChartsThemeName uses the standard dark theme only for dark mode", () =
 });
 
 test("buildChartOptions makes y-axis project labels explicit and readable", () => {
-	const { roadmap } = loadRoadmapScript();
+	const { roadmap } = loadRoadmapScript({
+		Jan: "янв",
+	});
 
 	const options = roadmap.buildChartOptions({
 		categories: ["Very long project name", "Another long project name"],
@@ -461,7 +465,9 @@ test("buildChartOptions makes y-axis project labels explicit and readable", () =
 });
 
 test("buildChartOptions can force month-year labels for wide horizontal ranges", () => {
-	const { roadmap } = loadRoadmapScript();
+	const { roadmap } = loadRoadmapScript({
+		Jan: "янв",
+	});
 
 	const options = roadmap.buildChartOptions({
 		categories: ["Project A"],
@@ -652,11 +658,25 @@ test("wrapAxisLabel splits long project names into at most two lines", () => {
 });
 
 test("formatXAxisLabel formats numeric timestamps as localized strings", () => {
-	const { roadmap } = loadRoadmapScript();
+	const { roadmap } = loadRoadmapScript({
+		Jan: "янв",
+	});
 
 	assert.equal(roadmap.formatXAxisLabel(Date.UTC(2026, 0, 1)), "янв 2026");
 	assert.equal(roadmap.formatXAxisLabel(Date.UTC(2026, 0, 15)), "15 янв");
 	assert.equal(roadmap.formatXAxisLabel(Date.UTC(2026, 0, 15), { monthOnly: true }), "янв 2026");
+});
+
+test("formatXAxisLabel uses English month source strings that can be translated", () => {
+	const { roadmap } = loadRoadmapScript({
+		Jan: "janv",
+		Feb: "fevr",
+	});
+
+	assert.equal(roadmap.chartMonthLabels[0], "Jan");
+	assert.equal(roadmap.chartMonthLabels[1], "Feb");
+	assert.equal(roadmap.formatXAxisLabel(Date.UTC(2026, 0, 1)), "janv 2026");
+	assert.equal(roadmap.formatXAxisLabel(Date.UTC(2026, 1, 15)), "15 fevr");
 });
 
 test("shouldUseMonthOnlyXAxisLabels switches to compact month labels for wide ranges", () => {

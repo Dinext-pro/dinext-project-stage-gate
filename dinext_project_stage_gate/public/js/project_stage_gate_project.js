@@ -162,6 +162,9 @@ dinext_project_stage_gate.project.render_chain = function (widget, stages) {
 		const title = frappe.utils.escape_html(stage.stage_name || stage.stage || __("Unnamed stage"));
 		const stageName = frappe.utils.escape_html(stage.name || "");
 		const tooltipParts = [`${__("Status")}: ${statusLabel}`];
+		if (gateStatus) {
+			tooltipParts.push(`${__("Gate")}: ${gateStatusLabel}`);
+		}
 		const tooltip = frappe.utils.escape_html(tooltipParts.join(" | "));
 
 		items.push(`<button type="button" class="stage-gate-node stage-gate-status-${frappe.scrub(

@@ -1,0 +1,13 @@
+[
+ {
+  "docstatus": 0,
+  "doctype": "Client Script",
+  "dt": "Project Portfolio",
+  "enabled": 1,
+  "modified": "2026-04-20 03:06:41.992322",
+  "module": "Dinext Project Stage Gate",
+  "name": "Project Portfolio Stage Gate Roadmap View",
+  "script": "frappe.ui.form.on(\"Project Portfolio\", {\n\trefresh(frm) {\n\t\tif (!frm || !frm.doc || frm.is_new() || !frm.doc.name) {\n\t\t\treturn;\n\t\t}\n\n\t\tfrm.add_custom_button(\n\t\t\t__(\"Projects Stage Roadmap\"),\n\t\t\t() => {\n\t\t\t\tfrappe.route_options = {\n\t\t\t\t\tportfolio: frm.doc.name,\n\t\t\t\t};\n\t\t\t\tfrappe.set_route(\"query-report\", \"Project Stage Gate Roadmap\");\n\t\t\t},\n\t\t\t__(\"View\")\n\t\t);\n\t},\n});",
+  "view": "Form"
+ }
+]

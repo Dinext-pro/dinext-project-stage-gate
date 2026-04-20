@@ -12,8 +12,11 @@
 - Transactional-слой исполнения через `Project Stage Instance`, `Project Gate Checkpoint` и `Project Gate Checklist Item`
 - Whitelisted Python API для цепочки стадий проекта и данных roadmap-отчета
 - Виджет на форме `Project`, подключаемый через `doctype_js`, без отдельного HTML custom field
+- Кнопка `Project Stage Gate Roadmap` на форме `Project Portfolio`, открывающая отчет сразу с фильтром по текущему портфелю
 - Автоматическое создание `Project Stage Instance` при назначении `Project Governance Model` проекту
+- Автоматическое создание `Project Gate Checkpoint` из `Checkpoint Template`, указанного в строке модели управления
 - Автоматическое обновление полей `current_stage_instance`, `current_stage`, `stage_gate_status` и `current_gate_result` на `Project`
+- Автоматический расчет `planned_start_date` / `planned_end_date` у `Project Stage Instance` по `expected_start_date`, `expected_duration_days` и рабочим дням из holiday list проекта / компании
 - Контролируемый сброс цепочки при смене или очистке `governance_model`: подтверждение на форме `Project`, отмена активных `Project Stage Instance` / `Project Gate Checkpoint` / строк чек-листа (статус `Canceled`), версионирование цепочки (`stage_chain_version`), скрытие архивных цепочек из виджета и roadmap
 - Script Report дорожной карты Stage-gate с ленивой загрузкой ECharts
 - Ролевая и permission-модель для `Stage Gate Owner`, `Stage Gate Reviewer`, `Stage Gate Approver` и `Project Governance Admin`
@@ -63,13 +66,22 @@ bench --site <site> export-fixtures --app dinext_project_stage_gate
 4. Заполняет связи `previous_stage_instance` / `next_stage_instance`.
 5. Обновляет summary-поля на `Project`.
 
-Для каждой созданной `Project Stage Instance`, у которой в соответствующей строке модели управления задан **Checkpoint Template**, создаётся документ `Project Gate Checkpoint` с чек-листом, скопированным из шаблона (имя вида `<PROJECT>-STAGE-001-GATE`). Если шаблон в строке не указан, чекпоинт не создаётся.
+Для каждой созданной `Project Stage Instance`, у которой в соответствующей строке модели управления задан **Checkpoint Template**, создаётся документ `Project Gate Checkpoint` с чек-листом, скопированным из шаблона (имя вида `<PROJECT>-STAGE-001-GATE`). Если шаблон в строке не указан, чекпоинт не создаётся. Если шаблон выключен или не содержит ни одного пункта чек-листа, создание цепочки прерывается валидационной ошибкой.
+
+Плановые даты `Project Stage Instance` вычисляются автоматически:
+
+1. Для первой стадии `planned_start_date` берётся из `Project.expected_start_date` (или `today()`), затем сдвигается на ближайший рабочий день.
+2. Для следующих стадий старт определяется как ближайший рабочий день после `planned_end_date` предыдущей стадии.
+3. `planned_end_date` считается по `expected_duration_days` строки модели управления с учетом holiday list проекта или компании.
+4. При переводе стадии в `Active` или `Completed` документ автоматически проставляет `actual_start_date`; при `Completed` также заполняет `actual_end_date`, если эти даты не были заданы вручную.
 
 При редактировании чеклиста на форме `Project Gate Checkpoint` удаление строки с установленным **Is Mandatory** блокируется на клиенте до тех пор, пока флаг не снят; после снятия флага строку можно удалить и сохранить документ одним сохранением. Массовое удаление всех строк таблицы недоступно (кнопка скрыта), чтобы нельзя было обойти эту проверку.
 
 Статусы строк чеклиста (**Open**, **Done**, **Canceled**) задаются в `Project Gate Checklist Item`. После сохранения чекпоинта поле **Checklist Completed** обновляется в контроллере [`project_gate_checkpoint.py`](dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_gate_checkpoint/project_gate_checkpoint.py): оно истинно только когда каждая строка в терминальном статусе (**Done** или **Canceled**). Условие `doc.checklist_completed` в [`fixtures/workflow.json`](dinext_project_stage_gate/fixtures/workflow.json) разрешает действие workflow **Submit for Review** только при полностью закрытом чеклисте.
 
 Дальше форма `Project` использует whitelisted API для отрисовки уже сохраненной Stage-gate цепочки. Если модель управления не назначена, виджет не показывается.
+
+На форме `Project Portfolio` появляется кнопка в меню `View`, которая открывает Script Report `Project Stage Gate Roadmap` с уже заполненным фильтром `portfolio` для текущего портфеля.
 
 Если цепочка уже создана, смена или очистка `governance_model` требует подтверждения в диалоге на форме `Project`. После подтверждения и сохранения текущая активная цепочка переводится в архив (все связанные исполнительные документы — в статус `Canceled`), номер активной версии цепочки на `Project` увеличивается; при назначенной новой модели создаётся новая цепочка, при пустой модели summary-поля проекта очищаются. Исторические строки остаются в БД, но не попадают в виджет и выборки roadmap для активной версии.
 
@@ -95,6 +107,7 @@ bench --site <site> execute dinext_project_stage_gate.stage_gate.api.get_roadmap
 - Frappe Framework / ERPNext
 - JavaScript form scripts и Script Reports
 - ECharts для визуализации дорожной карты
+- Node.js built-in test runner для изолированных JS regression-тестов
 - Ruff для Python linting
 - Prettier / ESLint / pyupgrade через pre-commit tooling
 
@@ -105,7 +118,9 @@ bench --site <site> execute dinext_project_stage_gate.stage_gate.api.get_roadmap
 Ключевые настройки и точки интеграции:
 
 - `required_apps = ["erpnext", "dinext_projects"]`
-- `doctype_js = {"Project": "public/js/project_stage_gate_project.js"}`
+- `doctype_js`:
+  - `Project -> public/js/project_stage_gate_project.js`
+  - `Project Portfolio -> public/js/project_portfolio_stage_gate.js`
 - `doc_events["Project"]`:
   - `validate` требует флаг `confirm_governance_reset` при смене/очистке `governance_model`, если есть активная цепочка
   - `before_save` выполняет отмену активной цепочки и инкремент `stage_chain_version` при подтверждённом сбросе
@@ -149,6 +164,13 @@ pre-commit install
 - `prettier`
 - `pyupgrade`
 
+Минимальная проверка перед публикацией изменений:
+
+```bash
+bench run-tests --app dinext_project_stage_gate
+node --test tests/*.js
+```
+
 При изменении metadata-driven поведения придерживайтесь такого процесса:
 
 1. Обновить код и metadata-файлы
@@ -164,13 +186,21 @@ pre-commit install
 - [`AGENTS.md`](AGENTS.md) — проектная доктрина и правила работы с Frappe
 - [`dinext_project_stage_gate/hooks.py`](dinext_project_stage_gate/hooks.py) — bootstrap приложения, fixtures и client script bindings
 - [`dinext_project_stage_gate/stage_gate/api.py`](dinext_project_stage_gate/stage_gate/api.py) — whitelisted API
+- [`dinext_project_stage_gate/stage_gate/checkpoint_provision.py`](dinext_project_stage_gate/stage_gate/checkpoint_provision.py) — создание checkpoint из шаблона при вставке `Project Stage Instance`
 - [`dinext_project_stage_gate/stage_gate/project_hooks.py`](dinext_project_stage_gate/stage_gate/project_hooks.py) — orchestration layer для автоматического provisioning и пересчета summary
 - [`dinext_project_stage_gate/stage_gate/query.py`](dinext_project_stage_gate/stage_gate/query.py) — read-model слой для виджета и отчета
 - [`dinext_project_stage_gate/stage_gate/service.py`](dinext_project_stage_gate/stage_gate/service.py) — pure business logic для сборки stage chain и project summary
+- [`dinext_project_stage_gate/stage_gate/working_days.py`](dinext_project_stage_gate/stage_gate/working_days.py) — расчет рабочих дат стадий с учетом holiday list
 - [`dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_gate_checkpoint/project_gate_checkpoint.js`](dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_gate_checkpoint/project_gate_checkpoint.js) — клиентская логика чеклиста (удаление обязательных строк, скрытие «Удалить все строки»)
 - [`dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_gate_checkpoint/project_gate_checkpoint.py`](dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_gate_checkpoint/project_gate_checkpoint.py) — валидация и синхронизация `checklist_completed` с чеклистом
+- [`dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_stage_instance/project_stage_instance.py`](dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_stage_instance/project_stage_instance.py) — вычисление плановых/фактических дат и `after_insert` provisioning gate checkpoint
+- [`dinext_project_stage_gate/public/js/project_portfolio_stage_gate.js`](dinext_project_stage_gate/public/js/project_portfolio_stage_gate.js) — shortcut из `Project Portfolio` в roadmap-отчет
 - [`dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_gate_checkpoint/test_project_gate_checkpoint.py`](dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_gate_checkpoint/test_project_gate_checkpoint.py) — тесты пересчёта `checklist_completed`
 - [`dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_stage_instance/test_project_stage_instance.py`](dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_stage_instance/test_project_stage_instance.py) — integration-тесты автосоздания и guard-логики
+- [`tests/test_project_portfolio_stage_gate.test.js`](tests/test_project_portfolio_stage_gate.test.js) — JS regression-тест интеграции `Project Portfolio`
+- [`tests/test_project_gate_checkpoint_form.test.js`](tests/test_project_gate_checkpoint_form.test.js) — JS regression-тест клиентских ограничений чеклиста
+- [`tests/test_project_stage_gate_widget.test.js`](tests/test_project_stage_gate_widget.test.js) — JS regression-тест виджета `Project`
+- [`tests/test_project_stage_gate_roadmap.test.js`](tests/test_project_stage_gate_roadmap.test.js) — JS regression-тест roadmap-отчета
 
 ## ❤️ Благодарности
 
@@ -185,6 +215,9 @@ pre-commit install
 ├── README.md
 ├── pyproject.toml
 ├── tests/
+│   ├── test_project_gate_checkpoint_form.test.js
+│   ├── test_project_portfolio_stage_gate.test.js
+│   ├── test_project_stage_gate_roadmap.test.js
 │   └── test_project_stage_gate_widget.test.js
 └── dinext_project_stage_gate/
     ├── __init__.py
@@ -203,16 +236,19 @@ pre-commit install
     │   ├── css/
     │   │   └── project_stage_gate.css
     │   └── js/
+    │       ├── project_portfolio_stage_gate.js
     │       ├── project_stage_gate_project.js
     │       └── vendor/
     │           └── echarts.min.js
     ├── stage_gate/
     │   ├── api.py
+    │   ├── checkpoint_provision.py
     │   ├── permissions.py
     │   ├── project_hooks.py
     │   ├── query.py
     │   ├── service.py
-    │   └── validators.py
+    │   ├── validators.py
+    │   └── working_days.py
     ├── tests/
     │   ├── test_app_bootstrap.py
     │   ├── test_project_stage_gate_roadmap_report.py
@@ -239,11 +275,11 @@ pre-commit install
 Пояснения к структуре:
 
 - `dinext_project_stage_gate/dinext_project_stage_gate/doctype/` содержит metadata-backed определения DocType, контроллеры и тесты.
-- `dinext_project_stage_gate/stage_gate/` содержит service/query/API и orchestration hooks для кросс-документной Stage-gate логики.
-- `dinext_project_stage_gate/public/` содержит UI-ассеты формы `Project` и vendored ECharts stub.
+- `dinext_project_stage_gate/stage_gate/` содержит service/query/API, orchestration hooks, provisioning checkpoint и утилиты расчета рабочих дат.
+- `dinext_project_stage_gate/public/` содержит UI-ассеты формы `Project`, shortcut для `Project Portfolio` и vendored ECharts stub.
 - `dinext_project_stage_gate/fixtures/` хранит экспортированные metadata, необходимые для воспроизведения ролей, прав, workflow, отчетов и custom fields.
 - `dinext_project_stage_gate/tests/` содержит точечные Python unit-тесты для service, query, API, permissions и report-поведения.
-- `tests/` в корне репозитория содержит изолированный JavaScript regression-тест для поведения Project widget.
+- `tests/` в корне репозитория содержит изолированные JavaScript regression-тесты для виджета `Project`, формы `Project Portfolio`, клиентской логики `Project Gate Checkpoint` и roadmap-отчета.
 
 ## 🔗 Схема потока
 
@@ -284,11 +320,12 @@ flowchart LR
 Основной runtime-поток выглядит так:
 
 1. Metadata DocType определяют модель управления, реестр стадий, уровни checkpoint и шаблоны gate.
-2. При сохранении `Project` hook-слой создает и синхронизирует `Project Stage Instance` и summary-поля проекта.
-3. Изменения самих `Project Stage Instance` также пересчитывают summary проекта через `doc_events`.
-4. `stage_gate.query` собирает read-optimized datasets для виджета проекта и roadmap-отчета.
-5. Клиентский код отрисовывает Stage-gate цепочку на форме `Project` и roadmap chart в Script Report.
-6. При сохранении `Project Gate Checkpoint` пересчитывается `checklist_completed` по статусам строк чеклиста; workflow checkpoint опирается на это поле для разрешения отправки на согласование.
+2. При сохранении `Project` hook-слой создает и синхронизирует `Project Stage Instance`, а контроллер стадии вычисляет плановые даты по рабочему календарю.
+3. После вставки `Project Stage Instance` модуль provisioning создает `Project Gate Checkpoint`, если для стадии задан template.
+4. Изменения самих `Project Stage Instance` также пересчитывают summary проекта через `doc_events`.
+5. `stage_gate.query` собирает read-optimized datasets для виджета проекта и roadmap-отчета.
+6. Клиентский код отрисовывает Stage-gate цепочку на форме `Project`, добавляет shortcut в `Project Portfolio` и строит roadmap chart в Script Report.
+7. При сохранении `Project Gate Checkpoint` пересчитывается `checklist_completed` по статусам строк чеклиста; workflow checkpoint опирается на это поле для разрешения отправки на согласование.
 
 ## Лицензия
 

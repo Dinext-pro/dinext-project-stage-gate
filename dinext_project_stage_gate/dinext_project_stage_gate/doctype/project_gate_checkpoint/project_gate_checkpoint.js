@@ -13,7 +13,7 @@ frappe.ui.form.on("Project Gate Checklist Item", {
 		if (cint(row.is_mandatory)) {
 			frappe.throw(
 				__(
-					"Нельзя удалить обязательный пункт чеклиста: "					
+					"Cannot delete mandatory checklist item: "
 				) + row.item_title + "."
 			);
 		}

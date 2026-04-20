@@ -1,4 +1,5 @@
 import frappe
+from frappe import _
 
 from dinext_project_stage_gate.stage_gate import query
 
@@ -32,5 +33,8 @@ def _coerce_filters(filters):
 
 def _ensure_permission(doctype, doc=None):
 	if not frappe.has_permission(doctype, "read", doc=doc):
-		frappe.throw(f"Not permitted to read {doctype}", frappe.PermissionError)
+		frappe.throw(
+			_("Not permitted to read {0}").format(doctype),
+			frappe.PermissionError,
+		)
 
