@@ -20,6 +20,7 @@ class TestAppBootstrap(unittest.TestCase):
 				for entry in hooks.fixtures
 			)
 		)
+
 		self.assertTrue(
 			any(
 				isinstance(entry, dict)

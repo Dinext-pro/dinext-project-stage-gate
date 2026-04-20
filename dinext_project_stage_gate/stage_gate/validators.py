@@ -1,4 +1,5 @@
 import frappe
+from frappe import _
 
 
 def assign_stage_sequences(rows):
@@ -16,7 +17,10 @@ def validate_unique_stage_references(rows, fieldname="stage"):
 		if not value:
 			continue
 		if value in seen:
-			frappe.throw(f"Duplicate {fieldname} reference: {value}", frappe.ValidationError)
+			frappe.throw(
+				_("Duplicate {0} reference: {1}").format(fieldname, value),
+				frappe.ValidationError,
+			)
 		seen.add(value)
 
 
@@ -27,7 +31,10 @@ def validate_enabled_links(rows, fieldname, records_by_name, label="Record"):
 			continue
 		record = records_by_name.get(value)
 		if record and not int(record.get("enabled", 0)):
-			frappe.throw(f"{label} is disabled: {value}", frappe.ValidationError)
+			frappe.throw(
+				_("{0} is disabled: {1}").format(label, value),
+				frappe.ValidationError,
+			)
 
 
 def validate_template_items(items):
@@ -35,7 +42,7 @@ def validate_template_items(items):
 		title = (item.get("title") or "").strip()
 		if not title:
 			frappe.throw(
-				f"Stage Gate Template Item row {index} must define a title.",
+				_("Stage Gate Template Item row {0} must define a title.").format(index),
 				frappe.ValidationError,
 			)
 

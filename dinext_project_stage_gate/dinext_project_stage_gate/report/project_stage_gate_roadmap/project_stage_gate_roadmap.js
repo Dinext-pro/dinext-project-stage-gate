@@ -130,18 +130,18 @@ dinext_project_stage_gate.roadmap.translateStatus = function (value) {
 };
 
 dinext_project_stage_gate.roadmap.chartMonthLabels = [
-	"янв",
-	"фев",
-	"мар",
-	"апр",
-	"май",
-	"июн",
-	"июл",
-	"авг",
-	"сен",
-	"окт",
-	"ноя",
-	"дек",
+	"Jan",
+	"Feb",
+	"Mar",
+	"Apr",
+	"May",
+	"Jun",
+	"Jul",
+	"Aug",
+	"Sep",
+	"Oct",
+	"Nov",
+	"Dec",
 ];
 
 dinext_project_stage_gate.roadmap.X_AXIS_MONTH_ONLY_THRESHOLD_DAYS = 45;
@@ -157,9 +157,10 @@ dinext_project_stage_gate.roadmap.formatXAxisLabel = function (value, options = 
 	}
 
 	const date = new Date(time);
-	const monthLabel =
+	const monthSource =
 		dinext_project_stage_gate.roadmap.chartMonthLabels[date.getUTCMonth()] ||
 		String(date.getUTCMonth() + 1);
+	const monthLabel = __(monthSource);
 	if (options.monthOnly) {
 		return `${monthLabel} ${date.getUTCFullYear()}`;
 	}

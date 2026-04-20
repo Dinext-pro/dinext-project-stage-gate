@@ -12,6 +12,9 @@ except ModuleNotFoundError:
 	_frappe_stub._ = lambda value: value
 	_frappe_stub.db = types.SimpleNamespace(get_value=lambda *args, **kwargs: 1)
 	sys.modules["frappe"] = _frappe_stub
+	_frappe_utils_stub = types.ModuleType("frappe.utils")
+	_frappe_utils_stub.add_months = lambda value, months: value
+	sys.modules["frappe.utils"] = _frappe_utils_stub
 
 from unittest.mock import Mock, patch
 
@@ -67,6 +70,16 @@ class TestStageGateQuery(unittest.TestCase):
 
 		self.assertEqual(result[0]["stage_name"], "Discovery")
 		self.assertEqual(result[0]["checkpoints"][0]["checkpoint_level"], "Stage Exit")
+
+	@patch("dinext_project_stage_gate.stage_gate.query.frappe.get_all")
+	def test_get_project_team_rows_uses_english_project_manager_role(self, get_all):
+		query._get_project_team_rows(["PROJ-001"])
+
+		get_all.assert_called_once()
+		self.assertEqual(
+			get_all.call_args.kwargs["filters"]["pt_role"],
+			"Project Manager",
+		)
 
 	@patch.object(query, "_today", return_value=date(2026, 4, 19))
 	@patch("dinext_project_stage_gate.stage_gate.query.frappe.get_all")

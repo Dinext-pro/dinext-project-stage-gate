@@ -1,8 +1,35 @@
+import sys
+import types
 import unittest
-from unittest.mock import patch
 from types import SimpleNamespace
+from unittest.mock import patch
 
-import frappe
+try:
+	import frappe  # noqa: F401
+except ModuleNotFoundError:
+	_frappe_stub = types.ModuleType("frappe")
+	_frappe_stub._ = lambda value: value
+	_frappe_stub.PermissionError = type("PermissionError", (Exception,), {})
+	_frappe_stub.ValidationError = type("ValidationError", (Exception,), {})
+	_frappe_stub.local = SimpleNamespace()
+	_frappe_stub.get_all = None
+	_frappe_stub.get_list = None
+	_frappe_stub.db = SimpleNamespace(get_value=lambda *args, **kwargs: 1)
+	_frappe_stub.has_permission = lambda *args, **kwargs: True
+	_frappe_stub.parse_json = lambda value: value
+	_frappe_stub.log = lambda *args, **kwargs: None
+	_frappe_stub.whitelist = lambda *args, **kwargs: (lambda func: func)
+
+	def _throw(message, exc=None):
+		exc_type = exc or Exception
+		raise exc_type(message)
+
+	_frappe_stub.throw = _throw
+	sys.modules["frappe"] = _frappe_stub
+	_frappe_utils_stub = types.ModuleType("frappe.utils")
+	_frappe_utils_stub.add_months = lambda value, months: value
+	sys.modules["frappe.utils"] = _frappe_utils_stub
+	import frappe
 
 from dinext_project_stage_gate.stage_gate import api
 
@@ -66,4 +93,13 @@ class TestStageGateApi(unittest.TestCase):
 			api.get_project_stage_chain("PROJ-001")
 
 		has_permission.assert_called_once_with("Project", "read", doc="PROJ-001")
+
+	@patch("dinext_project_stage_gate.stage_gate.api._", side_effect=lambda message: f"TR:{message}", create=True)
+	@patch("dinext_project_stage_gate.stage_gate.api.frappe.has_permission", return_value=False)
+	def test_permission_error_uses_translatable_english_source(self, has_permission, translate):
+		with self.assertRaisesRegex(frappe.PermissionError, r"TR:Not permitted to read Project"):
+			api.get_project_stage_chain("PROJ-001")
+
+		has_permission.assert_called_once_with("Project", "read", doc="PROJ-001")
+		translate.assert_called_once_with("Not permitted to read {0}")
 
