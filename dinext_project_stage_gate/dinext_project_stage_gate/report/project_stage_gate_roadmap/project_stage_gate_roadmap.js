@@ -31,6 +31,20 @@ frappe.query_reports["Project Stage Gate Roadmap"] = {
 			options: "User",
 		},
 		{
+			fieldname: "project_manager_role",
+			label: __("Project Manager Role"),
+			fieldtype: "Link",
+			options: "Project Role",
+			default: "Руководитель проекта",
+			get_query() {
+				return {
+					filters: {
+						enabled: 1,
+					},
+				};
+			},
+		},
+		{
 			fieldname: "governance_model",
 			label: __("Governance Model"),
 			fieldtype: "Link",

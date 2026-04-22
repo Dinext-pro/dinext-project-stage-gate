@@ -72,13 +72,23 @@ class TestStageGateQuery(unittest.TestCase):
 		self.assertEqual(result[0]["checkpoints"][0]["checkpoint_level"], "Stage Exit")
 
 	@patch("dinext_project_stage_gate.stage_gate.query.frappe.get_all")
-	def test_get_project_team_rows_uses_english_project_manager_role(self, get_all):
-		query._get_project_team_rows(["PROJ-001"])
+	def test_get_project_team_rows_uses_selected_manager_role(self, get_all):
+		query._get_project_team_rows(["PROJ-001"], "Delivery Manager")
 
 		get_all.assert_called_once()
 		self.assertEqual(
 			get_all.call_args.kwargs["filters"]["pt_role"],
-			"Project Manager",
+			"Delivery Manager",
+		)
+
+	@patch("dinext_project_stage_gate.stage_gate.query.frappe.get_all")
+	def test_get_project_team_rows_uses_default_manager_role_when_missing(self, get_all):
+		query._get_project_team_rows(["PROJ-001"], None)
+
+		get_all.assert_called_once()
+		self.assertEqual(
+			get_all.call_args.kwargs["filters"]["pt_role"],
+			"Руководитель проекта",
 		)
 
 	@patch.object(query, "_today", return_value=date(2026, 4, 19))
@@ -301,6 +311,41 @@ class TestStageGateQuery(unittest.TestCase):
 		result = query.get_roadmap_dataset({"project_manager": "pm@example.com"})
 
 		self.assertEqual([project["name"] for project in result["projects"]], ["PROJ-001"])
+		project_team_call = get_all.call_args_list[0]
+		self.assertEqual(
+			project_team_call.kwargs["filters"]["pt_role"],
+			"Руководитель проекта",
+		)
+
+	@patch.object(query, "_today", return_value=date(2026, 4, 19))
+	@patch("dinext_project_stage_gate.stage_gate.query.frappe.get_all")
+	@patch("dinext_project_stage_gate.stage_gate.query.frappe.get_list", create=True)
+	def test_get_roadmap_dataset_uses_selected_project_manager_role(self, get_list, get_all, _mock_today):
+		get_list.side_effect = [
+			[
+				{
+					"name": "PROJ-001",
+					"project_name": "Alpha",
+					"company": "Dinext",
+					"customer": "Customer A",
+					"custom_project_portfolio": "Portfolio A",
+					"governance_model": "Standard",
+					"stage_chain_version": 1,
+					"current_stage": "Discovery",
+					"stage_gate_status": "Active",
+				}
+			],
+			[],
+		]
+		get_all.side_effect = [[], [], [], []]
+
+		query.get_roadmap_dataset({"project_manager_role": "Delivery Manager"})
+
+		project_team_call = get_all.call_args_list[0]
+		self.assertEqual(
+			project_team_call.kwargs["filters"]["pt_role"],
+			"Delivery Manager",
+		)
 
 	@patch.object(query, "_today", return_value=date(2026, 4, 19))
 	@patch("dinext_project_stage_gate.stage_gate.query.frappe.get_all")

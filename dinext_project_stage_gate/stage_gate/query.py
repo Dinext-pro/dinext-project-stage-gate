@@ -3,7 +3,7 @@ from datetime import date
 import frappe
 from frappe.utils import add_months
 
-PROJECT_MANAGER_ROLE = "Руководитель проекта"
+DEFAULT_PROJECT_MANAGER_ROLE = "Руководитель проекта"
 
 
 def _get(row, key, default=None):
@@ -70,12 +70,20 @@ def _intervals_overlap(valid_from, valid_for, range_start, range_end):
 	return (start is None or start <= range_end) and (end is None or end >= range_start)
 
 
-def _get_project_team_rows(project_names):
+def _get_project_manager_role(filters=None):
+	filters = filters or {}
+	return filters.get("project_manager_role") or DEFAULT_PROJECT_MANAGER_ROLE
+
+
+def _get_project_team_rows(project_names, role_name=None):
 	if not project_names:
 		return []
 	return frappe.get_all(
 		"Project Team Details",
-		filters={"parent": ["in", project_names], "pt_role": PROJECT_MANAGER_ROLE},
+		filters={
+			"parent": ["in", project_names],
+			"pt_role": role_name or DEFAULT_PROJECT_MANAGER_ROLE,
+		},
 		fields=[
 			"parent",
 			"pt_participant",
@@ -102,8 +110,8 @@ def _get_user_display_names(user_ids):
 	}
 
 
-def _resolve_project_managers(project_names, range_start, range_end):
-	team_rows = _get_project_team_rows(project_names)
+def _resolve_project_managers(project_names, range_start, range_end, role_name=None):
+	team_rows = _get_project_team_rows(project_names, role_name)
 	valid_rows = [
 		row
 		for row in team_rows
@@ -214,6 +222,7 @@ def get_project_stage_chain(project_name):
 def get_roadmap_dataset(filters=None):
 	filters = filters or {}
 	range_start, range_end = _resolve_report_range(filters)
+	project_manager_role = _get_project_manager_role(filters)
 	project_filters = {}
 	if filters.get("company"):
 		project_filters["company"] = filters["company"]
@@ -235,7 +244,12 @@ def get_roadmap_dataset(filters=None):
 		order_by="custom_project_portfolio asc, project_name asc",
 	)
 	project_names = [_get(row, "name") for row in project_rows]
-	project_managers, project_manager_users = _resolve_project_managers(project_names, range_start, range_end)
+	project_managers, project_manager_users = _resolve_project_managers(
+		project_names,
+		range_start,
+		range_end,
+		project_manager_role,
+	)
 
 	selected_project_manager = filters.get("project_manager")
 	if selected_project_manager:
