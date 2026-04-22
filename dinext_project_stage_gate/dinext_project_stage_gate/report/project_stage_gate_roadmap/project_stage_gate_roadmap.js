@@ -164,6 +164,9 @@ dinext_project_stage_gate.roadmap.ROADMAP_INTRO_ANIMATION_DURATION_MS = 420;
 dinext_project_stage_gate.roadmap.ROADMAP_STAGE_INTRO_ANIMATION_MAX_SPREAD_MS = 420;
 dinext_project_stage_gate.roadmap.ROADMAP_GATE_INTRO_ANIMATION_MAX_SPREAD_MS = 180;
 dinext_project_stage_gate.roadmap.ROADMAP_INTRO_ANIMATION_EASING = "cubicOut";
+dinext_project_stage_gate.roadmap.ROADMAP_CHECKPOINT_PREFERRED_SIZE = 22;
+dinext_project_stage_gate.roadmap.ROADMAP_CHECKPOINT_MIN_STAGE_HEIGHT_RATIO = 0.2;
+dinext_project_stage_gate.roadmap.ROADMAP_CHECKPOINT_MAX_STAGE_HEIGHT_RATIO = 2 / 3;
 
 dinext_project_stage_gate.roadmap.formatXAxisLabel = function (value, options = {}) {
 	const time = dinext_project_stage_gate.roadmap._parseTimeMs(value);
@@ -410,6 +413,42 @@ dinext_project_stage_gate.roadmap.calculateChartHeight = function (categories) {
 	const viewportHeight = Number(window?.innerHeight) || 0;
 	const minHeight = viewportHeight > 0 ? Math.round(viewportHeight * 0.65) : 420;
 	return Math.max(dynamicHeight, minHeight);
+};
+
+dinext_project_stage_gate.roadmap.estimateStageBarHeight = function (categories, chartHeight, grid = {}) {
+	const rowCount = Array.isArray(categories) ? categories.length : Number(categories) || 0;
+	if (rowCount <= 0) {
+		return 0;
+	}
+
+	const plotHeight =
+		Math.max(0, Number(chartHeight) || 0) -
+		Math.max(0, Number(grid.top) || 0) -
+		Math.max(0, Number(grid.bottom) || 0);
+	if (plotHeight <= 0) {
+		return 0;
+	}
+
+	return (plotHeight / rowCount) * 0.5;
+};
+
+dinext_project_stage_gate.roadmap.getCheckpointDiamondSize = function (
+	stageHeight,
+	preferredSize = dinext_project_stage_gate.roadmap.ROADMAP_CHECKPOINT_PREFERRED_SIZE
+) {
+	const safeStageHeight = Number(stageHeight) || 0;
+	if (safeStageHeight <= 0) {
+		return preferredSize;
+	}
+
+	const minSize =
+		safeStageHeight *
+		dinext_project_stage_gate.roadmap.ROADMAP_CHECKPOINT_MIN_STAGE_HEIGHT_RATIO;
+	const maxSize =
+		safeStageHeight *
+		dinext_project_stage_gate.roadmap.ROADMAP_CHECKPOINT_MAX_STAGE_HEIGHT_RATIO;
+
+	return Math.min(Math.max(preferredSize, minSize), maxSize);
 };
 
 dinext_project_stage_gate.roadmap.applyChartHeight = function (dom, categories) {
@@ -808,19 +847,29 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 	const introAnimationDuration =
 		dinext_project_stage_gate.roadmap.ROADMAP_INTRO_ANIMATION_DURATION_MS;
 	const introAnimationEasing = dinext_project_stage_gate.roadmap.ROADMAP_INTRO_ANIMATION_EASING;
+	const safeCategories = categories || [];
+	const grid = {
+		containLabel: true,
+		top: 44,
+		right: 28,
+		bottom: 44,
+		left: 12,
+	};
+	const chartHeight = dinext_project_stage_gate.roadmap.calculateChartHeight(safeCategories);
+	const estimatedStageBarHeight = dinext_project_stage_gate.roadmap.estimateStageBarHeight(
+		safeCategories,
+		chartHeight,
+		grid
+	);
+	const checkpointSymbolSize =
+		dinext_project_stage_gate.roadmap.getCheckpointDiamondSize(estimatedStageBarHeight);
 
 	return {
 		animation: true,
 		animationDurationUpdate: 0,
 		animationEasing: introAnimationEasing,
 		animationEasingUpdate: "linear",
-		grid: {
-			containLabel: true,
-			top: 44,
-			right: 28,
-			bottom: 44,
-			left: 12,
-		},
+		grid,
 		tooltip: {
 			trigger: "item",
 			formatter: dinext_project_stage_gate.roadmap.formatTooltip,
@@ -883,7 +932,7 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 		yAxis: {
 			type: "category",
 			triggerEvent: true,
-			data: categories || [],
+			data: safeCategories,
 			splitLine: {
 				show: true,
 				lineStyle: {
@@ -957,7 +1006,7 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 			{
 				type: "scatter",
 				symbol: "diamond",
-				symbolSize: 22,
+				symbolSize: checkpointSymbolSize,
 				animationDuration: introAnimationDuration,
 				animationDurationUpdate: 0,
 				animationEasing: introAnimationEasing,

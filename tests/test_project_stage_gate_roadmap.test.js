@@ -474,8 +474,54 @@ test("buildChartOptions makes y-axis project labels explicit and readable", () =
 	assert.equal(options.xAxis.axisLabel.formatter("2026-01-01"), "янв 2026");
 	assert.equal(options.xAxis.axisLabel.formatter("2026-01-15"), "15 янв");
 	assert.equal(options.series[0].clip, true);
-	assert.equal(options.series[1].symbolSize, 22);
+	assert.equal(options.series[1].symbolSize, 34.6);
 	assert.equal(options.series[1].itemStyle.borderWidth, 2);
+});
+
+test("buildChartOptions keeps checkpoint diamonds at preferred size when it fits stage height", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const categories = new Array(8).fill(null).map((_, index) => `Project ${index + 1}`);
+	const options = roadmap.buildChartOptions({
+		categories,
+		bars: [],
+		gates: [],
+		dataZoom: [],
+	});
+
+	assert.equal(options.series[1].symbolSize, 22);
+});
+
+test("buildChartOptions grows checkpoint diamonds to at least twenty percent of stage height", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const categories = ["Project A", "Project B"];
+	const options = roadmap.buildChartOptions({
+		categories,
+		bars: [],
+		gates: [],
+		dataZoom: [],
+	});
+	const chartHeight = roadmap.calculateChartHeight(categories);
+	const estimatedStageHeight = ((chartHeight - 44 - 44) / categories.length) * 0.5;
+
+	assert.equal(options.series[1].symbolSize, estimatedStageHeight * 0.2);
+});
+
+test("buildChartOptions caps checkpoint diamonds at two thirds of stage height", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const categories = new Array(24).fill(null).map((_, index) => `Project ${index + 1}`);
+	const options = roadmap.buildChartOptions({
+		categories,
+		bars: [],
+		gates: [],
+		dataZoom: [],
+	});
+	const chartHeight = roadmap.calculateChartHeight(categories);
+	const estimatedStageHeight = ((chartHeight - 44 - 44) / categories.length) * 0.5;
+
+	assert.equal(options.series[1].symbolSize, (estimatedStageHeight * 2) / 3);
 });
 
 test("buildChartOptions can force month-year labels for wide horizontal ranges", () => {
@@ -797,15 +843,15 @@ test("prepareSeriesData adds outlined checkpoint styling for contrast", () => {
 	assert.ok(gates[0].itemStyle.borderColor);
 });
 
-test("calculateChartHeight keeps at least 55vh and does not cap tall datasets", () => {
+test("calculateChartHeight keeps at least 65vh and does not cap tall datasets", () => {
 	const { roadmap, context } = loadRoadmapScript();
 
-	assert.equal(roadmap.calculateChartHeight([]), 660);
-	assert.equal(roadmap.calculateChartHeight(new Array(6).fill("row")), 660);
-	assert.equal(roadmap.calculateChartHeight(new Array(14).fill("row")), 660);
+	assert.equal(roadmap.calculateChartHeight([]), 780);
+	assert.equal(roadmap.calculateChartHeight(new Array(6).fill("row")), 780);
+	assert.equal(roadmap.calculateChartHeight(new Array(14).fill("row")), 780);
 
 	context.window.innerHeight = 800;
-	assert.equal(roadmap.calculateChartHeight([]), 440);
+	assert.equal(roadmap.calculateChartHeight([]), 520);
 	assert.equal(roadmap.calculateChartHeight(new Array(40).fill("row")), 1170);
 
 	context.window.innerHeight = 500;
