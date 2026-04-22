@@ -73,6 +73,7 @@ frappe.query_reports["Project Stage Gate Roadmap"] = {
 	onload(report) {
 		dinext_project_stage_gate.roadmap.ensure_chart_mount(report);
 		dinext_project_stage_gate.roadmap.ensure_theme_observer(report);
+		dinext_project_stage_gate.roadmap.ensureResizeHandler(report);
 	},
 
 	after_datatable_render(_datatable) {
@@ -405,10 +406,20 @@ dinext_project_stage_gate.roadmap.formatTooltip = function (params) {
 
 dinext_project_stage_gate.roadmap.calculateChartHeight = function (categories) {
 	const rowCount = Array.isArray(categories) ? categories.length : Number(categories) || 0;
-	if (rowCount <= 10) {
-		return 420;
+	const dynamicHeight = rowCount <= 10 ? 420 : 420 + (rowCount - 10) * 25;
+	const viewportHeight = Number(window?.innerHeight) || 0;
+	const minHeight = viewportHeight > 0 ? Math.round(viewportHeight * 0.65) : 420;
+	return Math.max(dynamicHeight, minHeight);
+};
+
+dinext_project_stage_gate.roadmap.applyChartHeight = function (dom, categories) {
+	if (!dom?.style) {
+		return 0;
 	}
-	return Math.min(680, 420 + (rowCount - 10) * 25);
+
+	const height = dinext_project_stage_gate.roadmap.calculateChartHeight(categories);
+	dom.style.height = `${height}px`;
+	return height;
 };
 
 dinext_project_stage_gate.roadmap.getDisplayDate = function (actualValue, plannedValue) {
@@ -1095,9 +1106,64 @@ dinext_project_stage_gate.roadmap.ensure_chart_mount = function (report) {
 		return wrapper;
 	}
 
-	const chart = $('<div class="project-stage-gate-roadmap-chart" style="height: 420px; margin: 0 0 16px 0;"></div>');
+	const chart = $('<div class="project-stage-gate-roadmap-chart" style="margin: 0 0 16px 0;"></div>');
+	dinext_project_stage_gate.roadmap.applyChartHeight(chart.get(0), 0);
 	report.page.main.prepend(chart);
 	return chart;
+};
+
+dinext_project_stage_gate.roadmap.resizeCurrentChart = function () {
+	const lastReport = dinext_project_stage_gate.roadmap._last_report;
+	if (!lastReport?.page?.main) {
+		return;
+	}
+
+	const mount = dinext_project_stage_gate.roadmap.ensure_chart_mount(lastReport);
+	if (!mount?.length) {
+		return;
+	}
+
+	const dom = mount.get(0);
+	if (!dom) {
+		return;
+	}
+
+	dinext_project_stage_gate.roadmap.applyChartHeight(
+		dom,
+		dom._dinextRoadmapCategoryCount || 0
+	);
+	const chart =
+		(typeof echarts !== "undefined" &&
+			typeof echarts.getInstanceByDom === "function" &&
+			echarts.getInstanceByDom(dom)) ||
+		dom._dinextRoadmapChart ||
+		null;
+	if (!chart || typeof chart.resize !== "function") {
+		return;
+	}
+
+	chart.resize();
+	dinext_project_stage_gate.roadmap.updateXAxisLabelDensity(chart);
+};
+
+dinext_project_stage_gate.roadmap.ensureResizeHandler = function (report) {
+	if (report) {
+		dinext_project_stage_gate.roadmap._last_report = report;
+	}
+
+	if (
+		dinext_project_stage_gate.roadmap._resize_handler ||
+		typeof window === "undefined" ||
+		typeof window.addEventListener !== "function"
+	) {
+		return;
+	}
+
+	const handler = function () {
+		dinext_project_stage_gate.roadmap.resizeCurrentChart();
+	};
+	window.addEventListener("resize", handler);
+	dinext_project_stage_gate.roadmap._resize_handler = handler;
 };
 
 /**
@@ -1376,6 +1442,7 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 		return;
 	}
 
+	dinext_project_stage_gate.roadmap.ensureResizeHandler(report);
 	dinext_project_stage_gate.roadmap._last_report = report;
 	const payload = report.raw_data?.message || { projects: [], stageBars: [], gates: [] };
 	const fromDate = report.get_filter_value?.("from_date");
@@ -1393,7 +1460,8 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 		toDate,
 	});
 	const dom = mount.get(0);
-	dom.style.height = `${dinext_project_stage_gate.roadmap.calculateChartHeight(categories)}px`;
+	dom._dinextRoadmapCategoryCount = categories.length;
+	dinext_project_stage_gate.roadmap.applyChartHeight(dom, categories);
 	const existing =
 		(typeof echarts.getInstanceByDom === "function" && echarts.getInstanceByDom(dom)) ||
 		dom._dinextRoadmapChart ||
