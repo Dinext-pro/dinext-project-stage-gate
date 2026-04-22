@@ -12,6 +12,7 @@ function loadRoadmapScript(translations = {}) {
 	const state = {
 		setRouteCalls: [],
 		msgprintCalls: [],
+		windowListeners: {},
 	};
 
 	const context = {
@@ -26,6 +27,17 @@ function loadRoadmapScript(translations = {}) {
 				getAttribute() {
 					return null;
 				},
+			},
+		},
+		window: {
+			innerHeight: 1200,
+			addEventListener(event, handler) {
+				state.windowListeners[event] = handler;
+			},
+			removeEventListener(event, handler) {
+				if (state.windowListeners[event] === handler) {
+					delete state.windowListeners[event];
+				}
 			},
 		},
 		getComputedStyle(target) {
@@ -783,13 +795,58 @@ test("prepareSeriesData adds outlined checkpoint styling for contrast", () => {
 	assert.ok(gates[0].itemStyle.borderColor);
 });
 
-test("calculateChartHeight scales with row count but stays within sensible bounds", () => {
-	const { roadmap } = loadRoadmapScript();
+test("calculateChartHeight keeps at least 55vh and does not cap tall datasets", () => {
+	const { roadmap, context } = loadRoadmapScript();
 
+	assert.equal(roadmap.calculateChartHeight([]), 660);
+	assert.equal(roadmap.calculateChartHeight(new Array(6).fill("row")), 660);
+	assert.equal(roadmap.calculateChartHeight(new Array(14).fill("row")), 660);
+
+	context.window.innerHeight = 800;
+	assert.equal(roadmap.calculateChartHeight([]), 440);
+	assert.equal(roadmap.calculateChartHeight(new Array(40).fill("row")), 1170);
+
+	context.window.innerHeight = 500;
 	assert.equal(roadmap.calculateChartHeight([]), 420);
-	assert.equal(roadmap.calculateChartHeight(new Array(6).fill("row")), 420);
-	assert.equal(roadmap.calculateChartHeight(new Array(14).fill("row")), 520);
-	assert.equal(roadmap.calculateChartHeight(new Array(40).fill("row")), 680);
+});
+
+test("ensureResizeHandler recalculates current chart height and resizes the chart on viewport changes", () => {
+	const { roadmap, state, context } = loadRoadmapScript();
+	const dom = {
+		style: {},
+		_dinextRoadmapCategoryCount: 40,
+		_dinextRoadmapChart: {
+			resizeCalls: 0,
+			resize() {
+				this.resizeCalls += 1;
+			},
+		},
+	};
+	const mount = {
+		length: 1,
+		get() {
+			return dom;
+		},
+	};
+	const report = {
+		page: {
+			main: {
+				find() {
+					return mount;
+				},
+			},
+		},
+	};
+
+	roadmap.ensureResizeHandler(report);
+	roadmap.ensureResizeHandler(report);
+	assert.equal(typeof state.windowListeners.resize, "function");
+
+	context.window.innerHeight = 700;
+	state.windowListeners.resize();
+
+	assert.equal(dom.style.height, "1170px");
+	assert.equal(dom._dinextRoadmapChart.resizeCalls, 1);
 });
 
 test("navigateFromChartItem calls set_route when doc present and can_read", () => {
