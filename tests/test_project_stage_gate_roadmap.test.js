@@ -407,6 +407,8 @@ test("buildDataZoomConfig returns slider and inside zoom for both axes", () => {
 	assert.equal(dataZoom[2].yAxisIndex, 0);
 	assert.equal(dataZoom[3].type, "slider");
 	assert.equal(dataZoom[3].yAxisIndex, 0);
+	assert.equal(dataZoom[2].zoomOnMouseWheel, false);
+	assert.equal(dataZoom[2].moveOnMouseWheel, false);
 	assert.equal(dataZoom[2].startValue, 0);
 	assert.equal(dataZoom[2].endValue, 9);
 	assert.equal(dataZoom[0].startValue, "2026-01-01");

@@ -700,6 +700,8 @@ dinext_project_stage_gate.roadmap.buildDataZoomConfig = function ({
 			type: "inside",
 			yAxisIndex: 0,
 			filterMode: "none",
+			zoomOnMouseWheel: false,
+			moveOnMouseWheel: false,
 			startValue: vertical.startValue,
 			endValue: vertical.endValue,
 		},
