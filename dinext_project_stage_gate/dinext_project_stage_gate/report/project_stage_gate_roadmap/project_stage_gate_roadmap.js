@@ -249,21 +249,7 @@ dinext_project_stage_gate.roadmap.captureViewportStateFromChart = function (char
 	if (!chart || typeof chart.getOption !== "function") {
 		return null;
 	}
-	const option = chart.getOption?.() || {};
-	const viewportState = dinext_project_stage_gate.roadmap.getViewportStateFromDataZoom(option?.dataZoom);
-	const yAxisSource = Array.isArray(option?.yAxis) ? option.yAxis[0] : option?.yAxis;
-	const categoryKeys = Array.isArray(yAxisSource?.data) ? yAxisSource.data : [];
-	if (viewportState?.vertical && categoryKeys.length) {
-		const startIndex = Number(viewportState.vertical.startValue);
-		const endIndex = Number(viewportState.vertical.endValue);
-		if (Number.isFinite(startIndex) && categoryKeys[startIndex] != null) {
-			viewportState.vertical.startKey = categoryKeys[startIndex];
-		}
-		if (Number.isFinite(endIndex) && categoryKeys[endIndex] != null) {
-			viewportState.vertical.endKey = categoryKeys[endIndex];
-		}
-	}
-	return viewportState;
+	return dinext_project_stage_gate.roadmap.getViewportStateFromDataZoom(chart.getOption()?.dataZoom);
 };
 
 dinext_project_stage_gate.roadmap.cloneViewportState = function (viewportState) {
@@ -288,8 +274,6 @@ dinext_project_stage_gate.roadmap.cloneViewportState = function (viewportState) 
 			? {
 					startValue: vertical.startValue,
 					endValue: vertical.endValue,
-					startKey: vertical.startKey,
-					endKey: vertical.endKey,
 			  }
 			: {},
 	};
@@ -327,59 +311,10 @@ dinext_project_stage_gate.roadmap.clampHorizontalViewport = function (viewport, 
 	};
 };
 
-dinext_project_stage_gate.roadmap.getHorizontalViewportBounds = function ({
-	bars,
-	gates,
-	taskBars,
-	milestones,
-	fromDate,
-	toDate,
-} = {}) {
-	const fullViewport = dinext_project_stage_gate.roadmap.getFullHorizontalViewport({
-		bars,
-		gates,
-		taskBars,
-		milestones,
-		fromDate,
-		toDate,
-	});
-	const fromTime = dinext_project_stage_gate.roadmap._parseTimeMs(fromDate);
-	const toTime = dinext_project_stage_gate.roadmap._parseTimeMs(toDate);
-	let startValue = fullViewport.startValue;
-	let endValue = fullViewport.endValue;
-	if (Number.isFinite(fromTime)) {
-		startValue = dinext_project_stage_gate.roadmap._formatDateForChart(fromTime);
-	}
-	if (Number.isFinite(toTime)) {
-		endValue = dinext_project_stage_gate.roadmap._formatDateForChart(toTime);
-	}
-	const startTime = dinext_project_stage_gate.roadmap._parseTimeMs(startValue);
-	const endTime = dinext_project_stage_gate.roadmap._parseTimeMs(endValue);
-	if (Number.isFinite(startTime) && Number.isFinite(endTime) && endTime < startTime) {
-		return {
-			startValue: dinext_project_stage_gate.roadmap._formatDateForChart(endTime),
-			endValue: dinext_project_stage_gate.roadmap._formatDateForChart(startTime),
-		};
-	}
-	return { startValue, endValue };
-};
-
 dinext_project_stage_gate.roadmap.clampVerticalViewport = function (viewport, categories) {
 	const totalRows = Array.isArray(categories) ? categories.length : 0;
 	if (!totalRows) {
 		return null;
-	}
-	const startKey = viewport?.startKey;
-	const endKey = viewport?.endKey;
-	if (startKey != null && endKey != null) {
-		const startIndex = categories.indexOf(startKey);
-		const endIndex = categories.indexOf(endKey);
-		if (startIndex !== -1 && endIndex !== -1) {
-			return {
-				startValue: Math.min(startIndex, endIndex),
-				endValue: Math.max(startIndex, endIndex),
-			};
-		}
 	}
 	const startValue = Number(viewport?.startValue);
 	const endValue = Number(viewport?.endValue);
@@ -1022,7 +957,7 @@ dinext_project_stage_gate.roadmap.buildDataZoomConfig = function ({
 	});
 	let vertical = dinext_project_stage_gate.roadmap.getDefaultVerticalViewport(categories);
 	const savedViewport = dinext_project_stage_gate.roadmap.cloneViewportState(viewportState);
-	const horizontalBounds = dinext_project_stage_gate.roadmap.getHorizontalViewportBounds({
+	const fullHorizontalViewport = dinext_project_stage_gate.roadmap.getFullHorizontalViewport({
 		bars,
 		gates,
 		taskBars,
@@ -1034,7 +969,7 @@ dinext_project_stage_gate.roadmap.buildDataZoomConfig = function ({
 		horizontal =
 			dinext_project_stage_gate.roadmap.clampHorizontalViewport(
 				savedViewport.horizontal,
-				horizontalBounds
+				fullHorizontalViewport
 			) || horizontal;
 	}
 	if (savedViewport?.vertical && Object.keys(savedViewport.vertical).length) {
@@ -2371,14 +2306,7 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 	chart._dinextMonthOnlyXAxisLabels = monthOnlyXAxisLabels;
 	dinext_project_stage_gate.roadmap.persistViewportState(
 		dom,
-		{
-			horizontal: dinext_project_stage_gate.roadmap.getHorizontalRangeFromDataZoom(dataZoom),
-			vertical: {
-				...dinext_project_stage_gate.roadmap.getVerticalRangeFromDataZoom(dataZoom),
-				startKey: categories[dataZoom?.[2]?.startValue],
-				endKey: categories[dataZoom?.[2]?.endValue],
-			},
-		}
+		dinext_project_stage_gate.roadmap.getViewportStateFromDataZoom(dataZoom)
 	);
 	chart.on("datazoom", () => {
 		dinext_project_stage_gate.roadmap.persistViewportState(
