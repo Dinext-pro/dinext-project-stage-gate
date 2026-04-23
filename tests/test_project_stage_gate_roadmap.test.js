@@ -991,6 +991,103 @@ test("buildChartOptions makes y-axis project labels explicit and readable", () =
 	assert.equal(options.series[1].itemStyle.borderWidth, 2);
 });
 
+test("buildChartOptions hides lane labels on the y-axis and keeps project labels", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const options = roadmap.buildChartOptions({
+		categories: [
+			{
+				key: "PRJ-1::base",
+				projectLabel: "Alpha Delivery Program",
+				laneLabel: "Project",
+				isProjectLabel: true,
+			},
+			{
+				key: "PRJ-1::task_type:Phase::0",
+				projectLabel: "Alpha Delivery Program",
+				laneLabel: "Phase",
+				isProjectLabel: false,
+			},
+			{
+				key: "PRJ-1::milestone",
+				projectLabel: "Alpha Delivery Program",
+				laneLabel: "Milestones",
+				isProjectLabel: false,
+			},
+		],
+		bars: [],
+		gates: [],
+		milestones: [],
+		taskBars: [],
+		dataZoom: [],
+	});
+
+	assert.equal(options.yAxis.axisLabel.formatter("PRJ-1::base"), "Alpha Delivery Program");
+	assert.equal(options.yAxis.axisLabel.formatter("PRJ-1::task_type:Phase::0"), "");
+	assert.equal(options.yAxis.axisLabel.formatter("PRJ-1::milestone"), "");
+});
+
+test("buildLegendItems returns color and shape cues for roadmap elements", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const legendItems = roadmap.buildLegendItems({
+		taskBars: [
+			{
+				value: [1, "2026-04-04", "2026-04-10", "Sprint A", "Working", "Sprint", "#2563eb"],
+			},
+			{
+				value: [2, "2026-04-05", "2026-04-16", "Phase A", "Open", "Phase", "#7c3aed"],
+			},
+		],
+		milestones: [{ value: ["2026-04-03", 3] }],
+	});
+
+	assert.deepEqual(
+		Array.from(legendItems, (item) => item.key),
+		["stages", "gates", "milestones", "task-type:Sprint", "task-type:Phase"]
+	);
+	assert.equal(legendItems[0].shape, "chevron");
+	assert.equal(legendItems[1].shape, "diamond");
+	assert.equal(legendItems[2].shape, "diamond");
+	assert.equal(legendItems[3].shape, "line");
+	assert.equal(legendItems[3].color, "#2563eb");
+	assert.equal(legendItems[4].color, "#7c3aed");
+});
+
+test("buildLegendMarkup renders a top legend with roadmap element labels", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const markup = roadmap.buildLegendMarkup([
+		{
+			key: "stages",
+			label: "Stages",
+			description: "Chevron bar with status color",
+			shape: "chevron",
+			color: "#7f95c1",
+		},
+		{
+			key: "gates",
+			label: "Gate checkpoints",
+			description: "Diamond marker",
+			shape: "diamond",
+			color: "#739b7f",
+		},
+		{
+			key: "task-type:Phase",
+			label: "Phase",
+			description: "Task bar",
+			shape: "line",
+			color: "#7c3aed",
+		},
+	]);
+
+	assert.match(markup, /project-stage-gate-roadmap-legend/);
+	assert.match(markup, /Chevron bar with status color/);
+	assert.match(markup, /Gate checkpoints/);
+	assert.match(markup, /data-shape="line"/);
+	assert.match(markup, /data-key="task-type:Phase"/);
+});
+
 test("buildChartOptions keeps checkpoint diamonds at preferred size when it fits stage height", () => {
 	const { roadmap } = loadRoadmapScript();
 
@@ -1376,7 +1473,7 @@ test("task custom renderItem can recover task type color from value payload when
 	assert.equal(graphic.children[1].style.fill, "#f59e0b");
 });
 
-test("buildChartOptions formats lane labels from explicit lane rows", () => {
+test("buildChartOptions keeps explicit lane rows but hides their axis labels", () => {
 	const { roadmap } = loadRoadmapScript();
 
 	const options = roadmap.buildChartOptions({
@@ -1395,7 +1492,7 @@ test("buildChartOptions formats lane labels from explicit lane rows", () => {
 	assert.equal(options.yAxis.data[0], "PRJ-1::base");
 	assert.equal(options.yAxis.data[1], "PRJ-1::milestone");
 	assert.equal(options.yAxis.axisLabel.formatter("PRJ-1::base"), "Alpha");
-	assert.equal(options.yAxis.axisLabel.formatter("PRJ-1::milestone"), "  Milestones");
+	assert.equal(options.yAxis.axisLabel.formatter("PRJ-1::milestone"), "");
 });
 
 test("getFullHorizontalViewport spans full visible timeline from bars and gates", () => {
