@@ -483,16 +483,64 @@ dinext_project_stage_gate.roadmap.getTaskTypeColorIndex = function (taskType) {
 	if (!text) {
 		return 0;
 	}
-	return Array.from(text).reduce((sum, char) => sum + char.charCodeAt(0), 0);
+	return Array.from(text).reduce((hash, char) => hash * 33 + char.charCodeAt(0), 5381);
 };
 
-dinext_project_stage_gate.roadmap.getTaskTypeItemStyle = function (taskType) {
+dinext_project_stage_gate.roadmap.getTaskTypeColorKey = function (taskType, laneKey) {
+	const lane = String(laneKey || "").trim();
+	if (lane && lane !== "milestone") {
+		return lane;
+	}
+	const text = String(taskType || "").trim();
+	return text ? `task_type:${text}` : "";
+};
+
+dinext_project_stage_gate.roadmap.buildTaskTypeColorMap = function (
+	taskEntities,
+	taskTypeOrder = []
+) {
 	const isDark = dinext_project_stage_gate.roadmap.getEChartsThemeName() === "dark";
 	const palette = isDark
 		? dinext_project_stage_gate.roadmap.taskTypePalette.dark
 		: dinext_project_stage_gate.roadmap.taskTypePalette.light;
-	const index = dinext_project_stage_gate.roadmap.getTaskTypeColorIndex(taskType) % palette.length;
-	const lineColor = palette[index];
+	const orderedKeys = [];
+	const rememberKey = (taskType, laneKey) => {
+		const key = dinext_project_stage_gate.roadmap.getTaskTypeColorKey(taskType, laneKey);
+		if (key && !orderedKeys.includes(key)) {
+			orderedKeys.push(key);
+		}
+	};
+
+	dinext_project_stage_gate.roadmap._coerceToArray(taskTypeOrder).forEach((taskType) => {
+		rememberKey(taskType, `task_type:${taskType}`);
+	});
+
+	(taskEntities || [])
+		.filter((entity) => entity?.entity_kind === "task_bar")
+		.forEach((entity) => {
+			rememberKey(entity.type || entity.lane_label, entity.lane_key);
+		});
+
+	return orderedKeys.reduce((colorMap, key, index) => {
+		colorMap[key] = palette[index % palette.length];
+		return colorMap;
+	}, {});
+};
+
+dinext_project_stage_gate.roadmap.getTaskTypeItemStyle = function (taskType, options = {}) {
+	const isDark = dinext_project_stage_gate.roadmap.getEChartsThemeName() === "dark";
+	const palette = isDark
+		? dinext_project_stage_gate.roadmap.taskTypePalette.dark
+		: dinext_project_stage_gate.roadmap.taskTypePalette.light;
+	const colorKey =
+		options.colorKey ||
+		dinext_project_stage_gate.roadmap.getTaskTypeColorKey(taskType, options.laneKey);
+	const lineColor =
+		options.colorMap?.[colorKey] ||
+		palette[
+			dinext_project_stage_gate.roadmap.getTaskTypeColorIndex(colorKey || taskType) %
+				palette.length
+		];
 	return {
 		lineColor,
 		labelColor: lineColor,
@@ -1408,6 +1456,11 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 					);
 					const slotHeight = api.size([0, 1])[1] * slotRatio;
 					const lineWidth = Math.max(6, Math.min(12, slotHeight * 0.36));
+					const labelLayout = dinext_project_stage_gate.roadmap.getTaskLineLabelLayout({
+						span: Math.abs(end[0] - start[0]),
+						lineWidth,
+						slotHeight,
+					});
 					const fromApi = api.style();
 					const itemStyle = params.data?.itemStyle || {};
 					const payloadColor = api.value(6);
@@ -1434,6 +1487,7 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 						lineColor,
 						labelColor,
 						shadowColor,
+						labelLayout,
 						animationDelay: introAnimationDelays.taskBarDelays[params.dataIndex] ?? 0,
 						animationDuration: introAnimationDuration,
 						animationEasing: introAnimationEasing,
@@ -1675,6 +1729,36 @@ dinext_project_stage_gate.roadmap.buildProjectLaneRows = function (
 	return { categories, laneIndexByKey, rowLayoutsByProject, projectDocsByLabel };
 };
 
+dinext_project_stage_gate.roadmap.getTaskLineLabelLayout = function ({
+	span,
+	lineWidth,
+	slotHeight,
+} = {}) {
+	const safeSpan = Math.max(Number(span) || 0, 0);
+	const safeLineWidth = Math.max(Number(lineWidth) || 0, 0);
+	const hasSlotHeight = Number.isFinite(Number(slotHeight));
+	const safeSlotHeight = hasSlotHeight
+		? Math.max(Number(slotHeight) || 0, safeLineWidth)
+		: null;
+	let fontSize = 11;
+	if (safeSpan < 80 || (safeSlotHeight != null && safeSlotHeight < 22)) {
+		fontSize = 9;
+	} else if (safeSpan < 140 || (safeSlotHeight != null && safeSlotHeight < 28)) {
+		fontSize = 10;
+	}
+	return {
+		fontSize,
+		minSpanForLabel: 40,
+		offsetY: Math.max(
+			5,
+			Math.min(
+				9,
+				safeLineWidth * 0.5 + (safeSlotHeight != null ? safeSlotHeight * 0.08 : safeLineWidth * 0.2)
+			)
+		),
+	};
+};
+
 dinext_project_stage_gate.roadmap.ensure_theme_observer = function (report) {
 	if (!report || typeof MutationObserver === "undefined") {
 		return;
@@ -1812,6 +1896,10 @@ dinext_project_stage_gate.roadmap.prepareSeriesData = function (payload, options
 	);
 	const categories = laneLayout.categories;
 	const projectDocsByLabel = laneLayout.projectDocsByLabel;
+	const taskTypeColorMap = dinext_project_stage_gate.roadmap.buildTaskTypeColorMap(
+		safe.taskEntities || [],
+		options?.taskTypeOrder
+	);
 	const getBaseLaneIndex = (projectName) =>
 		laneLayout.rowLayoutsByProject[projectName]?.laneRowIndexByKey?.base ?? 0;
 
@@ -1908,7 +1996,10 @@ dinext_project_stage_gate.roadmap.prepareSeriesData = function (payload, options
 				const rowIndex = laneLayout.laneIndexByKey[laneKeys[entity.stackLevel]] ?? getBaseLaneIndex(projectName);
 				const taskColorKey =
 					entity.type || entity.lane_label || laneKey.replace(/^task_type:/, "") || laneKey;
-				const taskStyle = dinext_project_stage_gate.roadmap.getTaskTypeItemStyle(taskColorKey);
+				const taskStyle = dinext_project_stage_gate.roadmap.getTaskTypeItemStyle(taskColorKey, {
+					laneKey: entity.lane_key,
+					colorMap: taskTypeColorMap,
+				});
 				taskBars.push({
 					name: entity.subject || entity.name,
 					docType: "Task",
@@ -2143,6 +2234,7 @@ dinext_project_stage_gate.roadmap.buildRoundedTaskLineGraphic = function ({
 	lineColor,
 	labelColor,
 	shadowColor,
+	labelLayout = {},
 	animationDelay = 0,
 	animationDuration = dinext_project_stage_gate.roadmap.ROADMAP_INTRO_ANIMATION_DURATION_MS,
 	animationEasing = dinext_project_stage_gate.roadmap.ROADMAP_INTRO_ANIMATION_EASING,
@@ -2150,7 +2242,11 @@ dinext_project_stage_gate.roadmap.buildRoundedTaskLineGraphic = function ({
 	const x0 = Math.min(startX, endX);
 	const x1 = Math.max(startX, endX);
 	const span = Math.max(Math.abs(x1 - x0), 4);
-	const textY = centerY - Math.max(10, lineWidth + 6);
+	const layout = {
+		...dinext_project_stage_gate.roadmap.getTaskLineLabelLayout({ span, lineWidth }),
+		...(labelLayout || {}),
+	};
+	const textY = centerY - layout.offsetY;
 	const effectiveColor = lineColor || labelColor || "#2563eb";
 	const children = [
 		{
@@ -2177,7 +2273,7 @@ dinext_project_stage_gate.roadmap.buildRoundedTaskLineGraphic = function ({
 		},
 	];
 
-	if (label && span >= 40) {
+	if (label && span >= layout.minSpanForLabel) {
 		children.push({
 			type: "text",
 			style: {
@@ -2185,7 +2281,7 @@ dinext_project_stage_gate.roadmap.buildRoundedTaskLineGraphic = function ({
 				y: textY,
 				text: label,
 				fill: effectiveColor,
-				fontSize: 11,
+				fontSize: layout.fontSize,
 				fontWeight: 600,
 				align: "center",
 				verticalAlign: "bottom",
