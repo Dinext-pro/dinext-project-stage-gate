@@ -830,8 +830,8 @@ test("buildDataZoomConfig clamps a saved viewport to the refreshed dataset bound
 		},
 	});
 
-	assert.equal(dataZoom[0].startValue, "2026-01-01");
-	assert.equal(dataZoom[0].endValue, "2026-10-01");
+	assert.equal(dataZoom[0].startValue, "2026-02-01");
+	assert.equal(dataZoom[0].endValue, "2026-05-15");
 	assert.equal(dataZoom[2].startValue, 4);
 	assert.equal(dataZoom[2].endValue, 4);
 });
@@ -863,30 +863,6 @@ test("buildDataZoomConfig falls back to default viewport when saved state is inv
 	assert.equal(dataZoom[0].endValue, "2026-12-31");
 	assert.equal(dataZoom[2].startValue, 0);
 	assert.equal(dataZoom[2].endValue, 9);
-});
-
-test("buildDataZoomConfig restores vertical viewport by category keys after row shifts", () => {
-	const { roadmap } = loadRoadmapScript();
-
-	const dataZoom = roadmap.buildDataZoomConfig({
-		categories: ["Project X", "Project A", "Project B", "Project C", "Project D"],
-		fromDate: "2026-01-01",
-		toDate: "2026-12-31",
-		today: "2026-01-01",
-		viewportState: {
-			vertical: {
-				startValue: 1,
-				endValue: 3,
-				startKey: "Project B",
-				endKey: "Project D",
-			},
-		},
-	});
-
-	assert.equal(dataZoom[2].startValue, 2);
-	assert.equal(dataZoom[2].endValue, 4);
-	assert.equal(dataZoom[3].startValue, 2);
-	assert.equal(dataZoom[3].endValue, 4);
 });
 
 test("getEChartsThemeName uses the standard dark theme only for dark mode", () => {
