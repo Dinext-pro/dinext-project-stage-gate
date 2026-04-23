@@ -942,6 +942,7 @@ test("buildChartOptions makes y-axis project labels explicit and readable", () =
 	assert.equal(options.grid.bottom, 44);
 	assert.equal(options.yAxis.type, "category");
 	assert.equal(options.yAxis.data.length, 2);
+	assert.equal(options.yAxis.inverse, true);
 	assert.equal(options.yAxis.triggerEvent, true);
 	assert.equal(options.yAxis.axisLabel.show, true);
 	assert.equal(options.yAxis.axisLabel.interval, 0);
