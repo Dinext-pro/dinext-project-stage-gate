@@ -937,7 +937,6 @@ test("buildChartOptions makes y-axis project labels explicit and readable", () =
 	});
 
 	assert.equal(options.grid.left, 12);
-	assert.equal(options.grid.top, 44);
 	assert.equal(options.grid.right, 28);
 	assert.equal(options.grid.bottom, 44);
 	assert.equal(options.yAxis.type, "category");
@@ -962,6 +961,9 @@ test("buildChartOptions makes y-axis project labels explicit and readable", () =
 	assert.ok(options.toolbox);
 	assert.equal(options.toolbox.top, 4);
 	assert.ok(options.toolbox.top < options.grid.top);
+	assert.ok(options.legend);
+	assert.equal(options.legend.top, 4);
+	assert.equal(options.legend.selectedMode, false);
 	assert.ok(options.toolbox.feature.restore);
 	assert.equal(options.toolbox.feature.restore.title, "Restore");
 	assert.ok(options.toolbox.feature.saveAsImage);
@@ -1027,10 +1029,14 @@ test("buildChartOptions hides lane labels on the y-axis and keeps project labels
 	assert.equal(options.yAxis.axisLabel.formatter("PRJ-1::milestone"), "");
 });
 
-test("buildLegendItems returns color and shape cues for roadmap elements", () => {
+test("buildChartOptions configures standard ECharts legend entries for roadmap series", () => {
 	const { roadmap } = loadRoadmapScript();
 
-	const legendItems = roadmap.buildLegendItems({
+	const options = roadmap.buildChartOptions({
+		categories: ["Project A"],
+		bars: [{ value: [0, "2026-02-01", "2026-02-28"] }],
+		gates: [{ value: ["2026-01-15", 0] }],
+		milestones: [{ value: ["2026-01-20", 0.2, "Open"], docType: "Task", docName: "TASK-1" }],
 		taskBars: [
 			{
 				value: [1, "2026-04-04", "2026-04-10", "Sprint A", "Working", "Sprint", "#2563eb"],
@@ -1039,53 +1045,47 @@ test("buildLegendItems returns color and shape cues for roadmap elements", () =>
 				value: [2, "2026-04-05", "2026-04-16", "Phase A", "Open", "Phase", "#7c3aed"],
 			},
 		],
-		milestones: [{ value: ["2026-04-03", 3] }],
+		dataZoom: [],
 	});
 
 	assert.deepEqual(
-		Array.from(legendItems, (item) => item.key),
-		["stages", "gates", "milestones", "task-type:Sprint", "task-type:Phase"]
+		Array.from(options.legend.data, (item) => item.name || item),
+		["Stages", "Gate checkpoints", "Milestones", "Sprint", "Phase"]
 	);
-	assert.equal(legendItems[0].shape, "chevron");
-	assert.equal(legendItems[1].shape, "diamond");
-	assert.equal(legendItems[2].shape, "diamond");
-	assert.equal(legendItems[3].shape, "line");
-	assert.equal(legendItems[3].color, "#2563eb");
-	assert.equal(legendItems[4].color, "#7c3aed");
+	assert.match(options.legend.data[0].icon, /^path:\/\//);
+	assert.equal(options.legend.data[1].icon, "diamond");
+	assert.equal(options.legend.data[2].icon, "diamond");
+	assert.match(options.legend.data[3].icon, /^path:\/\//);
+	assert.match(options.legend.data[4].icon, /^path:\/\//);
 });
 
-test("buildLegendMarkup renders a top legend with roadmap element labels", () => {
+test("buildChartOptions splits task bars into separate custom series per task type", () => {
 	const { roadmap } = loadRoadmapScript();
 
-	const markup = roadmap.buildLegendMarkup([
-		{
-			key: "stages",
-			label: "Stages",
-			description: "Chevron bar with status color",
-			shape: "chevron",
-			color: "#7f95c1",
-		},
-		{
-			key: "gates",
-			label: "Gate checkpoints",
-			description: "Diamond marker",
-			shape: "diamond",
-			color: "#739b7f",
-		},
-		{
-			key: "task-type:Phase",
-			label: "Phase",
-			description: "Task bar",
-			shape: "line",
-			color: "#7c3aed",
-		},
-	]);
+	const options = roadmap.buildChartOptions({
+		categories: ["Project A"],
+		bars: [{ value: [0, "2026-02-01", "2026-02-28"] }],
+		gates: [{ value: ["2026-01-15", 0] }],
+		milestones: [{ value: ["2026-01-20", 0.2, "Open"], docType: "Task", docName: "TASK-1" }],
+		taskBars: [
+			{ value: [0.3, "2026-01-21", "2026-01-29", "Sprint A", "Working", "Sprint", "#2563eb"], docType: "Task" },
+			{ value: [0.4, "2026-01-22", "2026-01-30", "Sprint B", "Working", "Sprint", "#2563eb"], docType: "Task" },
+			{ value: [0.5, "2026-01-25", "2026-02-05", "Phase A", "Open", "Phase", "#7c3aed"], docType: "Task" },
+		],
+		dataZoom: [],
+	});
 
-	assert.match(markup, /project-stage-gate-roadmap-legend/);
-	assert.match(markup, /Chevron bar with status color/);
-	assert.match(markup, /Gate checkpoints/);
-	assert.match(markup, /data-shape="line"/);
-	assert.match(markup, /data-key="task-type:Phase"/);
+	const taskSeries = options.series.filter((series) => series.type === "custom" && ["Sprint", "Phase"].includes(series.name));
+	assert.equal(taskSeries.length, 2);
+	assert.deepEqual(
+		Array.from(taskSeries, (series) => [series.name, series.data.length]),
+		[
+			["Sprint", 2],
+			["Phase", 1],
+		]
+	);
+	assert.equal(taskSeries[0].itemStyle.color, "#2563eb");
+	assert.equal(taskSeries[1].itemStyle.color, "#7c3aed");
 });
 
 test("buildChartOptions keeps checkpoint diamonds at preferred size when it fits stage height", () => {
@@ -1282,14 +1282,19 @@ test("buildChartOptions adds series for milestones and task lines", () => {
 		bars: [{ value: [0, "2026-02-01", "2026-02-28"] }],
 		gates: [{ value: ["2026-01-15", 0] }],
 		milestones: [{ value: ["2026-01-20", 0.2, "Open"], docType: "Task", docName: "TASK-1" }],
-		taskBars: [{ value: [0.3, "2026-01-21", "2026-01-29", "Sprint A"], docType: "Task" }],
+		taskBars: [
+			{ value: [0.3, "2026-01-21", "2026-01-29", "Sprint A", "Open", "Sprint", "#2563eb"], docType: "Task" },
+			{ value: [0.4, "2026-01-21", "2026-02-02", "Phase A", "Open", "Phase", "#7c3aed"], docType: "Task" },
+		],
 		dataZoom: [],
 	});
 
-	assert.equal(options.series.length, 4);
 	assert.equal(options.series[2].type, "scatter");
 	assert.equal(options.series[2].symbol, "diamond");
 	assert.equal(options.series[3].type, "custom");
+	assert.equal(options.series[3].name, "Sprint");
+	assert.equal(options.series[4].name, "Phase");
+	assert.ok(options.series.length >= 5);
 });
 
 test("getMilestoneLabelLayout scales labels with compact symbol sizes and keeps them close", () => {

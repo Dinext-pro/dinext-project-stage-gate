@@ -557,46 +557,20 @@ dinext_project_stage_gate.roadmap.getMilestoneItemStyle = function () {
 	};
 };
 
-dinext_project_stage_gate.roadmap.escapeHtml = function (value) {
-	return String(value ?? "")
-		.replace(/&/g, "&amp;")
-		.replace(/</g, "&lt;")
-		.replace(/>/g, "&gt;")
-		.replace(/"/g, "&quot;")
-		.replace(/'/g, "&#39;");
-};
+dinext_project_stage_gate.roadmap.LEGEND_ICON_CHEVRON =
+	"path://M2 2H14L18 6L14 10H2L6 6Z";
+dinext_project_stage_gate.roadmap.LEGEND_ICON_LINE = "path://M1 4H19V8H1Z";
 
-dinext_project_stage_gate.roadmap.buildLegendItems = function ({
+dinext_project_stage_gate.roadmap.buildLegendData = function ({
 	taskBars = [],
 	milestones = [],
 } = {}) {
-	const stageStyle = dinext_project_stage_gate.roadmap.getStageItemStyle({ status: "Active" });
-	const gateStyle = dinext_project_stage_gate.roadmap.getCheckpointItemStyle("Approved");
-	const legendItems = [
-		{
-			key: "stages",
-			label: __("Stages"),
-			description: __("Chevron bar with status color"),
-			shape: "chevron",
-			color: stageStyle.fill,
-		},
-		{
-			key: "gates",
-			label: __("Gate checkpoints"),
-			description: __("Diamond marker"),
-			shape: "diamond",
-			color: gateStyle.color,
-		},
+	const legendData = [
+		{ name: __("Stages"), icon: dinext_project_stage_gate.roadmap.LEGEND_ICON_CHEVRON },
+		{ name: __("Gate checkpoints"), icon: "diamond" },
 	];
 	if (Array.isArray(milestones) && milestones.length) {
-		const milestoneStyle = dinext_project_stage_gate.roadmap.getMilestoneItemStyle();
-		legendItems.push({
-			key: "milestones",
-			label: __("Milestones"),
-			description: __("Diamond milestone marker"),
-			shape: "diamond",
-			color: milestoneStyle.lineColor,
-		});
+		legendData.push({ name: __("Milestones"), icon: "diamond" });
 	}
 
 	const seenTaskTypes = new Set();
@@ -606,66 +580,187 @@ dinext_project_stage_gate.roadmap.buildLegendItems = function ({
 			return;
 		}
 		seenTaskTypes.add(taskType);
-		legendItems.push({
-			key: `task-type:${taskType}`,
-			label: taskType,
-			description: __("Task bar"),
-			shape: "line",
-			color:
-				taskBar?.value?.[6] || dinext_project_stage_gate.roadmap.getTaskTypeItemStyle(taskType).lineColor,
+		legendData.push({
+			name: taskType,
+			icon: dinext_project_stage_gate.roadmap.LEGEND_ICON_LINE,
 		});
 	});
 
-	return legendItems;
+	return legendData;
 };
 
-dinext_project_stage_gate.roadmap.buildLegendMarkup = function (items = []) {
-	if (!Array.isArray(items) || !items.length) {
-		return "";
-	}
-	const renderSymbol = (item) => {
-		const safeColor = dinext_project_stage_gate.roadmap.escapeHtml(item?.color || "#8f9aa8");
-		const shape = item?.shape || "line";
-		if (shape === "chevron") {
-			return `<span class="project-stage-gate-roadmap-legend__symbol" data-shape="chevron" style="display:inline-block;width:20px;height:12px;background:${safeColor};clip-path:polygon(0 0,78% 0,100% 50%,78% 100%,0 100%,12% 50%);"></span>`;
+dinext_project_stage_gate.roadmap.groupTaskBarsByType = function (taskBars = []) {
+	const orderedTypes = [];
+	const groupedBars = {};
+	(taskBars || []).forEach((taskBar, index) => {
+		const taskType = String(taskBar?.value?.[5] || "").trim() || __("Task");
+		if (!groupedBars[taskType]) {
+			groupedBars[taskType] = [];
+			orderedTypes.push(taskType);
 		}
-		if (shape === "diamond") {
-			return `<span class="project-stage-gate-roadmap-legend__symbol" data-shape="diamond" style="display:inline-block;width:12px;height:12px;background:${safeColor};transform:rotate(45deg);border:2px solid var(--card-bg, #ffffff);box-sizing:border-box;"></span>`;
-		}
-		return `<span class="project-stage-gate-roadmap-legend__symbol" data-shape="line" style="display:inline-block;width:22px;height:0;border-top:4px solid ${safeColor};border-radius:999px;"></span>`;
-	};
-
-	return `<div class="project-stage-gate-roadmap-legend" style="display:flex;flex-wrap:wrap;gap:12px 18px;align-items:flex-start;margin:0 0 12px 0;padding:8px 0 0 0;">
-		${items
-			.map((item) => {
-				const key = dinext_project_stage_gate.roadmap.escapeHtml(item?.key || "");
-				const label = dinext_project_stage_gate.roadmap.escapeHtml(item?.label || "");
-				const description = dinext_project_stage_gate.roadmap.escapeHtml(item?.description || "");
-				return `<div class="project-stage-gate-roadmap-legend__item" data-key="${key}" style="display:flex;align-items:center;gap:8px;min-width:160px;">
-					${renderSymbol(item)}
-					<span class="project-stage-gate-roadmap-legend__copy" style="display:flex;flex-direction:column;gap:2px;line-height:1.2;">
-						<span class="project-stage-gate-roadmap-legend__label" style="font-size:12px;font-weight:600;">${label}</span>
-						<span class="project-stage-gate-roadmap-legend__description" style="font-size:11px;color:var(--text-muted, #7c7c7c);">${description}</span>
-					</span>
-				</div>`;
-			})
-			.join("")}
-	</div>`;
+		groupedBars[taskType].push({
+			...taskBar,
+			_taskDelayIndex: index,
+		});
+	});
+	return orderedTypes.map((taskType) => ({
+		taskType,
+		data: groupedBars[taskType],
+	}));
 };
 
-dinext_project_stage_gate.roadmap.renderLegend = function (mount, options = {}) {
-	if (!mount?.length || typeof mount.get !== "function") {
-		return;
-	}
-	const chartDom = mount.get(0);
-	const legendHost = chartDom?._dinextRoadmapLegendHost;
-	if (!legendHost?.length || typeof legendHost.html !== "function") {
-		return;
-	}
-	const legendMarkup = dinext_project_stage_gate.roadmap.buildLegendMarkup(
-		dinext_project_stage_gate.roadmap.buildLegendItems(options)
+dinext_project_stage_gate.roadmap.buildTaskBarSeries = function ({
+	taskBars = [],
+	introAnimationDuration,
+	introAnimationEasing,
+	introAnimationDelays,
+	rowSpanUnits = 1,
+} = {}) {
+	return dinext_project_stage_gate.roadmap.groupTaskBarsByType(taskBars).map(
+		({ taskType, data }) => ({
+			name: taskType,
+			type: "custom",
+			clip: true,
+			animationDuration: introAnimationDuration,
+			animationDurationUpdate: 0,
+			animationEasing: introAnimationEasing,
+			animationEasingUpdate: "linear",
+			animationDelay(dataIndex, params) {
+				return (
+					introAnimationDelays.taskBarDelays[params?.data?._taskDelayIndex ?? dataIndex] ?? 0
+				);
+			},
+			animationDelayUpdate() {
+				return 0;
+			},
+			itemStyle: {
+				color:
+					data[0]?.itemStyle?.color ||
+					data[0]?.value?.[6] ||
+					dinext_project_stage_gate.roadmap.getTaskTypeItemStyle(taskType).lineColor,
+			},
+			renderItem(params, api) {
+				const rowPosition = api.value(0);
+				const start = api.coord([api.value(1), rowPosition]);
+				const end = api.coord([api.value(2), rowPosition]);
+				const slotRatio = dinext_project_stage_gate.roadmap.getRowSlotHeightRatio(
+					params.data?.rowSpanUnits || rowSpanUnits
+				);
+				const slotHeight = api.size([0, 1])[1] * slotRatio;
+				const lineWidth = Math.max(6, Math.min(12, slotHeight * 0.36));
+				const labelLayout = dinext_project_stage_gate.roadmap.getTaskLineLabelLayout({
+					span: Math.abs(end[0] - start[0]),
+					lineWidth,
+					slotHeight,
+				});
+				const fromApi = api.style();
+				const itemStyle = params.data?.itemStyle || {};
+				const payloadColor = api.value(6);
+				const lineColor =
+					itemStyle.color ||
+					itemStyle.lineColor ||
+					itemStyle.labelColor ||
+					payloadColor ||
+					fromApi.stroke ||
+					fromApi.borderColor ||
+					fromApi.color;
+				const labelColor = itemStyle.labelColor || payloadColor || lineColor;
+				const shadowColor =
+					itemStyle.shadowColor ||
+					(lineColor ? dinext_project_stage_gate.roadmap.hexToRgba(lineColor, 0.18) : undefined);
+				return dinext_project_stage_gate.roadmap.buildRoundedTaskLineGraphic({
+					startX: start[0],
+					endX: end[0],
+					centerY: start[1],
+					lineWidth,
+					label: params.data?.name || api.value(3),
+					lineColor,
+					labelColor,
+					shadowColor,
+					labelLayout,
+					animationDelay:
+						introAnimationDelays.taskBarDelays[params.data?._taskDelayIndex ?? params.dataIndex] ??
+						0,
+					animationDuration: introAnimationDuration,
+					animationEasing: introAnimationEasing,
+				});
+			},
+			encode: {
+				x: [1, 2],
+				y: 0,
+			},
+			data,
+		})
 	);
-	legendHost.html(legendMarkup);
+};
+
+dinext_project_stage_gate.roadmap.buildLegendProxySeries = function ({
+	taskBars = [],
+	milestones = [],
+} = {}) {
+	const stageStyle = dinext_project_stage_gate.roadmap.getStageItemStyle({ status: "Active" });
+	const gateStyle = dinext_project_stage_gate.roadmap.getCheckpointItemStyle("Approved");
+	const legendSeries = [
+		{
+			name: __("Stages"),
+			type: "line",
+			data: [],
+			silent: true,
+			showSymbol: false,
+			legendHoverLink: false,
+			tooltip: { show: false },
+			lineStyle: {
+				color: stageStyle.fill,
+				width: 4,
+			},
+		},
+		{
+			name: __("Gate checkpoints"),
+			type: "scatter",
+			data: [],
+			silent: true,
+			legendHoverLink: false,
+			tooltip: { show: false },
+			symbol: "diamond",
+			itemStyle: {
+				color: gateStyle.color,
+			},
+		},
+	];
+	if (Array.isArray(milestones) && milestones.length) {
+		const milestoneStyle = dinext_project_stage_gate.roadmap.getMilestoneItemStyle();
+		legendSeries.push({
+			name: __("Milestones"),
+			type: "scatter",
+			data: [],
+			silent: true,
+			legendHoverLink: false,
+			tooltip: { show: false },
+			symbol: "diamond",
+			itemStyle: {
+				color: milestoneStyle.lineColor,
+			},
+		});
+	}
+	dinext_project_stage_gate.roadmap.groupTaskBarsByType(taskBars).forEach(({ taskType, data }) => {
+		legendSeries.push({
+			name: taskType,
+			type: "line",
+			data: [],
+			silent: true,
+			showSymbol: false,
+			legendHoverLink: false,
+			tooltip: { show: false },
+			lineStyle: {
+				color:
+					data[0]?.itemStyle?.color ||
+					data[0]?.value?.[6] ||
+					dinext_project_stage_gate.roadmap.getTaskTypeItemStyle(taskType).lineColor,
+				width: 4,
+			},
+		});
+	});
+	return legendSeries;
 };
 
 dinext_project_stage_gate.roadmap.wrapAxisLabel = function (label, maxLineLength = 24) {
@@ -1299,6 +1394,12 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 		dinext_project_stage_gate.roadmap.ROADMAP_INTRO_ANIMATION_DURATION_MS;
 	const introAnimationEasing = dinext_project_stage_gate.roadmap.ROADMAP_INTRO_ANIMATION_EASING;
 	const safeCategories = categories || [];
+	const safeTaskBars = Array.isArray(taskBars) ? taskBars : [];
+	const legendData = dinext_project_stage_gate.roadmap.buildLegendData({
+		taskBars: safeTaskBars,
+		milestones,
+	});
+	const legendRows = Math.max(1, Math.ceil(legendData.length / 4));
 	const categoryEntries = safeCategories.map((category) =>
 		typeof category === "string"
 			? { key: category, projectLabel: category, laneLabel: "", isProjectLabel: true }
@@ -1319,7 +1420,7 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 	);
 	const grid = {
 		containLabel: true,
-		top: 44,
+		top: Math.max(44, 18 + legendRows * 24),
 		right: 28,
 		bottom: 44,
 		left: 12,
@@ -1343,6 +1444,22 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 		animationEasing: introAnimationEasing,
 		animationEasingUpdate: "linear",
 		grid,
+		legend: {
+			show: true,
+			top: 4,
+			left: 12,
+			right: 88,
+			z: 20,
+			selectedMode: false,
+			itemWidth: 18,
+			itemHeight: 12,
+			textStyle: {
+				color: dinext_project_stage_gate.roadmap.getThemeVariableColor("--text-color", "#d1d5db"),
+				fontSize: 11,
+				lineHeight: 14,
+			},
+			data: legendData,
+		},
 		tooltip: {
 			trigger: "item",
 			formatter: dinext_project_stage_gate.roadmap.formatTooltip,
@@ -1432,6 +1549,7 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 		dataZoom: dataZoom || [],
 		series: [
 			{
+				name: __("Stages"),
 				type: "custom",
 				clip: true,
 				animationDuration: introAnimationDuration,
@@ -1482,9 +1600,13 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 					x: [1, 2],
 					y: 0,
 				},
+				itemStyle: {
+					color: dinext_project_stage_gate.roadmap.getStageItemStyle({ status: "Active" }).fill,
+				},
 				data: bars || [],
 			},
 			{
+				name: __("Gate checkpoints"),
 				type: "scatter",
 				symbol: "diamond",
 				symbolSize: checkpointSymbolSize,
@@ -1499,6 +1621,7 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 					return 0;
 				},
 				itemStyle: {
+					color: dinext_project_stage_gate.roadmap.getCheckpointItemStyle("Approved").color,
 					borderWidth: 2,
 				},
 				encode: {
@@ -1508,6 +1631,7 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 				data: gates || [],
 			},
 			{
+				name: __("Milestones"),
 				type: "scatter",
 				symbol: "diamond",
 				symbolSize(value, params) {
@@ -1545,71 +1669,17 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 				},
 				data: milestones || [],
 			},
-			{
-				type: "custom",
-				clip: true,
-				animationDuration: introAnimationDuration,
-				animationDurationUpdate: 0,
-				animationEasing: introAnimationEasing,
-				animationEasingUpdate: "linear",
-				animationDelay(dataIndex) {
-					return introAnimationDelays.taskBarDelays[dataIndex] ?? 0;
-				},
-				animationDelayUpdate() {
-					return 0;
-				},
-				renderItem(params, api) {
-					const rowPosition = api.value(0);
-					const start = api.coord([api.value(1), rowPosition]);
-					const end = api.coord([api.value(2), rowPosition]);
-					const slotRatio = dinext_project_stage_gate.roadmap.getRowSlotHeightRatio(
-						params.data?.rowSpanUnits || rowSpanUnits
-					);
-					const slotHeight = api.size([0, 1])[1] * slotRatio;
-					const lineWidth = Math.max(6, Math.min(12, slotHeight * 0.36));
-					const labelLayout = dinext_project_stage_gate.roadmap.getTaskLineLabelLayout({
-						span: Math.abs(end[0] - start[0]),
-						lineWidth,
-						slotHeight,
-					});
-					const fromApi = api.style();
-					const itemStyle = params.data?.itemStyle || {};
-					const payloadColor = api.value(6);
-					const lineColor =
-						itemStyle.color ||
-						itemStyle.lineColor ||
-						itemStyle.labelColor ||
-						payloadColor ||
-						fromApi.stroke ||
-						fromApi.borderColor ||
-						fromApi.color;
-					const labelColor = itemStyle.labelColor || payloadColor || lineColor;
-					const shadowColor =
-						itemStyle.shadowColor ||
-						(lineColor
-							? dinext_project_stage_gate.roadmap.hexToRgba(lineColor, 0.18)
-							: undefined);
-					return dinext_project_stage_gate.roadmap.buildRoundedTaskLineGraphic({
-						startX: start[0],
-						endX: end[0],
-						centerY: start[1],
-						lineWidth,
-						label: params.data?.name || api.value(3),
-						lineColor,
-						labelColor,
-						shadowColor,
-						labelLayout,
-						animationDelay: introAnimationDelays.taskBarDelays[params.dataIndex] ?? 0,
-						animationDuration: introAnimationDuration,
-						animationEasing: introAnimationEasing,
-					});
-				},
-				encode: {
-					x: [1, 2],
-					y: 0,
-				},
-				data: taskBars || [],
-			},
+			...dinext_project_stage_gate.roadmap.buildTaskBarSeries({
+				taskBars: safeTaskBars,
+				introAnimationDuration,
+				introAnimationEasing,
+				introAnimationDelays,
+				rowSpanUnits,
+			}),
+			...dinext_project_stage_gate.roadmap.buildLegendProxySeries({
+				taskBars: safeTaskBars,
+				milestones,
+			}),
 		],
 	};
 };
@@ -1949,27 +2019,21 @@ dinext_project_stage_gate.roadmap.ensure_chart_mount = function (report) {
 			return existingWrapper;
 		}
 		const existingChart = existingWrapper.find(".project-stage-gate-roadmap-chart");
-		const existingLegend = existingWrapper.find(".project-stage-gate-roadmap-legend-slot");
-		const existingChartDom = existingChart.get?.(0);
-		if (existingChartDom && existingLegend?.length) {
-			existingChartDom._dinextRoadmapLegendHost = existingLegend;
+		const legacyLegend = existingWrapper.find(".project-stage-gate-roadmap-legend-slot");
+		if (legacyLegend?.length && typeof legacyLegend.remove === "function") {
+			legacyLegend.remove();
 		}
-		return existingChart;
+		if (existingChart.length) {
+			return existingChart;
+		}
+		return existingWrapper;
 	}
 
-	const wrapper = $(
-		'<div class="project-stage-gate-roadmap" style="margin: 0 0 16px 0;"></div>'
+	const chart = $(
+		'<div class="project-stage-gate-roadmap-chart project-stage-gate-roadmap" style="margin: 0 0 16px 0;"></div>'
 	);
-	const legend = $('<div class="project-stage-gate-roadmap-legend-slot"></div>');
-	const chart = $('<div class="project-stage-gate-roadmap-chart"></div>');
-	wrapper.append(legend);
-	wrapper.append(chart);
 	dinext_project_stage_gate.roadmap.applyChartHeight(chart.get(0), 0);
-	const chartDom = chart.get(0);
-	if (chartDom) {
-		chartDom._dinextRoadmapLegendHost = legend;
-	}
-	report.page.main.prepend(wrapper);
+	report.page.main.prepend(chart);
 	return chart;
 };
 
@@ -2498,10 +2562,6 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 			toDate,
 			taskTypeOrder,
 		});
-	dinext_project_stage_gate.roadmap.renderLegend(mount, {
-		taskBars,
-		milestones,
-	});
 	const showAllDataZoom = dinext_project_stage_gate.roadmap.buildShowAllDataZoomConfig({
 		categories,
 		bars,
