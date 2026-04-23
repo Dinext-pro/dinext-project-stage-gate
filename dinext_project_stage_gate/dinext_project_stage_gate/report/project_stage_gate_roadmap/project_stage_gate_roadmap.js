@@ -763,6 +763,65 @@ dinext_project_stage_gate.roadmap.buildLegendProxySeries = function ({
 	return legendSeries;
 };
 
+dinext_project_stage_gate.roadmap.buildProjectSeparatorData = function (categoryEntries = []) {
+	const separators = [];
+	if (categoryEntries[0]?.projectName) {
+		separators.push({
+			value: [0],
+		});
+	}
+	for (let index = 1; index < categoryEntries.length; index += 1) {
+		const current = categoryEntries[index];
+		const previous = categoryEntries[index - 1];
+		if (!current?.projectName || current.projectName === previous?.projectName) {
+			continue;
+		}
+		separators.push({
+			value: [index],
+		});
+	}
+	return separators;
+};
+
+dinext_project_stage_gate.roadmap.buildProjectSeparatorSeries = function ({
+	projectSeparators = [],
+	gridLineColor,
+	startValue,
+	endValue,
+} = {}) {
+	return {
+		name: "__project-separators__",
+		type: "custom",
+		silent: true,
+		tooltip: { show: false },
+		legendHoverLink: false,
+		z: 1,
+		renderItem(params, api) {
+			const boundaryIndex = api.value(0);
+			const left = api.coord([startValue, boundaryIndex - 0.5]);
+			const right = api.coord([endValue, boundaryIndex - 0.5]);
+			return {
+				type: "line",
+				shape: {
+					x1: left[0],
+					y1: left[1],
+					x2: right[0],
+					y2: right[1],
+				},
+				style: {
+					stroke: gridLineColor,
+					lineWidth: 1,
+				},
+				silent: true,
+			};
+		},
+		encode: {
+			y: 0,
+		},
+		data: projectSeparators,
+	};
+};
+
 dinext_project_stage_gate.roadmap.wrapAxisLabel = function (label, maxLineLength = 24) {
 	const text = String(label || "").trim();
 	if (!text || text.length <= maxLineLength) {
@@ -1402,14 +1461,22 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 	const legendRows = Math.max(1, Math.ceil(legendData.length / 4));
 	const categoryEntries = safeCategories.map((category) =>
 		typeof category === "string"
-			? { key: category, projectLabel: category, laneLabel: "", isProjectLabel: true }
+			? {
+					key: category,
+					projectName: category,
+					projectLabel: category,
+					laneLabel: "",
+					isProjectLabel: true,
+			  }
 			: {
 					key: category?.key,
+					projectName: category?.projectName || category?.projectLabel || category?.key || "",
 					projectLabel: category?.projectLabel || category?.key || "",
 					laneLabel: category?.laneLabel || "",
 					isProjectLabel: category?.isProjectLabel !== false,
 				}
 	);
+	const projectSeparators = dinext_project_stage_gate.roadmap.buildProjectSeparatorData(categoryEntries);
 	const categoryLabelByKey = Object.fromEntries(
 		categoryEntries.map((category) => [
 			category.key,
@@ -1437,6 +1504,12 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 	);
 	const checkpointSymbolSize =
 		dinext_project_stage_gate.roadmap.getCheckpointDiamondSize(estimatedStageBarHeight);
+	const fullHorizontalViewport = dinext_project_stage_gate.roadmap.getFullHorizontalViewport({
+		bars,
+		gates,
+		taskBars: safeTaskBars,
+		milestones,
+	});
 
 	return {
 		animation: true,
@@ -1526,7 +1599,7 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 			triggerEvent: true,
 			data: categoryEntries.map((category) => category.key),
 			splitLine: {
-				show: true,
+				show: false,
 				lineStyle: {
 					color: gridLineColor,
 					type: "solid",
@@ -1675,6 +1748,12 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 				introAnimationEasing,
 				introAnimationDelays,
 				rowSpanUnits,
+			}),
+			dinext_project_stage_gate.roadmap.buildProjectSeparatorSeries({
+				projectSeparators,
+				gridLineColor,
+				startValue: fullHorizontalViewport.startValue,
+				endValue: fullHorizontalViewport.endValue,
 			}),
 			...dinext_project_stage_gate.roadmap.buildLegendProxySeries({
 				taskBars: safeTaskBars,

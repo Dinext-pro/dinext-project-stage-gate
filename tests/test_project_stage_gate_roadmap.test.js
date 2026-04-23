@@ -957,7 +957,7 @@ test("buildChartOptions makes y-axis project labels explicit and readable", () =
 	);
 	assert.equal(options.xAxis.splitLine.show, true);
 	assert.equal(options.xAxis.minorSplitLine.show, true);
-	assert.equal(options.yAxis.splitLine.show, true);
+	assert.equal(options.yAxis.splitLine.show, false);
 	assert.ok(options.toolbox);
 	assert.equal(options.toolbox.top, 4);
 	assert.ok(options.toolbox.top < options.grid.top);
@@ -1027,6 +1027,86 @@ test("buildChartOptions hides lane labels on the y-axis and keeps project labels
 	assert.equal(options.yAxis.axisLabel.formatter("PRJ-1::base"), "Alpha Delivery Program");
 	assert.equal(options.yAxis.axisLabel.formatter("PRJ-1::task_type:Phase::0"), "");
 	assert.equal(options.yAxis.axisLabel.formatter("PRJ-1::milestone"), "");
+});
+
+test("buildChartOptions disables default y-axis split lines in favor of project separators", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const options = roadmap.buildChartOptions({
+		categories: [
+			{ key: "PRJ-1::base", projectName: "PRJ-1", projectLabel: "Alpha", isProjectLabel: true },
+			{ key: "PRJ-1::task_type:Phase::0", projectName: "PRJ-1", projectLabel: "Alpha", isProjectLabel: false },
+			{ key: "PRJ-2::base", projectName: "PRJ-2", projectLabel: "Beta", isProjectLabel: true },
+		],
+		bars: [],
+		gates: [],
+		milestones: [],
+		taskBars: [],
+		dataZoom: [],
+	});
+
+	assert.equal(options.yAxis.splitLine.show, false);
+});
+
+test("buildChartOptions adds separator series only between different projects", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const options = roadmap.buildChartOptions({
+		categories: [
+			{ key: "PRJ-1::base", projectName: "PRJ-1", projectLabel: "Alpha", isProjectLabel: true },
+			{ key: "PRJ-1::task_type:Sprint::0", projectName: "PRJ-1", projectLabel: "Alpha", isProjectLabel: false },
+			{ key: "PRJ-1::milestone", projectName: "PRJ-1", projectLabel: "Alpha", isProjectLabel: false },
+			{ key: "PRJ-2::base", projectName: "PRJ-2", projectLabel: "Beta", isProjectLabel: true },
+			{ key: "PRJ-2::task_type:Phase::0", projectName: "PRJ-2", projectLabel: "Beta", isProjectLabel: false },
+		],
+		bars: [],
+		gates: [],
+		milestones: [],
+		taskBars: [],
+		dataZoom: [],
+	});
+
+	const separatorSeries = options.series.find((series) => series.name === "__project-separators__");
+	assert.ok(separatorSeries);
+	assert.equal(separatorSeries.type, "custom");
+	assert.equal(separatorSeries.silent, true);
+	assert.deepEqual(
+		Array.from(separatorSeries.data, (item) => item.value[0]),
+		[0, 3]
+	);
+});
+
+test("project separator series uses chart time range instead of pixel width for x coordinates", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const series = roadmap.buildProjectSeparatorSeries({
+		projectSeparators: [{ value: [3] }],
+		gridLineColor: "#334155",
+		startValue: "2026-01-01",
+		endValue: "2026-12-31",
+	});
+
+	const coordCalls = [];
+	const graphic = series.renderItem(
+		{},
+		{
+			value(index) {
+				return [3][index];
+			},
+			coord(value) {
+				coordCalls.push(value);
+				return value[0] === "2026-01-01" ? [10, 40] : [210, 40];
+			},
+		}
+	);
+
+	assert.deepEqual(Array.from(coordCalls, (value) => Array.from(value)), [
+		["2026-01-01", 2.5],
+		["2026-12-31", 2.5],
+	]);
+	assert.equal(graphic.shape.x1, 10);
+	assert.equal(graphic.shape.x2, 210);
+	assert.equal(graphic.style.stroke, "#334155");
 });
 
 test("buildChartOptions configures standard ECharts legend entries for roadmap series", () => {
