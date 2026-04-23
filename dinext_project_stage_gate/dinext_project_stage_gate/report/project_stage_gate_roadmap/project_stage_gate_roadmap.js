@@ -222,6 +222,182 @@ dinext_project_stage_gate.roadmap.getHorizontalRangeFromDataZoom = function (dat
 	};
 };
 
+dinext_project_stage_gate.roadmap.getVerticalRangeFromDataZoom = function (dataZoom) {
+	const zoomEntries = Array.isArray(dataZoom) ? dataZoom : [];
+	const verticalZoom = zoomEntries.find(
+		(zoom) => zoom && zoom.yAxisIndex === 0 && zoom.startValue != null && zoom.endValue != null
+	);
+	if (!verticalZoom) {
+		return {};
+	}
+	return {
+		startValue: verticalZoom.startValue,
+		endValue: verticalZoom.endValue,
+	};
+};
+
+dinext_project_stage_gate.roadmap.getViewportStateFromDataZoom = function (dataZoom) {
+	const horizontal = dinext_project_stage_gate.roadmap.getHorizontalRangeFromDataZoom(dataZoom);
+	const vertical = dinext_project_stage_gate.roadmap.getVerticalRangeFromDataZoom(dataZoom);
+	if (!Object.keys(horizontal).length && !Object.keys(vertical).length) {
+		return null;
+	}
+	return { horizontal, vertical };
+};
+
+dinext_project_stage_gate.roadmap.captureViewportStateFromChart = function (chart) {
+	if (!chart || typeof chart.getOption !== "function") {
+		return null;
+	}
+	const option = chart.getOption?.() || {};
+	const viewportState = dinext_project_stage_gate.roadmap.getViewportStateFromDataZoom(option?.dataZoom);
+	const yAxisSource = Array.isArray(option?.yAxis) ? option.yAxis[0] : option?.yAxis;
+	const categoryKeys = Array.isArray(yAxisSource?.data) ? yAxisSource.data : [];
+	if (viewportState?.vertical && categoryKeys.length) {
+		const startIndex = Number(viewportState.vertical.startValue);
+		const endIndex = Number(viewportState.vertical.endValue);
+		if (Number.isFinite(startIndex) && categoryKeys[startIndex] != null) {
+			viewportState.vertical.startKey = categoryKeys[startIndex];
+		}
+		if (Number.isFinite(endIndex) && categoryKeys[endIndex] != null) {
+			viewportState.vertical.endKey = categoryKeys[endIndex];
+		}
+	}
+	return viewportState;
+};
+
+dinext_project_stage_gate.roadmap.cloneViewportState = function (viewportState) {
+	if (!viewportState || typeof viewportState !== "object") {
+		return null;
+	}
+	const horizontal = viewportState.horizontal;
+	const vertical = viewportState.vertical;
+	const hasHorizontal = horizontal && horizontal.startValue != null && horizontal.endValue != null;
+	const hasVertical = vertical && vertical.startValue != null && vertical.endValue != null;
+	if (!hasHorizontal && !hasVertical) {
+		return null;
+	}
+	return {
+		horizontal: hasHorizontal
+			? {
+					startValue: horizontal.startValue,
+					endValue: horizontal.endValue,
+			  }
+			: {},
+		vertical: hasVertical
+			? {
+					startValue: vertical.startValue,
+					endValue: vertical.endValue,
+					startKey: vertical.startKey,
+					endKey: vertical.endKey,
+			  }
+			: {},
+	};
+};
+
+dinext_project_stage_gate.roadmap.persistViewportState = function (target, viewportState) {
+	if (!target) {
+		return;
+	}
+	target._dinextRoadmapViewportState =
+		dinext_project_stage_gate.roadmap.cloneViewportState(viewportState);
+};
+
+dinext_project_stage_gate.roadmap.clampHorizontalViewport = function (viewport, bounds) {
+	const startTime = dinext_project_stage_gate.roadmap._parseTimeMs(viewport?.startValue);
+	const endTime = dinext_project_stage_gate.roadmap._parseTimeMs(viewport?.endValue);
+	const lowerBound = dinext_project_stage_gate.roadmap._parseTimeMs(bounds?.startValue);
+	const upperBound = dinext_project_stage_gate.roadmap._parseTimeMs(bounds?.endValue);
+	if (
+		!Number.isFinite(startTime) ||
+		!Number.isFinite(endTime) ||
+		!Number.isFinite(lowerBound) ||
+		!Number.isFinite(upperBound)
+	) {
+		return null;
+	}
+	const clampedStart = Math.max(startTime, lowerBound);
+	const clampedEnd = Math.min(endTime, upperBound);
+	if (clampedEnd < clampedStart) {
+		return null;
+	}
+	return {
+		startValue: dinext_project_stage_gate.roadmap._formatDateForChart(clampedStart),
+		endValue: dinext_project_stage_gate.roadmap._formatDateForChart(clampedEnd),
+	};
+};
+
+dinext_project_stage_gate.roadmap.getHorizontalViewportBounds = function ({
+	bars,
+	gates,
+	taskBars,
+	milestones,
+	fromDate,
+	toDate,
+} = {}) {
+	const fullViewport = dinext_project_stage_gate.roadmap.getFullHorizontalViewport({
+		bars,
+		gates,
+		taskBars,
+		milestones,
+		fromDate,
+		toDate,
+	});
+	const fromTime = dinext_project_stage_gate.roadmap._parseTimeMs(fromDate);
+	const toTime = dinext_project_stage_gate.roadmap._parseTimeMs(toDate);
+	let startValue = fullViewport.startValue;
+	let endValue = fullViewport.endValue;
+	if (Number.isFinite(fromTime)) {
+		startValue = dinext_project_stage_gate.roadmap._formatDateForChart(fromTime);
+	}
+	if (Number.isFinite(toTime)) {
+		endValue = dinext_project_stage_gate.roadmap._formatDateForChart(toTime);
+	}
+	const startTime = dinext_project_stage_gate.roadmap._parseTimeMs(startValue);
+	const endTime = dinext_project_stage_gate.roadmap._parseTimeMs(endValue);
+	if (Number.isFinite(startTime) && Number.isFinite(endTime) && endTime < startTime) {
+		return {
+			startValue: dinext_project_stage_gate.roadmap._formatDateForChart(endTime),
+			endValue: dinext_project_stage_gate.roadmap._formatDateForChart(startTime),
+		};
+	}
+	return { startValue, endValue };
+};
+
+dinext_project_stage_gate.roadmap.clampVerticalViewport = function (viewport, categories) {
+	const totalRows = Array.isArray(categories) ? categories.length : 0;
+	if (!totalRows) {
+		return null;
+	}
+	const startKey = viewport?.startKey;
+	const endKey = viewport?.endKey;
+	if (startKey != null && endKey != null) {
+		const startIndex = categories.indexOf(startKey);
+		const endIndex = categories.indexOf(endKey);
+		if (startIndex !== -1 && endIndex !== -1) {
+			return {
+				startValue: Math.min(startIndex, endIndex),
+				endValue: Math.max(startIndex, endIndex),
+			};
+		}
+	}
+	const startValue = Number(viewport?.startValue);
+	const endValue = Number(viewport?.endValue);
+	if (!Number.isFinite(startValue) || !Number.isFinite(endValue)) {
+		return null;
+	}
+	const maxIndex = totalRows - 1;
+	const clampedStart = Math.min(Math.max(startValue, 0), maxIndex);
+	const clampedEnd = Math.min(Math.max(endValue, 0), maxIndex);
+	if (clampedEnd < clampedStart) {
+		return null;
+	}
+	return {
+		startValue: clampedStart,
+		endValue: clampedEnd,
+	};
+};
+
 dinext_project_stage_gate.roadmap.shouldUseMonthOnlyXAxisLabels = function (
 	{ startValue, endValue } = {},
 	thresholdDays = dinext_project_stage_gate.roadmap.X_AXIS_MONTH_ONLY_THRESHOLD_DAYS
@@ -830,16 +1006,44 @@ dinext_project_stage_gate.roadmap.buildShowAllDataZoomConfig = function ({
 
 dinext_project_stage_gate.roadmap.buildDataZoomConfig = function ({
 	categories,
+	bars,
+	gates,
+	taskBars,
+	milestones,
 	fromDate,
 	toDate,
 	today,
+	viewportState,
 } = {}) {
-	const horizontal = dinext_project_stage_gate.roadmap.getDefaultHorizontalViewport({
+	let horizontal = dinext_project_stage_gate.roadmap.getDefaultHorizontalViewport({
 		today,
 		fromDate,
 		toDate,
 	});
-	const vertical = dinext_project_stage_gate.roadmap.getDefaultVerticalViewport(categories);
+	let vertical = dinext_project_stage_gate.roadmap.getDefaultVerticalViewport(categories);
+	const savedViewport = dinext_project_stage_gate.roadmap.cloneViewportState(viewportState);
+	const horizontalBounds = dinext_project_stage_gate.roadmap.getHorizontalViewportBounds({
+		bars,
+		gates,
+		taskBars,
+		milestones,
+		fromDate,
+		toDate,
+	});
+	if (savedViewport?.horizontal && Object.keys(savedViewport.horizontal).length) {
+		horizontal =
+			dinext_project_stage_gate.roadmap.clampHorizontalViewport(
+				savedViewport.horizontal,
+				horizontalBounds
+			) || horizontal;
+	}
+	if (savedViewport?.vertical && Object.keys(savedViewport.vertical).length) {
+		vertical =
+			dinext_project_stage_gate.roadmap.clampVerticalViewport(
+				savedViewport.vertical,
+				categories
+			) || vertical;
+	}
 
 	return [
 		{
@@ -2118,6 +2322,11 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 		(typeof echarts.getInstanceByDom === "function" && echarts.getInstanceByDom(dom)) ||
 		dom._dinextRoadmapChart ||
 		null;
+	const savedViewportState =
+		dinext_project_stage_gate.roadmap.captureViewportStateFromChart(existing) ||
+		dom._dinextRoadmapViewportState ||
+		null;
+	dinext_project_stage_gate.roadmap.persistViewportState(dom, savedViewportState);
 	if (existing) {
 		existing.dispose();
 	}
@@ -2125,9 +2334,14 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 	dom._dinextRoadmapChart = chart;
 	const dataZoom = dinext_project_stage_gate.roadmap.buildDataZoomConfig({
 		categories,
+		bars,
+		gates,
+		taskBars,
+		milestones,
 		fromDate,
 		toDate,
 		today: frappe?.datetime?.get_today?.(),
+		viewportState: dom._dinextRoadmapViewportState,
 	});
 	const monthOnlyXAxisLabels =
 		dinext_project_stage_gate.roadmap.getMonthOnlyXAxisLabelsForDataZoom(dataZoom);
@@ -2146,12 +2360,31 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 				chart.setOption({
 					dataZoom: showAllDataZoom,
 				});
+				dinext_project_stage_gate.roadmap.persistViewportState(
+					dom,
+					dinext_project_stage_gate.roadmap.getViewportStateFromDataZoom(showAllDataZoom)
+				);
 				dinext_project_stage_gate.roadmap.updateXAxisLabelDensity(chart);
 			},
 		})
 	);
 	chart._dinextMonthOnlyXAxisLabels = monthOnlyXAxisLabels;
+	dinext_project_stage_gate.roadmap.persistViewportState(
+		dom,
+		{
+			horizontal: dinext_project_stage_gate.roadmap.getHorizontalRangeFromDataZoom(dataZoom),
+			vertical: {
+				...dinext_project_stage_gate.roadmap.getVerticalRangeFromDataZoom(dataZoom),
+				startKey: categories[dataZoom?.[2]?.startValue],
+				endKey: categories[dataZoom?.[2]?.endValue],
+			},
+		}
+	);
 	chart.on("datazoom", () => {
+		dinext_project_stage_gate.roadmap.persistViewportState(
+			dom,
+			dinext_project_stage_gate.roadmap.captureViewportStateFromChart(chart)
+		);
 		dinext_project_stage_gate.roadmap.updateXAxisLabelDensity(chart);
 	});
 
