@@ -400,6 +400,17 @@ test("getTaskTypeItemStyle is stable for the same task type", () => {
 	assert.equal(first.labelColor, second.labelColor);
 });
 
+test("getTaskTypeItemStyle keeps Stage and Sprint visually distinct", () => {
+	const { roadmap, context } = loadRoadmapScript();
+
+	context.document.documentElement.getAttribute = () => null;
+	const stageStyle = roadmap.getTaskTypeItemStyle("Stage");
+	const sprintStyle = roadmap.getTaskTypeItemStyle("Sprint");
+
+	assert.notEqual(stageStyle.lineColor, sprintStyle.lineColor);
+	assert.notEqual(stageStyle.labelColor, sprintStyle.labelColor);
+});
+
 test("buildRoundedTaskLineGraphic draws rounded line with label above", () => {
 	const { roadmap } = loadRoadmapScript();
 
@@ -420,6 +431,40 @@ test("buildRoundedTaskLineGraphic draws rounded line with label above", () => {
 	assert.equal(graphic.children[1].type, "text");
 	assert.equal(graphic.children[1].style.text, "Sprint Alpha");
 	assert.ok(graphic.children[1].style.y < 80, "label should sit above the line");
+});
+
+test("buildRoundedTaskLineGraphic scales task labels with span and keeps them closer to the line", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const shortGraphic = roadmap.buildRoundedTaskLineGraphic({
+		startX: 40,
+		endX: 96,
+		centerY: 80,
+		lineWidth: 8,
+		label: "Short Sprint",
+		lineColor: "#3366ff",
+		labelColor: "#3366ff",
+	});
+	const longGraphic = roadmap.buildRoundedTaskLineGraphic({
+		startX: 40,
+		endX: 220,
+		centerY: 80,
+		lineWidth: 8,
+		label: "Long Sprint",
+		lineColor: "#3366ff",
+		labelColor: "#3366ff",
+	});
+
+	assert.equal(shortGraphic.children[1].type, "text");
+	assert.equal(longGraphic.children[1].type, "text");
+	assert.ok(
+		shortGraphic.children[1].style.fontSize < longGraphic.children[1].style.fontSize,
+		"narrower task bars should render smaller labels"
+	);
+	assert.ok(
+		shortGraphic.children[1].style.y > 66,
+		"task labels should sit closer to the line than the previous fixed offset"
+	);
 });
 
 test("buildRoundedTaskLineGraphic falls back to a visible shared color when lineColor is missing", () => {
