@@ -557,6 +557,117 @@ dinext_project_stage_gate.roadmap.getMilestoneItemStyle = function () {
 	};
 };
 
+dinext_project_stage_gate.roadmap.escapeHtml = function (value) {
+	return String(value ?? "")
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;")
+		.replace(/"/g, "&quot;")
+		.replace(/'/g, "&#39;");
+};
+
+dinext_project_stage_gate.roadmap.buildLegendItems = function ({
+	taskBars = [],
+	milestones = [],
+} = {}) {
+	const stageStyle = dinext_project_stage_gate.roadmap.getStageItemStyle({ status: "Active" });
+	const gateStyle = dinext_project_stage_gate.roadmap.getCheckpointItemStyle("Approved");
+	const legendItems = [
+		{
+			key: "stages",
+			label: __("Stages"),
+			description: __("Chevron bar with status color"),
+			shape: "chevron",
+			color: stageStyle.fill,
+		},
+		{
+			key: "gates",
+			label: __("Gate checkpoints"),
+			description: __("Diamond marker"),
+			shape: "diamond",
+			color: gateStyle.color,
+		},
+	];
+	if (Array.isArray(milestones) && milestones.length) {
+		const milestoneStyle = dinext_project_stage_gate.roadmap.getMilestoneItemStyle();
+		legendItems.push({
+			key: "milestones",
+			label: __("Milestones"),
+			description: __("Diamond milestone marker"),
+			shape: "diamond",
+			color: milestoneStyle.lineColor,
+		});
+	}
+
+	const seenTaskTypes = new Set();
+	(taskBars || []).forEach((taskBar) => {
+		const taskType = String(taskBar?.value?.[5] || "").trim();
+		if (!taskType || seenTaskTypes.has(taskType)) {
+			return;
+		}
+		seenTaskTypes.add(taskType);
+		legendItems.push({
+			key: `task-type:${taskType}`,
+			label: taskType,
+			description: __("Task bar"),
+			shape: "line",
+			color:
+				taskBar?.value?.[6] || dinext_project_stage_gate.roadmap.getTaskTypeItemStyle(taskType).lineColor,
+		});
+	});
+
+	return legendItems;
+};
+
+dinext_project_stage_gate.roadmap.buildLegendMarkup = function (items = []) {
+	if (!Array.isArray(items) || !items.length) {
+		return "";
+	}
+	const renderSymbol = (item) => {
+		const safeColor = dinext_project_stage_gate.roadmap.escapeHtml(item?.color || "#8f9aa8");
+		const shape = item?.shape || "line";
+		if (shape === "chevron") {
+			return `<span class="project-stage-gate-roadmap-legend__symbol" data-shape="chevron" style="display:inline-block;width:20px;height:12px;background:${safeColor};clip-path:polygon(0 0,78% 0,100% 50%,78% 100%,0 100%,12% 50%);"></span>`;
+		}
+		if (shape === "diamond") {
+			return `<span class="project-stage-gate-roadmap-legend__symbol" data-shape="diamond" style="display:inline-block;width:12px;height:12px;background:${safeColor};transform:rotate(45deg);border:2px solid var(--card-bg, #ffffff);box-sizing:border-box;"></span>`;
+		}
+		return `<span class="project-stage-gate-roadmap-legend__symbol" data-shape="line" style="display:inline-block;width:22px;height:0;border-top:4px solid ${safeColor};border-radius:999px;"></span>`;
+	};
+
+	return `<div class="project-stage-gate-roadmap-legend" style="display:flex;flex-wrap:wrap;gap:12px 18px;align-items:flex-start;margin:0 0 12px 0;padding:8px 0 0 0;">
+		${items
+			.map((item) => {
+				const key = dinext_project_stage_gate.roadmap.escapeHtml(item?.key || "");
+				const label = dinext_project_stage_gate.roadmap.escapeHtml(item?.label || "");
+				const description = dinext_project_stage_gate.roadmap.escapeHtml(item?.description || "");
+				return `<div class="project-stage-gate-roadmap-legend__item" data-key="${key}" style="display:flex;align-items:center;gap:8px;min-width:160px;">
+					${renderSymbol(item)}
+					<span class="project-stage-gate-roadmap-legend__copy" style="display:flex;flex-direction:column;gap:2px;line-height:1.2;">
+						<span class="project-stage-gate-roadmap-legend__label" style="font-size:12px;font-weight:600;">${label}</span>
+						<span class="project-stage-gate-roadmap-legend__description" style="font-size:11px;color:var(--text-muted, #7c7c7c);">${description}</span>
+					</span>
+				</div>`;
+			})
+			.join("")}
+	</div>`;
+};
+
+dinext_project_stage_gate.roadmap.renderLegend = function (mount, options = {}) {
+	if (!mount?.length || typeof mount.get !== "function") {
+		return;
+	}
+	const chartDom = mount.get(0);
+	const legendHost = chartDom?._dinextRoadmapLegendHost;
+	if (!legendHost?.length || typeof legendHost.html !== "function") {
+		return;
+	}
+	const legendMarkup = dinext_project_stage_gate.roadmap.buildLegendMarkup(
+		dinext_project_stage_gate.roadmap.buildLegendItems(options)
+	);
+	legendHost.html(legendMarkup);
+};
+
 dinext_project_stage_gate.roadmap.wrapAxisLabel = function (label, maxLineLength = 24) {
 	const text = String(label || "").trim();
 	if (!text || text.length <= maxLineLength) {
@@ -1203,9 +1314,7 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 			category.key,
 			category.isProjectLabel
 				? dinext_project_stage_gate.roadmap.wrapAxisLabel(category.projectLabel)
-				: category.laneLabel
-					? `  ${category.laneLabel}`
-					: "",
+				: "",
 		])
 	);
 	const grid = {
@@ -1834,14 +1943,33 @@ dinext_project_stage_gate.roadmap.ensure_chart_mount = function (report) {
 		return null;
 	}
 
-	const wrapper = report.page.main.find(".project-stage-gate-roadmap-chart");
-	if (wrapper.length) {
-		return wrapper;
+	const existingWrapper = report.page.main.find(".project-stage-gate-roadmap");
+	if (existingWrapper.length) {
+		if (typeof existingWrapper.find !== "function") {
+			return existingWrapper;
+		}
+		const existingChart = existingWrapper.find(".project-stage-gate-roadmap-chart");
+		const existingLegend = existingWrapper.find(".project-stage-gate-roadmap-legend-slot");
+		const existingChartDom = existingChart.get?.(0);
+		if (existingChartDom && existingLegend?.length) {
+			existingChartDom._dinextRoadmapLegendHost = existingLegend;
+		}
+		return existingChart;
 	}
 
-	const chart = $('<div class="project-stage-gate-roadmap-chart" style="margin: 0 0 16px 0;"></div>');
+	const wrapper = $(
+		'<div class="project-stage-gate-roadmap" style="margin: 0 0 16px 0;"></div>'
+	);
+	const legend = $('<div class="project-stage-gate-roadmap-legend-slot"></div>');
+	const chart = $('<div class="project-stage-gate-roadmap-chart"></div>');
+	wrapper.append(legend);
+	wrapper.append(chart);
 	dinext_project_stage_gate.roadmap.applyChartHeight(chart.get(0), 0);
-	report.page.main.prepend(chart);
+	const chartDom = chart.get(0);
+	if (chartDom) {
+		chartDom._dinextRoadmapLegendHost = legend;
+	}
+	report.page.main.prepend(wrapper);
 	return chart;
 };
 
@@ -2370,6 +2498,10 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 			toDate,
 			taskTypeOrder,
 		});
+	dinext_project_stage_gate.roadmap.renderLegend(mount, {
+		taskBars,
+		milestones,
+	});
 	const showAllDataZoom = dinext_project_stage_gate.roadmap.buildShowAllDataZoomConfig({
 		categories,
 		bars,
