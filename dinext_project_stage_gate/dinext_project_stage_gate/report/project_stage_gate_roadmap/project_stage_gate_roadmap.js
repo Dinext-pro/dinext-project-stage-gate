@@ -1414,15 +1414,15 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 				},
 				label: {
 					show: true,
-					position: "top",
-					distance: 6,
-					fontSize: 11,
+					position: "right",
+					align: "left",
+					verticalAlign: "middle",
 					fontWeight: 600,
 					formatter(params) {
-						return params?.data?.name || params?.name || "";
+						return params?.data?.label?.text || params?.data?.name || params?.name || "";
 					},
 					color(params) {
-						return params?.data?.labelColor || "#d13438";
+						return params?.data?.label?.color || params?.data?.labelColor || "#d13438";
 					},
 				},
 				itemStyle: {
@@ -1612,10 +1612,10 @@ dinext_project_stage_gate.roadmap.getOrderedTaskLaneKeys = function (laneMap, ta
 	const safeTaskTypeOrder = dinext_project_stage_gate.roadmap._coerceToArray(taskTypeOrder);
 	return Object.keys(laneMap || {}).sort((left, right) => {
 		if (left === "milestone") {
-			return -1;
+			return 1;
 		}
 		if (right === "milestone") {
-			return 1;
+			return -1;
 		}
 		const leftType = left.replace(/^task_type:/, "");
 		const rightType = right.replace(/^task_type:/, "");
@@ -1756,6 +1756,23 @@ dinext_project_stage_gate.roadmap.getTaskLineLabelLayout = function ({
 				safeLineWidth * 0.5 + (safeSlotHeight != null ? safeSlotHeight * 0.08 : safeLineWidth * 0.2)
 			)
 		),
+	};
+};
+
+dinext_project_stage_gate.roadmap.getMilestoneLabelLayout = function ({ symbolSize } = {}) {
+	const safeSymbolSize = Math.max(Number(symbolSize) || 0, 0);
+	let fontSize = 11;
+	if (safeSymbolSize < 16) {
+		fontSize = 9;
+	} else if (safeSymbolSize < 20) {
+		fontSize = 10;
+	}
+	return {
+		position: "right",
+		align: "left",
+		verticalAlign: "middle",
+		fontSize,
+		distance: Math.max(4, Math.min(8, safeSymbolSize * 0.35)),
 	};
 };
 
@@ -1960,13 +1977,28 @@ dinext_project_stage_gate.roadmap.prepareSeriesData = function (payload, options
 		.map((entity) => {
 			const rowIndex =
 				laneLayout.laneIndexByKey[`${entity.project}::milestone`] ?? getBaseLaneIndex(entity.project);
+			const symbolSize = Number(entity.symbolSize) || 14;
+			const labelLayout = dinext_project_stage_gate.roadmap.getMilestoneLabelLayout({
+				symbolSize,
+			});
 			return {
 				name: entity.subject || entity.name,
 				docType: "Task",
 				docName: entity.name,
 				entityKind: "milestone",
 				labelColor: milestoneStyle.labelColor,
-				symbolSize: 14,
+				symbolSize,
+				label: {
+					show: true,
+					position: labelLayout.position,
+					distance: labelLayout.distance,
+					fontSize: labelLayout.fontSize,
+					fontWeight: 600,
+					align: labelLayout.align,
+					verticalAlign: labelLayout.verticalAlign,
+					color: milestoneStyle.labelColor,
+					text: entity.subject || entity.name,
+				},
 				value: [entity.point_date, rowIndex, dinext_project_stage_gate.roadmap.translateStatus(entity.status)],
 				itemStyle: {
 					borderColor: milestoneStyle.borderColor,

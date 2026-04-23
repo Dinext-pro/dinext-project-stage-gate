@@ -296,10 +296,14 @@ test("prepareSeriesData builds task bars and milestones into separate sublanes",
 	assert.equal(taskBars[0].docType, "Task");
 	assert.equal(taskBars[0].value[3], "Sprint A");
 	assert.ok(categories.length > 1);
-	assert.ok(bars[0].value[0] < milestones[0].value[1], "stage band should stay above milestones");
+	assert.ok(bars[0].value[0] < taskBars[0].value[0], "stage band should stay above task lanes");
 	assert.ok(
 		taskBars[0].value[0] < taskBars[1].value[0],
 		"overlapping tasks in the same sublane should stack downward"
+	);
+	assert.ok(
+		taskBars[2].value[0] < milestones[0].value[1],
+		"milestones should render below all task type lanes"
 	);
 	assert.ok(
 		taskBars[1].value[0] < taskBars[2].value[0],
@@ -362,12 +366,12 @@ test("prepareSeriesData expands projects into explicit lane rows", () => {
 
 	assert.deepEqual(
 		Array.from(data.categories, (lane) => lane.key),
-		["PRJ-1::base", "PRJ-1::milestone", "PRJ-1::task_type:Sprint::0"]
+		["PRJ-1::base", "PRJ-1::task_type:Sprint::0", "PRJ-1::milestone"]
 	);
 	assert.equal(data.bars[0].value[0], 0);
 	assert.equal(data.gates[0].value[1], 0);
-	assert.equal(data.milestones[0].value[1], 1);
-	assert.equal(data.taskBars[0].value[0], 2);
+	assert.equal(data.taskBars[0].value[0], 1);
+	assert.equal(data.milestones[0].value[1], 2);
 	assert.equal(data.projectDocsByLabel["PRJ-1::base"].docType, "Project");
 	assert.equal(data.projectDocsByLabel["PRJ-1::base"].docName, "PRJ-1");
 	assert.equal(data.projectDocsByLabel["PRJ-1::milestone"], undefined);
@@ -1188,6 +1192,58 @@ test("buildChartOptions adds series for milestones and task lines", () => {
 	assert.equal(options.series[2].type, "scatter");
 	assert.equal(options.series[2].symbol, "diamond");
 	assert.equal(options.series[3].type, "custom");
+});
+
+test("getMilestoneLabelLayout scales labels with compact symbol sizes and keeps them close", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const compactLayout = roadmap.getMilestoneLabelLayout({
+		symbolSize: 12,
+	});
+	const roomyLayout = roadmap.getMilestoneLabelLayout({
+		symbolSize: 22,
+	});
+
+	assert.ok(
+		compactLayout.fontSize < roomyLayout.fontSize,
+		"smaller milestone markers should render smaller labels"
+	);
+	assert.equal(compactLayout.position, "right");
+	assert.equal(compactLayout.align, "left");
+	assert.equal(compactLayout.verticalAlign, "middle");
+	assert.ok(
+		compactLayout.distance < 10,
+		"milestone label should stay closer to the marker than the old fixed distance"
+	);
+});
+
+test("prepareSeriesData stores milestone label layout as numeric values on each item", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const { milestones } = roadmap.prepareSeriesData({
+		projects: [{ name: "PRJ-1", project_name: "Alpha" }],
+		stageBars: [],
+		gates: [],
+		taskEntities: [
+			{
+				project: "PRJ-1",
+				name: "Compact milestone",
+				subject: "Compact milestone",
+				entity_kind: "milestone",
+				symbolSize: 12,
+				point_date: "2026-01-20",
+				status: "Open",
+			},
+		],
+	});
+
+	assert.equal(typeof milestones[0].label.fontSize, "number");
+	assert.equal(typeof milestones[0].label.distance, "number");
+	assert.equal(milestones[0].label.position, "right");
+	assert.equal(milestones[0].label.align, "left");
+	assert.equal(milestones[0].label.text, "Compact milestone");
+	assert.ok(milestones[0].label.fontSize < 11);
+	assert.ok(milestones[0].label.distance < 10);
 });
 
 test("task custom renderItem uses api style fallback for visible line stroke", () => {
