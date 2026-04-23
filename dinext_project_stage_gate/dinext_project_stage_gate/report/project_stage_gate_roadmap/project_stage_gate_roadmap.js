@@ -1295,6 +1295,8 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 		},
 		yAxis: {
 			type: "category",
+			// Keep the first category at the top so visual row order matches the lane layout.
+			inverse: true,
 			triggerEvent: true,
 			data: categoryEntries.map((category) => category.key),
 			splitLine: {
