@@ -758,6 +758,137 @@ test("buildDataZoomConfig returns slider and inside zoom for both axes", () => {
 	assert.equal(dataZoom[3].width, 18);
 });
 
+test("getViewportStateFromDataZoom extracts horizontal and vertical ranges", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const viewportState = roadmap.getViewportStateFromDataZoom([
+		{ type: "inside", xAxisIndex: 0, startValue: "2026-03-01", endValue: "2026-06-01" },
+		{ type: "slider", xAxisIndex: 0, startValue: "2026-03-01", endValue: "2026-06-01" },
+		{ type: "inside", yAxisIndex: 0, startValue: 2, endValue: 6 },
+		{ type: "slider", yAxisIndex: 0, startValue: 2, endValue: 6 },
+	]);
+
+	assert.equal(viewportState.horizontal.startValue, "2026-03-01");
+	assert.equal(viewportState.horizontal.endValue, "2026-06-01");
+	assert.equal(viewportState.vertical.startValue, 2);
+	assert.equal(viewportState.vertical.endValue, 6);
+});
+
+test("buildDataZoomConfig restores a saved viewport when it remains valid", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const dataZoom = roadmap.buildDataZoomConfig({
+		categories: new Array(12).fill("row"),
+		bars: [
+			{ value: [0, "2026-01-01", "2026-09-30"] },
+		],
+		fromDate: "2026-01-01",
+		toDate: "2026-12-31",
+		today: "2026-01-01",
+		viewportState: {
+			horizontal: {
+				startValue: "2026-03-01",
+				endValue: "2026-06-01",
+			},
+			vertical: {
+				startValue: 3,
+				endValue: 7,
+			},
+		},
+	});
+
+	assert.equal(dataZoom[0].startValue, "2026-03-01");
+	assert.equal(dataZoom[0].endValue, "2026-06-01");
+	assert.equal(dataZoom[1].startValue, "2026-03-01");
+	assert.equal(dataZoom[1].endValue, "2026-06-01");
+	assert.equal(dataZoom[2].startValue, 3);
+	assert.equal(dataZoom[2].endValue, 7);
+	assert.equal(dataZoom[3].startValue, 3);
+	assert.equal(dataZoom[3].endValue, 7);
+});
+
+test("buildDataZoomConfig clamps a saved viewport to the refreshed dataset bounds", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const dataZoom = roadmap.buildDataZoomConfig({
+		categories: new Array(5).fill("row"),
+		bars: [
+			{ value: [0, "2026-02-01", "2026-05-15"] },
+		],
+		fromDate: "2026-01-01",
+		toDate: "2026-12-31",
+		today: "2026-01-01",
+		viewportState: {
+			horizontal: {
+				startValue: "2025-11-01",
+				endValue: "2026-10-01",
+			},
+			vertical: {
+				startValue: 4,
+				endValue: 12,
+			},
+		},
+	});
+
+	assert.equal(dataZoom[0].startValue, "2026-01-01");
+	assert.equal(dataZoom[0].endValue, "2026-10-01");
+	assert.equal(dataZoom[2].startValue, 4);
+	assert.equal(dataZoom[2].endValue, 4);
+});
+
+test("buildDataZoomConfig falls back to default viewport when saved state is invalid", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const dataZoom = roadmap.buildDataZoomConfig({
+		categories: new Array(12).fill("row"),
+		bars: [
+			{ value: [0, "2026-02-01", "2026-05-15"] },
+		],
+		fromDate: "2025-10-01",
+		toDate: "2026-12-31",
+		today: "2026-01-01",
+		viewportState: {
+			horizontal: {
+				startValue: "not-a-date",
+				endValue: "2026-04-01",
+			},
+			vertical: {
+				startValue: "bad",
+				endValue: 4,
+			},
+		},
+	});
+
+	assert.equal(dataZoom[0].startValue, "2026-01-01");
+	assert.equal(dataZoom[0].endValue, "2026-12-31");
+	assert.equal(dataZoom[2].startValue, 0);
+	assert.equal(dataZoom[2].endValue, 9);
+});
+
+test("buildDataZoomConfig restores vertical viewport by category keys after row shifts", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const dataZoom = roadmap.buildDataZoomConfig({
+		categories: ["Project X", "Project A", "Project B", "Project C", "Project D"],
+		fromDate: "2026-01-01",
+		toDate: "2026-12-31",
+		today: "2026-01-01",
+		viewportState: {
+			vertical: {
+				startValue: 1,
+				endValue: 3,
+				startKey: "Project B",
+				endKey: "Project D",
+			},
+		},
+	});
+
+	assert.equal(dataZoom[2].startValue, 2);
+	assert.equal(dataZoom[2].endValue, 4);
+	assert.equal(dataZoom[3].startValue, 2);
+	assert.equal(dataZoom[3].endValue, 4);
+});
+
 test("getEChartsThemeName uses the standard dark theme only for dark mode", () => {
 	const { roadmap, context } = loadRoadmapScript();
 
