@@ -26,7 +26,12 @@ def execute(filters=None):
 			"datatype": "Int",
 		},
 	]
-	message = {"projects": dataset["projects"], "stageBars": dataset["stageBars"], "gates": dataset["gates"]}
+	message = {
+		"projects": dataset["projects"],
+		"stageBars": dataset["stageBars"],
+		"gates": dataset["gates"],
+		"taskEntities": dataset.get("taskEntities", []),
+	}
 	return columns, data, message, chart, report_summary
 
 

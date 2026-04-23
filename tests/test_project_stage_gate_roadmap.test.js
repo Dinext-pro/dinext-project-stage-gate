@@ -103,6 +103,24 @@ function loadRoadmapScript(translations = {}) {
 	};
 }
 
+test("report defines milestone and task type filters", () => {
+	const { context } = loadRoadmapScript();
+	const report = context.frappe.query_reports["Project Stage Gate Roadmap"];
+
+	assert.ok(report);
+	assert.ok(Array.isArray(report.filters));
+
+	const showMilestones = report.filters.find((filter) => filter.fieldname === "show_milestones");
+	assert.ok(showMilestones);
+	assert.equal(showMilestones.fieldtype, "Check");
+
+	const taskTypes = report.filters.find((filter) => filter.fieldname === "task_types");
+	assert.ok(taskTypes);
+	assert.equal(taskTypes.fieldtype, "MultiSelectList");
+	assert.equal(taskTypes.options, "Task Type");
+	assert.equal(typeof taskTypes.get_data, "function");
+});
+
 test("buildStageBarChevronPoints expands zero span and keeps tip inside bar", () => {
 	const { roadmap } = loadRoadmapScript();
 	const yc = 50;
@@ -204,6 +222,222 @@ test("prepareSeriesData attaches docType and docName for stages and gates", () =
 	assert.equal(gates[0].docName, "PGC-20");
 });
 
+test("prepareSeriesData builds task bars and milestones into separate sublanes", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const { categories, bars, taskBars, milestones, rowSpanUnits } = roadmap.prepareSeriesData(
+		{
+			projects: [{ name: "PRJ-1", project_name: "Alpha" }],
+			stageBars: [
+				{
+					name: "PSI-10",
+					project: "PRJ-1",
+					stage: "Discovery",
+					status: "Active",
+					sequence: 1,
+					planned_start_date: "2026-04-01",
+					planned_end_date: "2026-04-20",
+				},
+			],
+			gates: [],
+			taskEntities: [
+				{
+					name: "TASK-1",
+					project: "PRJ-1",
+					subject: "Milestone A",
+					status: "Open",
+					type: "Sprint",
+					entity_kind: "milestone",
+					lane_key: "milestone",
+					point_date: "2026-04-03",
+				},
+				{
+					name: "TASK-2",
+					project: "PRJ-1",
+					subject: "Sprint A",
+					status: "Working",
+					type: "Sprint",
+					entity_kind: "task_bar",
+					lane_key: "task_type:Sprint",
+					start_date: "2026-04-04",
+					end_date: "2026-04-10",
+				},
+				{
+					name: "TASK-3",
+					project: "PRJ-1",
+					subject: "Sprint B",
+					status: "Open",
+					type: "Sprint",
+					entity_kind: "task_bar",
+					lane_key: "task_type:Sprint",
+					start_date: "2026-04-06",
+					end_date: "2026-04-12",
+				},
+				{
+					name: "TASK-4",
+					project: "PRJ-1",
+					subject: "Phase A",
+					status: "Open",
+					type: "Phase",
+					entity_kind: "task_bar",
+					lane_key: "task_type:Phase",
+					start_date: "2026-04-05",
+					end_date: "2026-04-16",
+				},
+			],
+		},
+		{ taskTypeOrder: ["Sprint", "Phase"] }
+	);
+
+	assert.equal(milestones.length, 1);
+	assert.equal(milestones[0].docType, "Task");
+	assert.equal(milestones[0].docName, "TASK-1");
+	assert.equal(taskBars.length, 3);
+	assert.equal(taskBars[0].docType, "Task");
+	assert.equal(taskBars[0].value[3], "Sprint A");
+	assert.ok(categories.length > 1);
+	assert.ok(bars[0].value[0] < milestones[0].value[1], "stage band should stay above milestones");
+	assert.ok(
+		taskBars[0].value[0] < taskBars[1].value[0],
+		"overlapping tasks in the same sublane should stack downward"
+	);
+	assert.ok(
+		taskBars[1].value[0] < taskBars[2].value[0],
+		"later task type lanes should render below earlier ones"
+	);
+});
+
+test("prepareSeriesData expands projects into explicit lane rows", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const data = roadmap.prepareSeriesData(
+		{
+			projects: [{ name: "PRJ-1", project_name: "Alpha" }],
+			stageBars: [
+				{
+					name: "PSI-10",
+					project: "PRJ-1",
+					stage: "Discovery",
+					status: "Active",
+					sequence: 1,
+					planned_start_date: "2026-04-01",
+					planned_end_date: "2026-04-20",
+				},
+			],
+			gates: [
+				{
+					name: "PGC-1",
+					project: "PRJ-1",
+					approval_date: "2026-04-12",
+					status: "Approved",
+					checkpoint_level: "Gate 1",
+				},
+			],
+			taskEntities: [
+				{
+					name: "TASK-M1",
+					project: "PRJ-1",
+					subject: "Milestone A",
+					status: "Open",
+					type: "Sprint",
+					entity_kind: "milestone",
+					lane_key: "milestone",
+					point_date: "2026-04-03",
+				},
+				{
+					name: "TASK-T1",
+					project: "PRJ-1",
+					subject: "Sprint A",
+					status: "Working",
+					type: "Sprint",
+					entity_kind: "task_bar",
+					lane_key: "task_type:Sprint",
+					start_date: "2026-04-04",
+					end_date: "2026-04-10",
+				},
+			],
+		},
+		{ taskTypeOrder: ["Sprint"] }
+	);
+
+	assert.deepEqual(
+		Array.from(data.categories, (lane) => lane.key),
+		["PRJ-1::base", "PRJ-1::milestone", "PRJ-1::task_type:Sprint::0"]
+	);
+	assert.equal(data.bars[0].value[0], 0);
+	assert.equal(data.gates[0].value[1], 0);
+	assert.equal(data.milestones[0].value[1], 1);
+	assert.equal(data.taskBars[0].value[0], 2);
+	assert.equal(data.projectDocsByLabel["PRJ-1::base"].docType, "Project");
+	assert.equal(data.projectDocsByLabel["PRJ-1::base"].docName, "PRJ-1");
+	assert.equal(data.projectDocsByLabel["PRJ-1::milestone"], undefined);
+});
+
+test("getTaskTypeItemStyle switches palette across themes and task types", () => {
+	const { roadmap, context } = loadRoadmapScript();
+
+	context.document.documentElement.getAttribute = () => null;
+	const lightSprint = roadmap.getTaskTypeItemStyle("Sprint");
+	const lightPhase = roadmap.getTaskTypeItemStyle("Phase");
+
+	context.document.documentElement.getAttribute = () => "dark";
+	const darkSprint = roadmap.getTaskTypeItemStyle("Sprint");
+
+	assert.notEqual(lightSprint.lineColor, lightPhase.lineColor);
+	assert.notEqual(lightSprint.lineColor, darkSprint.lineColor);
+	assert.ok(lightSprint.labelColor);
+	assert.ok(darkSprint.labelColor);
+});
+
+test("getTaskTypeItemStyle is stable for the same task type", () => {
+	const { roadmap, context } = loadRoadmapScript();
+
+	context.document.documentElement.getAttribute = () => null;
+	const first = roadmap.getTaskTypeItemStyle("Sprint");
+	const second = roadmap.getTaskTypeItemStyle("Sprint");
+
+	assert.equal(first.lineColor, second.lineColor);
+	assert.equal(first.labelColor, second.labelColor);
+});
+
+test("buildRoundedTaskLineGraphic draws rounded line with label above", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const graphic = roadmap.buildRoundedTaskLineGraphic({
+		startX: 40,
+		endX: 180,
+		centerY: 80,
+		lineWidth: 8,
+		label: "Sprint Alpha",
+		lineColor: "#3366ff",
+		labelColor: "#3366ff",
+	});
+
+	assert.equal(graphic.type, "group");
+	assert.equal(graphic.children[0].type, "line");
+	assert.equal(graphic.children[0].style.lineCap, "round");
+	assert.equal(graphic.children[0].style.lineWidth, 8);
+	assert.equal(graphic.children[1].type, "text");
+	assert.equal(graphic.children[1].style.text, "Sprint Alpha");
+	assert.ok(graphic.children[1].style.y < 80, "label should sit above the line");
+});
+
+test("buildRoundedTaskLineGraphic falls back to a visible shared color when lineColor is missing", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const graphic = roadmap.buildRoundedTaskLineGraphic({
+		startX: 40,
+		endX: 180,
+		centerY: 80,
+		lineWidth: 8,
+		label: "Sprint Alpha",
+		labelColor: "#3366ff",
+	});
+
+	assert.equal(graphic.children[0].style.stroke, "#3366ff");
+	assert.equal(graphic.children[1].style.fill, "#3366ff");
+});
+
 test("prepareSeriesData uses widget status palette instead of per-stage color override", () => {
 	const { roadmap } = loadRoadmapScript();
 
@@ -229,6 +463,113 @@ test("prepareSeriesData uses widget status palette instead of per-stage color ov
 	assert.equal(bars[0].value[3], "Discovery");
 	assert.equal(bars[0].itemStyle.color, "#8f9aa8");
 	assert.equal(bars[0].itemStyle.borderColor, "#8f9aa8");
+});
+
+test("prepareSeriesData assigns different colors to different task types and keeps same type stable", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const { taskBars } = roadmap.prepareSeriesData(
+		{
+			projects: [
+				{ name: "PRJ-1", project_name: "Alpha" },
+				{ name: "PRJ-2", project_name: "Beta" },
+			],
+			stageBars: [],
+			gates: [],
+			taskEntities: [
+				{
+					name: "TASK-1",
+					project: "PRJ-1",
+					subject: "Sprint A",
+					status: "Working",
+					type: "Sprint",
+					entity_kind: "task_bar",
+					lane_key: "task_type:Sprint",
+					lane_label: "Sprint",
+					start_date: "2026-04-01",
+					end_date: "2026-04-10",
+				},
+				{
+					name: "TASK-2",
+					project: "PRJ-2",
+					subject: "Sprint B",
+					status: "Open",
+					type: "Sprint",
+					entity_kind: "task_bar",
+					lane_key: "task_type:Sprint",
+					lane_label: "Sprint",
+					start_date: "2026-04-03",
+					end_date: "2026-04-12",
+				},
+				{
+					name: "TASK-3",
+					project: "PRJ-1",
+					subject: "Phase A",
+					status: "Open",
+					type: "Phase",
+					entity_kind: "task_bar",
+					lane_key: "task_type:Phase",
+					lane_label: "Phase",
+					start_date: "2026-04-05",
+					end_date: "2026-04-15",
+				},
+			],
+		},
+		{ taskTypeOrder: ["Sprint", "Phase"] }
+	);
+
+	const sprintBars = taskBars.filter((task) => task.value[5] === "Sprint");
+	const phaseBars = taskBars.filter((task) => task.value[5] === "Phase");
+
+	assert.equal(sprintBars.length, 2);
+	assert.equal(phaseBars.length, 1);
+	assert.equal(sprintBars[0].itemStyle.color, sprintBars[1].itemStyle.color);
+	assert.equal(sprintBars[0].itemStyle.labelColor, sprintBars[0].itemStyle.color);
+	assert.notEqual(sprintBars[0].itemStyle.color, phaseBars[0].itemStyle.color);
+	assert.equal(sprintBars[0].value[6], sprintBars[0].itemStyle.color);
+	assert.equal(phaseBars[0].value[6], phaseBars[0].itemStyle.color);
+});
+
+test("prepareSeriesData falls back to lane metadata when task type is missing", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const { taskBars } = roadmap.prepareSeriesData(
+		{
+			projects: [{ name: "PRJ-1", project_name: "Alpha" }],
+			stageBars: [],
+			gates: [],
+			taskEntities: [
+				{
+					name: "TASK-1",
+					project: "PRJ-1",
+					subject: "Portal Discovery",
+					status: "Working",
+					type: "",
+					entity_kind: "task_bar",
+					lane_key: "task_type:Sprint",
+					lane_label: "Sprint",
+					start_date: "2026-04-01",
+					end_date: "2026-04-10",
+				},
+				{
+					name: "TASK-2",
+					project: "PRJ-1",
+					subject: "Portal Build",
+					status: "Open",
+					type: "",
+					entity_kind: "task_bar",
+					lane_key: "task_type:Phase",
+					lane_label: "Phase",
+					start_date: "2026-04-03",
+					end_date: "2026-04-12",
+				},
+			],
+		},
+		{ taskTypeOrder: ["Sprint", "Phase"] }
+	);
+
+	assert.equal(taskBars.length, 2);
+	assert.notEqual(taskBars[0].itemStyle.color, taskBars[1].itemStyle.color);
 });
 
 test("getStageItemStyle switches palette with theme exactly like widget", () => {
@@ -474,7 +815,22 @@ test("buildChartOptions makes y-axis project labels explicit and readable", () =
 	assert.equal(options.xAxis.axisLabel.formatter("2026-01-01"), "янв 2026");
 	assert.equal(options.xAxis.axisLabel.formatter("2026-01-15"), "15 янв");
 	assert.equal(options.series[0].clip, true);
-	assert.equal(options.series[1].symbolSize, 34.6);
+	const estimatedStageHeight = roadmap.estimateStageBarHeight(
+		["Very long project name", "Another long project name"],
+		roadmap.calculateChartHeight(["Very long project name", "Another long project name"]),
+		{ top: 44, bottom: 44 },
+		1
+	);
+	assert.equal(
+		options.series[1].symbolSize,
+		Math.min(
+			Math.max(
+				roadmap.ROADMAP_CHECKPOINT_PREFERRED_SIZE,
+				estimatedStageHeight * roadmap.ROADMAP_CHECKPOINT_MIN_STAGE_HEIGHT_RATIO
+			),
+			estimatedStageHeight * roadmap.ROADMAP_CHECKPOINT_MAX_STAGE_HEIGHT_RATIO
+		)
+	);
 	assert.equal(options.series[1].itemStyle.borderWidth, 2);
 });
 
@@ -503,9 +859,17 @@ test("buildChartOptions grows checkpoint diamonds to at least twenty percent of 
 		dataZoom: [],
 	});
 	const chartHeight = roadmap.calculateChartHeight(categories);
-	const estimatedStageHeight = ((chartHeight - 44 - 44) / categories.length) * 0.5;
+	const estimatedStageHeight = roadmap.estimateStageBarHeight(
+		categories,
+		chartHeight,
+		{ top: 44, bottom: 44 },
+		1
+	);
 
-	assert.equal(options.series[1].symbolSize, estimatedStageHeight * 0.2);
+	assert.equal(
+		options.series[1].symbolSize,
+		estimatedStageHeight * roadmap.ROADMAP_CHECKPOINT_MIN_STAGE_HEIGHT_RATIO
+	);
 });
 
 test("buildChartOptions caps checkpoint diamonds at two thirds of stage height", () => {
@@ -519,9 +883,17 @@ test("buildChartOptions caps checkpoint diamonds at two thirds of stage height",
 		dataZoom: [],
 	});
 	const chartHeight = roadmap.calculateChartHeight(categories);
-	const estimatedStageHeight = ((chartHeight - 44 - 44) / categories.length) * 0.5;
+	const estimatedStageHeight = roadmap.estimateStageBarHeight(
+		categories,
+		chartHeight,
+		{ top: 44, bottom: 44 },
+		1
+	);
 
-	assert.equal(options.series[1].symbolSize, (estimatedStageHeight * 2) / 3);
+	assert.equal(
+		options.series[1].symbolSize,
+		estimatedStageHeight * roadmap.ROADMAP_CHECKPOINT_MAX_STAGE_HEIGHT_RATIO
+	);
 });
 
 test("buildChartOptions can force month-year labels for wide horizontal ranges", () => {
@@ -648,6 +1020,175 @@ test("buildChartOptions adds intro animation config for stages and gates", () =>
 	assert.equal(options.series[1].animationDelay(0), 0);
 });
 
+test("buildChartOptions adds series for milestones and task lines", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const options = roadmap.buildChartOptions({
+		categories: ["Project A"],
+		bars: [{ value: [0, "2026-02-01", "2026-02-28"] }],
+		gates: [{ value: ["2026-01-15", 0] }],
+		milestones: [{ value: ["2026-01-20", 0.2, "Open"], docType: "Task", docName: "TASK-1" }],
+		taskBars: [{ value: [0.3, "2026-01-21", "2026-01-29", "Sprint A"], docType: "Task" }],
+		dataZoom: [],
+	});
+
+	assert.equal(options.series.length, 4);
+	assert.equal(options.series[2].type, "scatter");
+	assert.equal(options.series[2].symbol, "diamond");
+	assert.equal(options.series[3].type, "custom");
+});
+
+test("task custom renderItem uses api style fallback for visible line stroke", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const options = roadmap.buildChartOptions({
+		categories: [{ key: "PRJ-1::task_type:Sprint::0", projectLabel: "Alpha", laneLabel: "Sprint" }],
+		bars: [],
+		gates: [],
+		milestones: [],
+		taskBars: [{ value: [0, "2026-01-21", "2026-01-29", "Sprint A"], docType: "Task", name: "Sprint A" }],
+		dataZoom: [],
+	});
+
+	const graphic = options.series[3].renderItem(
+		{
+			data: { name: "Sprint A", itemStyle: {} },
+			dataIndex: 0,
+		},
+		{
+			value(index) {
+				return ["2026-01-21", "2026-01-29", "Sprint A"][index - 1] ?? 0;
+			},
+			coord([x, y]) {
+				return [x === "2026-01-21" ? 10 : 110, y === 0 ? 50 : y];
+			},
+			size() {
+				return [100, 24];
+			},
+			style() {
+				return { color: "#2255cc" };
+			},
+		}
+	);
+
+	assert.equal(graphic.children[0].style.stroke, "#2255cc");
+});
+
+test("task custom renderItem prefers task type color over generic api style color", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const options = roadmap.buildChartOptions({
+		categories: [{ key: "PRJ-1::task_type:Sprint::0", projectLabel: "Alpha", laneLabel: "Sprint" }],
+		bars: [],
+		gates: [],
+		milestones: [],
+		taskBars: [
+			{
+				value: [0, "2026-01-21", "2026-01-29", "Sprint A"],
+				docType: "Task",
+				name: "Sprint A",
+				itemStyle: {
+					color: "#7c3aed",
+					labelColor: "#7c3aed",
+				},
+			},
+		],
+		dataZoom: [],
+	});
+
+	const graphic = options.series[3].renderItem(
+		{
+			data: {
+				name: "Sprint A",
+				itemStyle: {
+					color: "#7c3aed",
+					labelColor: "#7c3aed",
+				},
+			},
+			dataIndex: 0,
+		},
+		{
+			value(index) {
+				return ["2026-01-21", "2026-01-29", "Sprint A"][index - 1] ?? 0;
+			},
+			coord([x, y]) {
+				return [x === "2026-01-21" ? 10 : 110, y === 0 ? 50 : y];
+			},
+			size() {
+				return [100, 24];
+			},
+			style() {
+				return { color: "#2563eb" };
+			},
+		}
+	);
+
+	assert.equal(graphic.children[0].style.stroke, "#7c3aed");
+	assert.equal(graphic.children[1].style.fill, "#7c3aed");
+});
+
+test("task custom renderItem can recover task type color from value payload when itemStyle is missing", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const options = roadmap.buildChartOptions({
+		categories: [{ key: "PRJ-1::task_type:Phase::0", projectLabel: "Alpha", laneLabel: "Phase" }],
+		bars: [],
+		gates: [],
+		milestones: [],
+		taskBars: [{ value: [0, "2026-01-21", "2026-01-29", "Phase A", "Open", "Phase", "#f59e0b"], docType: "Task", name: "Phase A" }],
+		dataZoom: [],
+	});
+
+	const graphic = options.series[3].renderItem(
+		{
+			data: {
+				name: "Phase A",
+				itemStyle: {},
+			},
+			dataIndex: 0,
+		},
+		{
+			value(index) {
+				return [0, "2026-01-21", "2026-01-29", "Phase A", "Open", "Phase", "#f59e0b"][index];
+			},
+			coord([x, y]) {
+				return [x === "2026-01-21" ? 10 : 110, y === 0 ? 50 : y];
+			},
+			size() {
+				return [100, 24];
+			},
+			style() {
+				return { color: "#2563eb" };
+			},
+		}
+	);
+
+	assert.equal(graphic.children[0].style.stroke, "#f59e0b");
+	assert.equal(graphic.children[1].style.fill, "#f59e0b");
+});
+
+test("buildChartOptions formats lane labels from explicit lane rows", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const options = roadmap.buildChartOptions({
+		categories: [
+			{ key: "PRJ-1::base", projectLabel: "Alpha", laneLabel: "Project", isProjectLabel: true },
+			{ key: "PRJ-1::milestone", projectLabel: "Alpha", laneLabel: "Milestones", isProjectLabel: false },
+		],
+		bars: [],
+		gates: [],
+		milestones: [],
+		taskBars: [],
+		dataZoom: [],
+	});
+
+	assert.equal(options.yAxis.data.length, 2);
+	assert.equal(options.yAxis.data[0], "PRJ-1::base");
+	assert.equal(options.yAxis.data[1], "PRJ-1::milestone");
+	assert.equal(options.yAxis.axisLabel.formatter("PRJ-1::base"), "Alpha");
+	assert.equal(options.yAxis.axisLabel.formatter("PRJ-1::milestone"), "  Milestones");
+});
+
 test("getFullHorizontalViewport spans full visible timeline from bars and gates", () => {
 	const { roadmap } = loadRoadmapScript();
 
@@ -663,6 +1204,22 @@ test("getFullHorizontalViewport spans full visible timeline from bars and gates"
 
 	assert.equal(viewport.startValue, "2026-01-15");
 	assert.equal(viewport.endValue, "2026-03-20");
+});
+
+test("getFullHorizontalViewport includes milestones and task bars", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const viewport = roadmap.getFullHorizontalViewport({
+		bars: [],
+		gates: [],
+		milestones: [{ value: ["2026-01-08", 0.1] }],
+		taskBars: [{ value: [0.2, "2026-01-10", "2026-02-14"] }],
+		fromDate: "2026-01-01",
+		toDate: "2026-03-01",
+	});
+
+	assert.equal(viewport.startValue, "2026-01-08");
+	assert.equal(viewport.endValue, "2026-02-14");
 });
 
 test("getFullHorizontalViewport falls back to filter range when dataset is empty", () => {
@@ -977,5 +1534,30 @@ test("attachChartClickNavigation opens project form from y-axis label click", ()
 	});
 
 	chart.onCalls[0].handler({ componentType: "yAxis", value: "Alpha" });
+	assert.deepEqual(state.setRouteCalls, [["Form", "Project", "PRJ-1"]]);
+});
+
+test("attachChartClickNavigation only opens project from base lane click", () => {
+	const { roadmap, state } = loadRoadmapScript();
+
+	const chart = {
+		offCalls: [],
+		onCalls: [],
+		off(event, handler) {
+			this.offCalls.push({ event, handler });
+		},
+		on(event, handler) {
+			this.onCalls.push({ event, handler });
+		},
+	};
+
+	roadmap.attachChartClickNavigation(chart, {
+		"PRJ-1::base": { docType: "Project", docName: "PRJ-1" },
+	});
+
+	chart.onCalls[0].handler({ componentType: "yAxis", value: "PRJ-1::milestone" });
+	assert.equal(state.setRouteCalls.length, 0);
+
+	chart.onCalls[0].handler({ componentType: "yAxis", value: "PRJ-1::base" });
 	assert.deepEqual(state.setRouteCalls, [["Form", "Project", "PRJ-1"]]);
 });

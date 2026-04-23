@@ -68,6 +68,21 @@ frappe.query_reports["Project Stage Gate Roadmap"] = {
 			fieldtype: "Check",
 			default: 1,
 		},
+		{
+			fieldname: "show_milestones",
+			label: __("Show Milestones"),
+			fieldtype: "Check",
+			default: 0,
+		},
+		{
+			fieldname: "task_types",
+			label: __("Task Types"),
+			fieldtype: "MultiSelectList",
+			options: "Task Type",
+			get_data(txt) {
+				return frappe.db.get_link_options("Task Type", txt);
+			},
+		},
 	],
 
 	onload(report) {
@@ -165,8 +180,15 @@ dinext_project_stage_gate.roadmap.ROADMAP_STAGE_INTRO_ANIMATION_MAX_SPREAD_MS = 
 dinext_project_stage_gate.roadmap.ROADMAP_GATE_INTRO_ANIMATION_MAX_SPREAD_MS = 180;
 dinext_project_stage_gate.roadmap.ROADMAP_INTRO_ANIMATION_EASING = "cubicOut";
 dinext_project_stage_gate.roadmap.ROADMAP_CHECKPOINT_PREFERRED_SIZE = 22;
-dinext_project_stage_gate.roadmap.ROADMAP_CHECKPOINT_MIN_STAGE_HEIGHT_RATIO = 0.2;
+dinext_project_stage_gate.roadmap.ROADMAP_CHECKPOINT_MIN_STAGE_HEIGHT_RATIO = 0.3;
 dinext_project_stage_gate.roadmap.ROADMAP_CHECKPOINT_MAX_STAGE_HEIGHT_RATIO = 2 / 3;
+dinext_project_stage_gate.roadmap.ROADMAP_ROW_USABLE_HEIGHT_RATIO = 0.8;
+dinext_project_stage_gate.roadmap.ROADMAP_SLOT_FILL_RATIO = 0.625;
+
+dinext_project_stage_gate.roadmap.taskTypePalette = {
+	light: ["#2563eb", "#7c3aed", "#0f766e", "#dc6803", "#c2410c", "#db2777", "#4f46e5"],
+	dark: ["#60a5fa", "#a78bfa", "#2dd4bf", "#f59e0b", "#fb923c", "#f472b6", "#818cf8"],
+};
 
 dinext_project_stage_gate.roadmap.formatXAxisLabel = function (value, options = {}) {
 	const time = dinext_project_stage_gate.roadmap._parseTimeMs(value);
@@ -345,6 +367,37 @@ dinext_project_stage_gate.roadmap.getCheckpointItemStyle = function (status) {
 	};
 };
 
+dinext_project_stage_gate.roadmap.getTaskTypeColorIndex = function (taskType) {
+	const text = String(taskType || "").trim();
+	if (!text) {
+		return 0;
+	}
+	return Array.from(text).reduce((sum, char) => sum + char.charCodeAt(0), 0);
+};
+
+dinext_project_stage_gate.roadmap.getTaskTypeItemStyle = function (taskType) {
+	const isDark = dinext_project_stage_gate.roadmap.getEChartsThemeName() === "dark";
+	const palette = isDark
+		? dinext_project_stage_gate.roadmap.taskTypePalette.dark
+		: dinext_project_stage_gate.roadmap.taskTypePalette.light;
+	const index = dinext_project_stage_gate.roadmap.getTaskTypeColorIndex(taskType) % palette.length;
+	const lineColor = palette[index];
+	return {
+		lineColor,
+		labelColor: lineColor,
+		shadowColor: dinext_project_stage_gate.roadmap.hexToRgba(lineColor, isDark ? 0.32 : 0.2),
+	};
+};
+
+dinext_project_stage_gate.roadmap.getMilestoneItemStyle = function () {
+	const lineColor = "#d13438";
+	return {
+		lineColor,
+		labelColor: lineColor,
+		borderColor: dinext_project_stage_gate.roadmap.getThemeVariableColor("--card-bg", "#ffffff"),
+	};
+};
+
 dinext_project_stage_gate.roadmap.wrapAxisLabel = function (label, maxLineLength = 24) {
 	const text = String(label || "").trim();
 	if (!text || text.length <= maxLineLength) {
@@ -401,21 +454,48 @@ dinext_project_stage_gate.roadmap.formatTooltip = function (params) {
 		return [params?.name || "", value[2] || "", value[0] || ""].filter(Boolean).join("<br>");
 	}
 
+	if (docType === "Task") {
+		if (params?.data?.entityKind === "milestone") {
+			return [params?.name || "", value[2] || "", value[0] || ""].filter(Boolean).join("<br>");
+		}
+		return [
+			params?.data?.name || params?.name || value[3] || "",
+			value[4] || "",
+			dinext_project_stage_gate.roadmap.formatDateRange(value[1], value[2]),
+			value[5] || "",
+		]
+			.filter(Boolean)
+			.filter((entry, index, parts) => parts.indexOf(entry) === index)
+			.join("<br>");
+	}
+
 	return [params?.name || "", value[3] || value[2] || "", value[4] || ""]
 		.filter(Boolean)
 		.filter((entry, index, parts) => parts.indexOf(entry) === index)
 		.join("<br>");
 };
 
-dinext_project_stage_gate.roadmap.calculateChartHeight = function (categories) {
+dinext_project_stage_gate.roadmap.calculateChartHeight = function (categories, rowSpanUnits = 1) {
 	const rowCount = Array.isArray(categories) ? categories.length : Number(categories) || 0;
-	const dynamicHeight = rowCount <= 10 ? 420 : 420 + (rowCount - 10) * 25;
+	const safeRowSpanUnits = Math.max(1, Number(rowSpanUnits) || 1);
+	const effectiveRows = rowCount * safeRowSpanUnits;
+	const dynamicHeight = effectiveRows <= 10 ? 420 : 420 + (effectiveRows - 10) * 25;
 	const viewportHeight = Number(window?.innerHeight) || 0;
 	const minHeight = viewportHeight > 0 ? Math.round(viewportHeight * 0.65) : 420;
 	return Math.max(dynamicHeight, minHeight);
 };
 
-dinext_project_stage_gate.roadmap.estimateStageBarHeight = function (categories, chartHeight, grid = {}) {
+dinext_project_stage_gate.roadmap.getRowSlotHeightRatio = function (rowSpanUnits = 1) {
+	const safeRowSpanUnits = Math.max(1, Number(rowSpanUnits) || 1);
+	return dinext_project_stage_gate.roadmap.ROADMAP_ROW_USABLE_HEIGHT_RATIO / safeRowSpanUnits;
+};
+
+dinext_project_stage_gate.roadmap.estimateStageBarHeight = function (
+	categories,
+	chartHeight,
+	grid = {},
+	rowSpanUnits = 1
+) {
 	const rowCount = Array.isArray(categories) ? categories.length : Number(categories) || 0;
 	if (rowCount <= 0) {
 		return 0;
@@ -429,7 +509,11 @@ dinext_project_stage_gate.roadmap.estimateStageBarHeight = function (categories,
 		return 0;
 	}
 
-	return (plotHeight / rowCount) * 0.5;
+	return (
+		(plotHeight / rowCount) *
+		dinext_project_stage_gate.roadmap.getRowSlotHeightRatio(rowSpanUnits) *
+		dinext_project_stage_gate.roadmap.ROADMAP_SLOT_FILL_RATIO
+	);
 };
 
 dinext_project_stage_gate.roadmap.getCheckpointDiamondSize = function (
@@ -451,12 +535,12 @@ dinext_project_stage_gate.roadmap.getCheckpointDiamondSize = function (
 	return Math.min(Math.max(preferredSize, minSize), maxSize);
 };
 
-dinext_project_stage_gate.roadmap.applyChartHeight = function (dom, categories) {
+dinext_project_stage_gate.roadmap.applyChartHeight = function (dom, categories, rowSpanUnits = 1) {
 	if (!dom?.style) {
 		return 0;
 	}
 
-	const height = dinext_project_stage_gate.roadmap.calculateChartHeight(categories);
+	const height = dinext_project_stage_gate.roadmap.calculateChartHeight(categories, rowSpanUnits);
 	dom.style.height = `${height}px`;
 	return height;
 };
@@ -530,6 +614,22 @@ dinext_project_stage_gate.roadmap._formatDateForChart = function (ms) {
 	const m = String(d.getUTCMonth() + 1).padStart(2, "0");
 	const day = String(d.getUTCDate()).padStart(2, "0");
 	return `${y}-${m}-${day}`;
+};
+
+dinext_project_stage_gate.roadmap._coerceToArray = function (value) {
+	if (value == null || value === "") {
+		return [];
+	}
+	if (Array.isArray(value)) {
+		return value.filter(Boolean);
+	}
+	if (typeof value === "string") {
+		return value
+			.split(",")
+			.map((entry) => entry.trim())
+			.filter(Boolean);
+	}
+	return [value];
 };
 
 dinext_project_stage_gate.roadmap._addUtcMonths = function (value, months) {
@@ -623,6 +723,8 @@ dinext_project_stage_gate.roadmap.getDefaultHorizontalViewport = function ({
 dinext_project_stage_gate.roadmap.getFullHorizontalViewport = function ({
 	bars,
 	gates,
+	taskBars,
+	milestones,
 	fromDate,
 	toDate,
 } = {}) {
@@ -640,6 +742,23 @@ dinext_project_stage_gate.roadmap.getFullHorizontalViewport = function ({
 
 	(gates || []).forEach((gate) => {
 		const time = dinext_project_stage_gate.roadmap._parseTimeMs(gate?.value?.[0]);
+		if (Number.isFinite(time)) {
+			times.push(time);
+		}
+	});
+
+	(taskBars || []).forEach((taskBar) => {
+		const value = taskBar?.value || [];
+		[value[1], value[2]].forEach((point) => {
+			const time = dinext_project_stage_gate.roadmap._parseTimeMs(point);
+			if (Number.isFinite(time)) {
+				times.push(time);
+			}
+		});
+	});
+
+	(milestones || []).forEach((milestone) => {
+		const time = dinext_project_stage_gate.roadmap._parseTimeMs(milestone?.value?.[0]);
 		if (Number.isFinite(time)) {
 			times.push(time);
 		}
@@ -674,12 +793,16 @@ dinext_project_stage_gate.roadmap.buildShowAllDataZoomConfig = function ({
 	categories,
 	bars,
 	gates,
+	taskBars,
+	milestones,
 	fromDate,
 	toDate,
 } = {}) {
 	const horizontal = dinext_project_stage_gate.roadmap.getFullHorizontalViewport({
 		bars,
 		gates,
+		taskBars,
+		milestones,
 		fromDate,
 		toDate,
 	});
@@ -765,6 +888,12 @@ dinext_project_stage_gate.roadmap.getRoadmapIntroAnimationTimeMs = function (ent
 	if (kind === "gate") {
 		return dinext_project_stage_gate.roadmap._parseTimeMs(entry?.value?.[0]);
 	}
+	if (kind === "taskBar") {
+		return dinext_project_stage_gate.roadmap._parseTimeMs(entry?.value?.[1]);
+	}
+	if (kind === "milestone") {
+		return dinext_project_stage_gate.roadmap._parseTimeMs(entry?.value?.[0]);
+	}
 	return NaN;
 };
 
@@ -805,9 +934,13 @@ dinext_project_stage_gate.roadmap.buildRoadmapIntroAnimationDelaySeries = functi
 dinext_project_stage_gate.roadmap.buildSequentialIntroAnimationDelays = function ({
 	bars,
 	gates,
+	taskBars,
+	milestones,
 } = {}) {
 	const safeBars = Array.isArray(bars) ? bars : [];
 	const safeGates = Array.isArray(gates) ? gates : [];
+	const safeTaskBars = Array.isArray(taskBars) ? taskBars : [];
+	const safeMilestones = Array.isArray(milestones) ? milestones : [];
 	const barDelays = dinext_project_stage_gate.roadmap.buildRoadmapIntroAnimationDelaySeries(
 		safeBars.map((bar) => ({
 			timeMs: dinext_project_stage_gate.roadmap.getRoadmapIntroAnimationTimeMs(bar, "bar"),
@@ -820,17 +953,35 @@ dinext_project_stage_gate.roadmap.buildSequentialIntroAnimationDelays = function
 		})),
 		dinext_project_stage_gate.roadmap.ROADMAP_GATE_INTRO_ANIMATION_MAX_SPREAD_MS
 	);
+	const taskBarDelays = dinext_project_stage_gate.roadmap.buildRoadmapIntroAnimationDelaySeries(
+		safeTaskBars.map((taskBar) => ({
+			timeMs: dinext_project_stage_gate.roadmap.getRoadmapIntroAnimationTimeMs(taskBar, "taskBar"),
+		})),
+		dinext_project_stage_gate.roadmap.ROADMAP_STAGE_INTRO_ANIMATION_MAX_SPREAD_MS
+	);
+	const milestoneDelays = dinext_project_stage_gate.roadmap.buildRoadmapIntroAnimationDelaySeries(
+		safeMilestones.map((milestone) => ({
+			timeMs: dinext_project_stage_gate.roadmap.getRoadmapIntroAnimationTimeMs(
+				milestone,
+				"milestone"
+			),
+		})),
+		dinext_project_stage_gate.roadmap.ROADMAP_GATE_INTRO_ANIMATION_MAX_SPREAD_MS
+	);
 
-	return { barDelays, gateDelays };
+	return { barDelays, gateDelays, taskBarDelays, milestoneDelays };
 };
 
 dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 	categories,
 	bars,
 	gates,
+	taskBars,
+	milestones,
 	dataZoom,
 	onShowAllData,
 	monthOnlyXAxisLabels = false,
+	rowSpanUnits = 1,
 } = {}) {
 	const gridLineColor = dinext_project_stage_gate.roadmap.getThemeVariableColor(
 		"--border-color",
@@ -843,11 +994,33 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 	const introAnimationDelays = dinext_project_stage_gate.roadmap.buildSequentialIntroAnimationDelays({
 		bars,
 		gates,
+		taskBars,
+		milestones,
 	});
 	const introAnimationDuration =
 		dinext_project_stage_gate.roadmap.ROADMAP_INTRO_ANIMATION_DURATION_MS;
 	const introAnimationEasing = dinext_project_stage_gate.roadmap.ROADMAP_INTRO_ANIMATION_EASING;
 	const safeCategories = categories || [];
+	const categoryEntries = safeCategories.map((category) =>
+		typeof category === "string"
+			? { key: category, projectLabel: category, laneLabel: "", isProjectLabel: true }
+			: {
+					key: category?.key,
+					projectLabel: category?.projectLabel || category?.key || "",
+					laneLabel: category?.laneLabel || "",
+					isProjectLabel: category?.isProjectLabel !== false,
+				}
+	);
+	const categoryLabelByKey = Object.fromEntries(
+		categoryEntries.map((category) => [
+			category.key,
+			category.isProjectLabel
+				? dinext_project_stage_gate.roadmap.wrapAxisLabel(category.projectLabel)
+				: category.laneLabel
+					? `  ${category.laneLabel}`
+					: "",
+		])
+	);
 	const grid = {
 		containLabel: true,
 		top: 44,
@@ -855,11 +1028,15 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 		bottom: 44,
 		left: 12,
 	};
-	const chartHeight = dinext_project_stage_gate.roadmap.calculateChartHeight(safeCategories);
+	const chartHeight = dinext_project_stage_gate.roadmap.calculateChartHeight(
+		safeCategories,
+		rowSpanUnits
+	);
 	const estimatedStageBarHeight = dinext_project_stage_gate.roadmap.estimateStageBarHeight(
 		safeCategories,
 		chartHeight,
-		grid
+		grid,
+		rowSpanUnits
 	);
 	const checkpointSymbolSize =
 		dinext_project_stage_gate.roadmap.getCheckpointDiamondSize(estimatedStageBarHeight);
@@ -932,7 +1109,7 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 		yAxis: {
 			type: "category",
 			triggerEvent: true,
-			data: safeCategories,
+			data: categoryEntries.map((category) => category.key),
 			splitLine: {
 				show: true,
 				lineStyle: {
@@ -950,7 +1127,7 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 				margin: 12,
 				align: "right",
 				formatter(value) {
-					return dinext_project_stage_gate.roadmap.wrapAxisLabel(value);
+					return categoryLabelByKey[value] ?? dinext_project_stage_gate.roadmap.wrapAxisLabel(value);
 				},
 			},
 		},
@@ -970,10 +1147,16 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 					return 0;
 				},
 				renderItem(params, api) {
-					const categoryIndex = api.value(0);
-					const start = api.coord([api.value(1), categoryIndex]);
-					const end = api.coord([api.value(2), categoryIndex]);
-					const height = api.size([0, 1])[1] * 0.5;
+					const rowPosition = api.value(0);
+					const start = api.coord([api.value(1), rowPosition]);
+					const end = api.coord([api.value(2), rowPosition]);
+					const slotRatio = dinext_project_stage_gate.roadmap.getRowSlotHeightRatio(
+						params.data?.rowSpanUnits || rowSpanUnits
+					);
+					const height =
+						api.size([0, 1])[1] *
+						slotRatio *
+						dinext_project_stage_gate.roadmap.ROADMAP_SLOT_FILL_RATIO;
 					const fromApi = api.style();
 					const itemStyle = params.data?.itemStyle || {};
 					const fill = fromApi.fill || fromApi.color || itemStyle.color || itemStyle.fill;
@@ -1025,6 +1208,103 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 					y: 1,
 				},
 				data: gates || [],
+			},
+			{
+				type: "scatter",
+				symbol: "diamond",
+				symbolSize(value, params) {
+					return params?.data?.symbolSize || 14;
+				},
+				animationDuration: introAnimationDuration,
+				animationDurationUpdate: 0,
+				animationEasing: introAnimationEasing,
+				animationEasingUpdate: "linear",
+				animationDelay(dataIndex) {
+					return introAnimationDelays.milestoneDelays[dataIndex] ?? 0;
+				},
+				animationDelayUpdate() {
+					return 0;
+				},
+				label: {
+					show: true,
+					position: "top",
+					distance: 6,
+					fontSize: 11,
+					fontWeight: 600,
+					formatter(params) {
+						return params?.data?.name || params?.name || "";
+					},
+					color(params) {
+						return params?.data?.labelColor || "#d13438";
+					},
+				},
+				itemStyle: {
+					color: dinext_project_stage_gate.roadmap.getMilestoneItemStyle().lineColor,
+				},
+				encode: {
+					x: 0,
+					y: 1,
+				},
+				data: milestones || [],
+			},
+			{
+				type: "custom",
+				clip: true,
+				animationDuration: introAnimationDuration,
+				animationDurationUpdate: 0,
+				animationEasing: introAnimationEasing,
+				animationEasingUpdate: "linear",
+				animationDelay(dataIndex) {
+					return introAnimationDelays.taskBarDelays[dataIndex] ?? 0;
+				},
+				animationDelayUpdate() {
+					return 0;
+				},
+				renderItem(params, api) {
+					const rowPosition = api.value(0);
+					const start = api.coord([api.value(1), rowPosition]);
+					const end = api.coord([api.value(2), rowPosition]);
+					const slotRatio = dinext_project_stage_gate.roadmap.getRowSlotHeightRatio(
+						params.data?.rowSpanUnits || rowSpanUnits
+					);
+					const slotHeight = api.size([0, 1])[1] * slotRatio;
+					const lineWidth = Math.max(6, Math.min(12, slotHeight * 0.36));
+					const fromApi = api.style();
+					const itemStyle = params.data?.itemStyle || {};
+					const payloadColor = api.value(6);
+					const lineColor =
+						itemStyle.color ||
+						itemStyle.lineColor ||
+						itemStyle.labelColor ||
+						payloadColor ||
+						fromApi.stroke ||
+						fromApi.borderColor ||
+						fromApi.color;
+					const labelColor = itemStyle.labelColor || payloadColor || lineColor;
+					const shadowColor =
+						itemStyle.shadowColor ||
+						(lineColor
+							? dinext_project_stage_gate.roadmap.hexToRgba(lineColor, 0.18)
+							: undefined);
+					return dinext_project_stage_gate.roadmap.buildRoundedTaskLineGraphic({
+						startX: start[0],
+						endX: end[0],
+						centerY: start[1],
+						lineWidth,
+						label: params.data?.name || api.value(3),
+						lineColor,
+						labelColor,
+						shadowColor,
+						animationDelay: introAnimationDelays.taskBarDelays[params.dataIndex] ?? 0,
+						animationDuration: introAnimationDuration,
+						animationEasing: introAnimationEasing,
+					});
+				},
+				encode: {
+					x: [1, 2],
+					y: 0,
+				},
+				data: taskBars || [],
 			},
 		],
 	};
@@ -1094,6 +1374,166 @@ dinext_project_stage_gate.roadmap.normalizeIdenticalStageRanges = function (bars
 			bar.value[2] = dinext_project_stage_gate.roadmap._formatDateForChart(e);
 		});
 	});
+};
+
+dinext_project_stage_gate.roadmap.assignTaskLaneLevels = function (entities) {
+	const safeEntities = Array.isArray(entities) ? [...entities] : [];
+	const laneEndTimes = [];
+	return safeEntities
+		.sort((left, right) => {
+			const leftStart = dinext_project_stage_gate.roadmap._parseTimeMs(left.startDate);
+			const rightStart = dinext_project_stage_gate.roadmap._parseTimeMs(right.startDate);
+			if (Number.isFinite(leftStart) && Number.isFinite(rightStart) && leftStart !== rightStart) {
+				return leftStart - rightStart;
+			}
+			return String(left.name || "").localeCompare(String(right.name || ""));
+		})
+		.map((entity) => {
+			const startMs = dinext_project_stage_gate.roadmap._parseTimeMs(entity.startDate);
+			const endMs = dinext_project_stage_gate.roadmap._parseTimeMs(entity.endDate || entity.startDate);
+			let stackLevel = 0;
+			while (
+				stackLevel < laneEndTimes.length &&
+				Number.isFinite(startMs) &&
+				Number.isFinite(laneEndTimes[stackLevel]) &&
+				startMs <= laneEndTimes[stackLevel]
+			) {
+				stackLevel += 1;
+			}
+			laneEndTimes[stackLevel] = Number.isFinite(endMs) ? endMs : startMs;
+			return {
+				...entity,
+				stackLevel,
+			};
+		});
+};
+
+dinext_project_stage_gate.roadmap.getRoadmapRowOffset = function (slotIndex, totalSlots) {
+	const safeTotalSlots = Math.max(1, Number(totalSlots) || 1);
+	const usableHeight = dinext_project_stage_gate.roadmap.ROADMAP_ROW_USABLE_HEIGHT_RATIO;
+	const slotSize = usableHeight / safeTotalSlots;
+	return -usableHeight / 2 + slotSize * (slotIndex + 0.5);
+};
+
+dinext_project_stage_gate.roadmap.getOrderedTaskLaneKeys = function (laneMap, taskTypeOrder = []) {
+	const safeTaskTypeOrder = dinext_project_stage_gate.roadmap._coerceToArray(taskTypeOrder);
+	return Object.keys(laneMap || {}).sort((left, right) => {
+		if (left === "milestone") {
+			return -1;
+		}
+		if (right === "milestone") {
+			return 1;
+		}
+		const leftType = left.replace(/^task_type:/, "");
+		const rightType = right.replace(/^task_type:/, "");
+		const leftIndex = safeTaskTypeOrder.indexOf(leftType);
+		const rightIndex = safeTaskTypeOrder.indexOf(rightType);
+		if (leftIndex !== -1 || rightIndex !== -1) {
+			if (leftIndex === -1) {
+				return 1;
+			}
+			if (rightIndex === -1) {
+				return -1;
+			}
+			return leftIndex - rightIndex;
+		}
+		return leftType.localeCompare(rightType);
+	});
+};
+
+dinext_project_stage_gate.roadmap.buildProjectLaneRows = function (
+	projects,
+	taskEntities,
+	taskTypeOrder = []
+) {
+	const safeProjects = Array.isArray(projects) ? projects : [];
+	const safeTaskEntities = Array.isArray(taskEntities) ? taskEntities : [];
+	const groupedByProject = {};
+	const categories = [];
+	const laneIndexByKey = {};
+	const projectDocsByLabel = {};
+	const rowLayoutsByProject = {};
+
+	safeTaskEntities.forEach((entity) => {
+		if (!entity?.project) {
+			return;
+		}
+		const laneKey = entity.lane_key || (entity.entity_kind === "milestone" ? "milestone" : "task");
+		(groupedByProject[entity.project] ??= {});
+		(groupedByProject[entity.project][laneKey] ??= []).push(entity);
+	});
+
+	safeProjects.forEach((project) => {
+		const projectName = project?.name;
+		const projectLabel = project?.project_name || projectName;
+		const baseKey = `${projectName}::base`;
+		const baseCategory = {
+			key: baseKey,
+			projectName,
+			projectLabel,
+			laneKey: "base",
+			laneLabel: __("Project"),
+			isProjectLabel: true,
+		};
+		laneIndexByKey[baseKey] = categories.length;
+		categories.push(baseCategory);
+		projectDocsByLabel[baseKey] = { docType: "Project", docName: projectName };
+		projectDocsByLabel[projectLabel] = { docType: "Project", docName: projectName };
+
+		const lanes = groupedByProject[projectName] || {};
+		const orderedLaneKeys = dinext_project_stage_gate.roadmap.getOrderedTaskLaneKeys(
+			lanes,
+			taskTypeOrder
+		);
+		const laneRowIndexByKey = { base: laneIndexByKey[baseKey] };
+
+		orderedLaneKeys.forEach((laneKey) => {
+			const positioned = dinext_project_stage_gate.roadmap.assignTaskLaneLevels(
+				lanes[laneKey].map((entity) => ({
+					...entity,
+					startDate:
+						entity.entity_kind === "milestone"
+							? entity.point_date
+							: entity.start_date || entity.point_date,
+					endDate:
+						entity.entity_kind === "milestone"
+							? entity.point_date
+							: entity.end_date || entity.start_date || entity.point_date,
+				}))
+			);
+			const laneLabel =
+				laneKey === "milestone" ? __("Milestones") : lanes[laneKey]?.[0]?.lane_label || laneKey;
+			const stackCount = Math.max(
+				1,
+				positioned.reduce((maxLevel, entity) => Math.max(maxLevel, entity.stackLevel + 1), 1)
+			);
+			const stackKeys = [];
+			for (let stackLevel = 0; stackLevel < stackCount; stackLevel += 1) {
+				const categoryKey =
+					laneKey === "milestone"
+						? `${projectName}::milestone`
+						: `${projectName}::${laneKey}::${stackLevel}`;
+				laneIndexByKey[categoryKey] = categories.length;
+				stackKeys.push(categoryKey);
+				categories.push({
+					key: categoryKey,
+					projectName,
+					projectLabel,
+					laneKey,
+					laneLabel: stackLevel === 0 ? laneLabel : "",
+					isProjectLabel: false,
+				});
+			}
+			laneRowIndexByKey[laneKey] = stackKeys;
+		});
+
+		rowLayoutsByProject[projectName] = {
+			baseKey,
+			laneRowIndexByKey,
+		};
+	});
+
+	return { categories, laneIndexByKey, rowLayoutsByProject, projectDocsByLabel };
 };
 
 dinext_project_stage_gate.roadmap.ensure_theme_observer = function (report) {
@@ -1181,7 +1621,8 @@ dinext_project_stage_gate.roadmap.resizeCurrentChart = function () {
 
 	dinext_project_stage_gate.roadmap.applyChartHeight(
 		dom,
-		dom._dinextRoadmapCategoryCount || 0
+		dom._dinextRoadmapCategoryCount || 0,
+		dom._dinextRoadmapRowSpanUnits || 1
 	);
 	const chart =
 		(typeof echarts !== "undefined" &&
@@ -1224,19 +1665,16 @@ dinext_project_stage_gate.roadmap.ensureResizeHandler = function (report) {
  * @returns {{ categories: string[], bars: object[], gates: object[], projectDocsByLabel: Record<string, { docType: string, docName: string }> }}
  */
 dinext_project_stage_gate.roadmap.prepareSeriesData = function (payload, options) {
-	const safe = payload || { projects: [], stageBars: [], gates: [] };
-	const projectIndex = {};
-	const projectDocsByLabel = {};
-	const categories = (safe.projects || []).map((project) => {
-		const label = project.project_name || project.name;
-		projectIndex[project.name] = label;
-		projectDocsByLabel[label] = {
-			docType: "Project",
-			docName: project.name,
-		};
-		return label;
-	});
-	const categoryIndexByLabel = Object.fromEntries(categories.map((label, index) => [label, index]));
+	const safe = payload || { projects: [], stageBars: [], gates: [], taskEntities: [] };
+	const laneLayout = dinext_project_stage_gate.roadmap.buildProjectLaneRows(
+		safe.projects || [],
+		safe.taskEntities || [],
+		options?.taskTypeOrder
+	);
+	const categories = laneLayout.categories;
+	const projectDocsByLabel = laneLayout.projectDocsByLabel;
+	const getBaseLaneIndex = (projectName) =>
+		laneLayout.rowLayoutsByProject[projectName]?.laneRowIndexByKey?.base ?? 0;
 
 	const bars = (safe.stageBars || []).map((stage) => {
 		const colors = dinext_project_stage_gate.roadmap.getStageItemStyle(stage);
@@ -1247,7 +1685,7 @@ dinext_project_stage_gate.roadmap.prepareSeriesData = function (payload, options
 			docType: "Project Stage Instance",
 			docName: stage.name,
 			value: [
-				categoryIndexByLabel[projectIndex[stage.project]] ?? 0,
+				getBaseLaneIndex(stage.project),
 				range.start,
 				range.end,
 				stageLabel,
@@ -1281,7 +1719,7 @@ dinext_project_stage_gate.roadmap.prepareSeriesData = function (payload, options
 			docName: gate.name,
 			value: [
 				dinext_project_stage_gate.roadmap.getDisplayDate(gate.approval_date, gate.gate_due_date),
-				categoryIndexByLabel[projectIndex[gate.project]] ?? 0,
+				getBaseLaneIndex(gate.project),
 				dinext_project_stage_gate.roadmap.translateStatus(gate.status),
 			],
 			itemStyle: {
@@ -1289,7 +1727,82 @@ dinext_project_stage_gate.roadmap.prepareSeriesData = function (payload, options
 			},
 		}));
 
-	return { categories, bars, gates, projectDocsByLabel };
+	const milestoneStyle = dinext_project_stage_gate.roadmap.getMilestoneItemStyle();
+	const milestones = (safe.taskEntities || [])
+		.filter((entity) => entity?.entity_kind === "milestone")
+		.map((entity) => {
+			const rowIndex =
+				laneLayout.laneIndexByKey[`${entity.project}::milestone`] ?? getBaseLaneIndex(entity.project);
+			return {
+				name: entity.subject || entity.name,
+				docType: "Task",
+				docName: entity.name,
+				entityKind: "milestone",
+				labelColor: milestoneStyle.labelColor,
+				symbolSize: 14,
+				value: [entity.point_date, rowIndex, dinext_project_stage_gate.roadmap.translateStatus(entity.status)],
+				itemStyle: {
+					borderColor: milestoneStyle.borderColor,
+				},
+			};
+		});
+
+	const taskBars = [];
+	Object.entries(laneLayout.rowLayoutsByProject).forEach(([projectName, projectLayout]) => {
+		const laneMap = {};
+		(safe.taskEntities || [])
+			.filter((entity) => entity?.project === projectName && entity?.entity_kind === "task_bar")
+			.forEach((entity) => {
+				(laneMap[entity.lane_key] ??= []).push(entity);
+			});
+
+		Object.entries(laneMap).forEach(([laneKey, entities]) => {
+			const positioned = dinext_project_stage_gate.roadmap.assignTaskLaneLevels(
+				entities.map((entity) => ({
+					...entity,
+					startDate: entity.start_date || entity.point_date,
+					endDate: entity.end_date || entity.start_date || entity.point_date,
+				}))
+			);
+			positioned.forEach((entity) => {
+				const laneKeys = projectLayout.laneRowIndexByKey[laneKey] || [];
+				const rowIndex = laneLayout.laneIndexByKey[laneKeys[entity.stackLevel]] ?? getBaseLaneIndex(projectName);
+				const taskColorKey =
+					entity.type || entity.lane_label || laneKey.replace(/^task_type:/, "") || laneKey;
+				const taskStyle = dinext_project_stage_gate.roadmap.getTaskTypeItemStyle(taskColorKey);
+				taskBars.push({
+					name: entity.subject || entity.name,
+					docType: "Task",
+					docName: entity.name,
+					entityKind: "task_bar",
+					value: [
+						rowIndex,
+						entity.start_date,
+						entity.end_date || entity.start_date,
+						entity.subject || entity.name,
+						dinext_project_stage_gate.roadmap.translateStatus(entity.status),
+						entity.lane_label || entity.type || __("Task"),
+						taskStyle.lineColor,
+					],
+					itemStyle: {
+						color: taskStyle.lineColor,
+						labelColor: taskStyle.labelColor,
+						shadowColor: taskStyle.shadowColor,
+					},
+				});
+			});
+		});
+	});
+
+	return {
+		categories,
+		bars,
+		gates,
+		taskBars,
+		milestones,
+		rowSpanUnits: 1,
+		projectDocsByLabel,
+	};
 };
 
 /**
@@ -1482,6 +1995,82 @@ dinext_project_stage_gate.roadmap.buildStageBarGraphic = function ({
 	};
 };
 
+dinext_project_stage_gate.roadmap.buildRoundedTaskLineGraphic = function ({
+	startX,
+	endX,
+	centerY,
+	lineWidth,
+	label,
+	lineColor,
+	labelColor,
+	shadowColor,
+	animationDelay = 0,
+	animationDuration = dinext_project_stage_gate.roadmap.ROADMAP_INTRO_ANIMATION_DURATION_MS,
+	animationEasing = dinext_project_stage_gate.roadmap.ROADMAP_INTRO_ANIMATION_EASING,
+}) {
+	const x0 = Math.min(startX, endX);
+	const x1 = Math.max(startX, endX);
+	const span = Math.max(Math.abs(x1 - x0), 4);
+	const textY = centerY - Math.max(10, lineWidth + 6);
+	const effectiveColor = lineColor || labelColor || "#2563eb";
+	const children = [
+		{
+			type: "line",
+			shape: { x1: x0, y1: centerY, x2: x1, y2: centerY },
+			style: {
+				stroke: effectiveColor,
+				lineWidth,
+				lineCap: "round",
+				shadowBlur: 6,
+				shadowColor:
+					shadowColor || dinext_project_stage_gate.roadmap.hexToRgba(effectiveColor, 0.18),
+			},
+			enterFrom: {
+				shape: { x1: x0, y1: centerY, x2: x0, y2: centerY },
+				style: { opacity: 0 },
+			},
+			enterAnimation: {
+				delay: animationDelay,
+				duration: animationDuration,
+				easing: animationEasing,
+			},
+			transition: "all",
+		},
+	];
+
+	if (label && span >= 40) {
+		children.push({
+			type: "text",
+			style: {
+				x: x0 + span / 2,
+				y: textY,
+				text: label,
+				fill: effectiveColor,
+				fontSize: 11,
+				fontWeight: 600,
+				align: "center",
+				verticalAlign: "bottom",
+				width: Math.max(span, 48),
+				overflow: "truncate",
+			},
+			enterFrom: {
+				style: {
+					opacity: 0,
+				},
+			},
+			enterAnimation: {
+				delay: animationDelay,
+				duration: animationDuration,
+				easing: animationEasing,
+			},
+			transition: "all",
+			silent: true,
+		});
+	}
+
+	return { type: "group", children };
+};
+
 dinext_project_stage_gate.roadmap.render = async function (report) {
 	if (!report?.page?.main) {
 		return;
@@ -1495,24 +2084,36 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 
 	dinext_project_stage_gate.roadmap.ensureResizeHandler(report);
 	dinext_project_stage_gate.roadmap._last_report = report;
-	const payload = report.raw_data?.message || { projects: [], stageBars: [], gates: [] };
+	const payload = report.raw_data?.message || {
+		projects: [],
+		stageBars: [],
+		gates: [],
+		taskEntities: [],
+	};
 	const fromDate = report.get_filter_value?.("from_date");
 	const toDate = report.get_filter_value?.("to_date");
-	const { categories, bars, gates, projectDocsByLabel } =
+	const taskTypeOrder = dinext_project_stage_gate.roadmap._coerceToArray(
+		report.get_filter_value?.("task_types")
+	);
+	const { categories, bars, gates, taskBars, milestones, rowSpanUnits, projectDocsByLabel } =
 		dinext_project_stage_gate.roadmap.prepareSeriesData(payload, {
 			fromDate,
 			toDate,
+			taskTypeOrder,
 		});
 	const showAllDataZoom = dinext_project_stage_gate.roadmap.buildShowAllDataZoomConfig({
 		categories,
 		bars,
 		gates,
+		taskBars,
+		milestones,
 		fromDate,
 		toDate,
 	});
 	const dom = mount.get(0);
 	dom._dinextRoadmapCategoryCount = categories.length;
-	dinext_project_stage_gate.roadmap.applyChartHeight(dom, categories);
+	dom._dinextRoadmapRowSpanUnits = rowSpanUnits;
+	dinext_project_stage_gate.roadmap.applyChartHeight(dom, categories, rowSpanUnits);
 	const existing =
 		(typeof echarts.getInstanceByDom === "function" && echarts.getInstanceByDom(dom)) ||
 		dom._dinextRoadmapChart ||
@@ -1536,8 +2137,11 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 			categories,
 			bars,
 			gates,
+			taskBars,
+			milestones,
 			dataZoom,
 			monthOnlyXAxisLabels,
+			rowSpanUnits,
 			onShowAllData() {
 				chart.setOption({
 					dataZoom: showAllDataZoom,
