@@ -75,6 +75,16 @@ def _get_project_manager_role(filters=None):
 	return filters.get("project_manager_role") or DEFAULT_PROJECT_MANAGER_ROLE
 
 
+def _coerce_to_list(value):
+	if value is None:
+		return []
+	if isinstance(value, (list, tuple, set)):
+		return [item for item in value if item]
+	if isinstance(value, str):
+		return [item.strip() for item in value.split(",") if item.strip()]
+	return [value]
+
+
 def _get_project_team_rows(project_names, role_name=None):
 	if not project_names:
 		return []
@@ -219,6 +229,63 @@ def get_project_stage_chain(project_name):
 	]
 
 
+def _task_overlaps_report_range(task, range_start, range_end):
+	start = _get(task, "exp_start_date")
+	end = _get(task, "exp_end_date")
+	if not start and not end:
+		return False
+	return _intervals_overlap(start, end or start, range_start, range_end)
+
+
+def _build_task_entities(task_rows, project_meta, range_start, range_end, filters=None):
+	filters = filters or {}
+	show_milestones = bool(filters.get("show_milestones"))
+	selected_task_types = set(_coerce_to_list(filters.get("task_types")))
+	task_entities = []
+
+	for row in task_rows:
+		if not _task_overlaps_report_range(row, range_start, range_end):
+			continue
+
+		is_milestone = int(_get(row, "is_milestone") or 0) == 1
+		task_type = _get(row, "type")
+		point_date = _get(row, "exp_end_date") or _get(row, "exp_start_date")
+		start_date = _get(row, "exp_start_date")
+		end_date = _get(row, "exp_end_date")
+		if is_milestone and not point_date:
+			continue
+		if not is_milestone and not start_date and not end_date:
+			continue
+		include = (is_milestone and show_milestones) or (
+			not is_milestone and bool(task_type) and task_type in selected_task_types
+		)
+		if not include:
+			continue
+
+		project = project_meta.get(_get(row, "project"), {})
+		entity = {
+			**row,
+			"entity_kind": "milestone" if is_milestone else "task_bar",
+			"lane_key": "milestone" if is_milestone else f"task_type:{task_type}",
+			"lane_label": "Milestone" if is_milestone else task_type,
+			"docType": "Task",
+			"docName": _get(row, "name"),
+			"start_date": start_date,
+			"end_date": end_date,
+			"point_date": point_date,
+			"project_name": _get(project, "project_name") or _get(row, "project"),
+			"portfolio": _get(project, "custom_project_portfolio"),
+		}
+		task_entities.append(entity)
+
+	return task_entities
+
+
+def _should_include_task_entities(filters=None):
+	filters = filters or {}
+	return bool(filters.get("show_milestones")) or bool(_coerce_to_list(filters.get("task_types")))
+
+
 def get_roadmap_dataset(filters=None):
 	filters = filters or {}
 	range_start, range_end = _resolve_report_range(filters)
@@ -339,9 +406,29 @@ def get_roadmap_dataset(filters=None):
 		row["project_name"] = _get(project, "project_name") or _get(row, "project")
 		row["portfolio"] = _get(project, "custom_project_portfolio")
 
+	task_entities = []
+	if _should_include_task_entities(filters):
+		task_rows = _get_permission_aware_list(
+			"Task",
+			filters={"project": ["in", project_names]} if project_names else {"project": ["in", [""]]},
+			fields=[
+				"name",
+				"project",
+				"subject",
+				"type",
+				"status",
+				"is_milestone",
+				"exp_start_date",
+				"exp_end_date",
+			],
+			order_by="project asc, exp_start_date asc, exp_end_date asc, modified asc",
+		)
+		task_entities = _build_task_entities(task_rows, project_meta, range_start, range_end, filters)
+
 	return {
 		"projects": project_rows,
 		"stageBars": stage_rows,
 		"gates": gate_rows,
+		"taskEntities": task_entities,
 	}
 

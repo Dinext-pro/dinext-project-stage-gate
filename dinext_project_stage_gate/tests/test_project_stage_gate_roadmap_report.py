@@ -9,6 +9,9 @@ except ModuleNotFoundError:
 	_frappe_stub = types.ModuleType("frappe")
 	_frappe_stub._ = lambda value: value
 	sys.modules["frappe"] = _frappe_stub
+	_frappe_utils_stub = types.ModuleType("frappe.utils")
+	_frappe_utils_stub.add_months = lambda value, months: value
+	sys.modules["frappe.utils"] = _frappe_utils_stub
 
 from dinext_project_stage_gate.dinext_project_stage_gate.report.project_stage_gate_roadmap import (
 	project_stage_gate_roadmap,
@@ -28,6 +31,7 @@ class TestProjectStageGateRoadmapReport(unittest.TestCase):
 			"projects": [{"name": "PROJ-001", "project_name": "Alpha"}],
 			"stageBars": [{"name": "PSI-001"}],
 			"gates": [{"name": "PGC-001"}],
+			"taskEntities": [{"name": "TASK-001"}],
 		}
 
 		columns, data, message, chart, report_summary = project_stage_gate_roadmap.execute(
@@ -38,6 +42,7 @@ class TestProjectStageGateRoadmapReport(unittest.TestCase):
 		self.assertEqual(columns[0]["label"], "Portfolio")
 		self.assertEqual(data[0]["project"], "PROJ-001")
 		self.assertEqual(message["projects"][0]["name"], "PROJ-001")
+		self.assertEqual(message["taskEntities"][0]["name"], "TASK-001")
 		self.assertIsNone(chart)
 		self.assertEqual(report_summary[0]["value"], 1)
 		self.assertEqual(report_summary[0]["label"], "Projects")

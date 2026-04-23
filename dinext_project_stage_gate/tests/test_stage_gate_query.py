@@ -428,3 +428,135 @@ class TestStageGateQuery(unittest.TestCase):
 		self.assertEqual(get_list.call_args_list[0].args[0], "Project")
 		self.assertEqual(get_list.call_args_list[1].args[0], "Project Stage Instance")
 		self.assertEqual(get_all.call_args_list[2].kwargs["filters"], {"stage_instance": ["in", ["PSI-001"]]})
+
+	@patch.object(query, "_today", return_value=date(2026, 4, 19))
+	@patch("dinext_project_stage_gate.stage_gate.query.frappe.get_all")
+	@patch("dinext_project_stage_gate.stage_gate.query.frappe.get_list", create=True)
+	def test_get_roadmap_dataset_includes_filtered_task_entities(self, get_list, get_all, _mock_today):
+		get_list.side_effect = [
+			[
+				{
+					"name": "PROJ-001",
+					"project_name": "Alpha",
+					"company": "Dinext",
+					"customer": "Customer A",
+					"custom_project_portfolio": "Portfolio A",
+					"governance_model": "Standard",
+					"stage_chain_version": 1,
+					"current_stage": "Discovery",
+					"stage_gate_status": "Active",
+				}
+			],
+			[],
+			[
+				{
+					"name": "TASK-001",
+					"project": "PROJ-001",
+					"subject": "Milestone A",
+					"type": "Sprint",
+					"status": "Open",
+					"is_milestone": 1,
+					"exp_start_date": "2026-04-10",
+					"exp_end_date": "2026-04-12",
+				},
+				{
+					"name": "TASK-002",
+					"project": "PROJ-001",
+					"subject": "Sprint 2",
+					"type": "Sprint",
+					"status": "Working",
+					"is_milestone": 0,
+					"exp_start_date": "2026-04-14",
+					"exp_end_date": "2026-04-30",
+				},
+				{
+					"name": "TASK-003",
+					"project": "PROJ-001",
+					"subject": "Phase X",
+					"type": "Phase",
+					"status": "Open",
+					"is_milestone": 0,
+					"exp_start_date": "2026-04-05",
+					"exp_end_date": "2026-04-07",
+				},
+			],
+		]
+		get_all.side_effect = [[], [], []]
+
+		result = query.get_roadmap_dataset(
+			{
+				"from_date": "2026-04-10",
+				"to_date": "2026-04-20",
+				"show_milestones": 1,
+				"task_types": ["Sprint"],
+			}
+		)
+
+		self.assertEqual([row["name"] for row in result["taskEntities"]], ["TASK-001", "TASK-002"])
+		self.assertEqual(result["taskEntities"][0]["entity_kind"], "milestone")
+		self.assertEqual(result["taskEntities"][0]["lane_key"], "milestone")
+		self.assertEqual(result["taskEntities"][0]["point_date"], "2026-04-12")
+		self.assertEqual(result["taskEntities"][0]["project_name"], "Alpha")
+		self.assertEqual(result["taskEntities"][0]["portfolio"], "Portfolio A")
+		self.assertEqual(result["taskEntities"][1]["entity_kind"], "task_bar")
+		self.assertEqual(result["taskEntities"][1]["lane_key"], "task_type:Sprint")
+		self.assertEqual(result["taskEntities"][1]["start_date"], "2026-04-14")
+		self.assertEqual(result["taskEntities"][1]["end_date"], "2026-04-30")
+		self.assertEqual(get_list.call_args_list[2].args[0], "Task")
+		task_filters = get_list.call_args_list[2].kwargs["filters"]
+		self.assertEqual(task_filters["project"], ["in", ["PROJ-001"]])
+
+	@patch.object(query, "_today", return_value=date(2026, 4, 19))
+	@patch("dinext_project_stage_gate.stage_gate.query.frappe.get_all")
+	@patch("dinext_project_stage_gate.stage_gate.query.frappe.get_list", create=True)
+	def test_get_roadmap_dataset_skips_undated_task_entities(self, get_list, get_all, _mock_today):
+		get_list.side_effect = [
+			[
+				{
+					"name": "PROJ-001",
+					"project_name": "Alpha",
+					"company": "Dinext",
+					"customer": "Customer A",
+					"custom_project_portfolio": "Portfolio A",
+					"governance_model": "Standard",
+					"stage_chain_version": 1,
+					"current_stage": "Discovery",
+					"stage_gate_status": "Active",
+				}
+			],
+			[],
+			[
+				{
+					"name": "TASK-UNDATED-MILESTONE",
+					"project": "PROJ-001",
+					"subject": "Undated milestone",
+					"type": "Sprint",
+					"status": "Open",
+					"is_milestone": 1,
+					"exp_start_date": None,
+					"exp_end_date": None,
+				},
+				{
+					"name": "TASK-DATED",
+					"project": "PROJ-001",
+					"subject": "Sprint A",
+					"type": "Sprint",
+					"status": "Working",
+					"is_milestone": 0,
+					"exp_start_date": "2026-04-14",
+					"exp_end_date": "2026-04-30",
+				},
+			],
+		]
+		get_all.side_effect = [[], [], []]
+
+		result = query.get_roadmap_dataset(
+			{
+				"from_date": "2026-04-10",
+				"to_date": "2026-04-20",
+				"show_milestones": 1,
+				"task_types": ["Sprint"],
+			}
+		)
+
+		self.assertEqual([row["name"] for row in result["taskEntities"]], ["TASK-DATED"])
