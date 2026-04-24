@@ -567,6 +567,7 @@ class TestStageGateQuery(unittest.TestCase):
 					"project": "PROJ-001",
 					"subject": "Milestone A",
 					"type": "Sprint",
+					"progress": 100,
 					"status": "Open",
 					"is_milestone": 1,
 					"exp_start_date": "2026-04-10",
@@ -577,6 +578,7 @@ class TestStageGateQuery(unittest.TestCase):
 					"project": "PROJ-001",
 					"subject": "Sprint 2",
 					"type": "Sprint",
+					"progress": 35,
 					"status": "Working",
 					"is_milestone": 0,
 					"exp_start_date": "2026-04-14",
@@ -611,13 +613,16 @@ class TestStageGateQuery(unittest.TestCase):
 		self.assertEqual(result["taskEntities"][0]["point_date"], "2026-04-12")
 		self.assertEqual(result["taskEntities"][0]["project_name"], "Alpha")
 		self.assertEqual(result["taskEntities"][0]["portfolio"], "Portfolio A")
+		self.assertNotIn("progress", result["taskEntities"][0])
 		self.assertEqual(result["taskEntities"][1]["entity_kind"], "task_bar")
 		self.assertEqual(result["taskEntities"][1]["lane_key"], "task_type:Sprint")
 		self.assertEqual(result["taskEntities"][1]["start_date"], "2026-04-14")
 		self.assertEqual(result["taskEntities"][1]["end_date"], "2026-04-30")
+		self.assertEqual(result["taskEntities"][1]["progress"], 35)
 		self.assertEqual(get_list.call_args_list[2].args[0], "Task")
 		task_filters = get_list.call_args_list[2].kwargs["filters"]
 		self.assertEqual(task_filters["project"], ["in", ["PROJ-001"]])
+		self.assertIn("progress", get_list.call_args_list[2].kwargs["fields"])
 
 	@patch.object(query, "_today", return_value=date(2026, 4, 19))
 	@patch("dinext_project_stage_gate.stage_gate.query.frappe.get_all")

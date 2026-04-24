@@ -490,6 +490,122 @@ test("onload wraps refresh to clear stale roadmap payload and rerender empty res
 	assert.deepEqual(Array.from(report.raw_data.message.taskEntities), []);
 });
 
+test("hideActionsMenu removes only the grouped Actions button and mirrored mobile items", () => {
+	const { roadmap, context } = loadRoadmapScript();
+	let actionsGroupRemoved = false;
+	let refreshItemRemoved = false;
+	let actionItemRemoved = false;
+
+	const menuItems = [
+		{
+			text() {
+				return "Actions > Set Chart";
+			},
+			remove() {
+				actionItemRemoved = true;
+			},
+		},
+		{
+			text() {
+				return "Refresh";
+			},
+			remove() {
+				refreshItemRemoved = true;
+			},
+		},
+	];
+
+	context.$ = (element) => ({
+		text() {
+			return element.text();
+		},
+	});
+
+	const report = {
+		page: {
+			get_inner_group_button(label) {
+				assert.equal(label, "Actions");
+				return {
+					remove() {
+						actionsGroupRemoved = true;
+					},
+				};
+			},
+			menu: {
+				find(selector) {
+					assert.equal(selector, ".menu-item-label");
+					return {
+						filter(predicate) {
+							const matches = menuItems.filter((item, index) => predicate(index, item));
+							return {
+								closest(closestSelector) {
+									assert.equal(closestSelector, "li");
+									return {
+										remove() {
+											matches.forEach((item) => item.remove());
+										},
+									};
+								},
+							};
+						},
+					};
+				},
+			},
+		},
+	};
+
+	roadmap.hideActionsMenu(report);
+
+	assert.equal(actionsGroupRemoved, true);
+	assert.equal(actionItemRemoved, true);
+	assert.equal(refreshItemRemoved, false);
+});
+
+test("ensureActionsMenuObserver installs a single observer for toolbar and menu mutations", () => {
+	const { roadmap, context } = loadRoadmapScript();
+	const observedTargets = [];
+	let hideCalls = 0;
+
+	class MutationObserverMock {
+		constructor(callback) {
+			this.callback = callback;
+		}
+
+		observe(target, options) {
+			observedTargets.push({ target, options });
+		}
+	}
+
+	context.window.MutationObserver = MutationObserverMock;
+	roadmap.hideActionsMenu = function () {
+		hideCalls += 1;
+	};
+
+	const toolbarElement = { id: "toolbar" };
+	const menuElement = { id: "menu" };
+	const report = {
+		page: {
+			inner_toolbar: [toolbarElement],
+			menu: [menuElement],
+		},
+	};
+
+	roadmap.ensureActionsMenuObserver(report);
+	roadmap.ensureActionsMenuObserver(report);
+
+	assert.equal(report.page._dinextRoadmapActionsMenuObserverInstalled, true);
+	assert.equal(observedTargets.length, 2);
+	assert.strictEqual(observedTargets[0].target, toolbarElement);
+	assert.equal(observedTargets[0].options.childList, true);
+	assert.equal(observedTargets[0].options.subtree, true);
+	assert.strictEqual(observedTargets[1].target, menuElement);
+	assert.equal(observedTargets[1].options.childList, true);
+	assert.equal(observedTargets[1].options.subtree, true);
+
+	report.page._dinextRoadmapActionsMenuObserver.callback();
+	assert.equal(hideCalls, 1);
+});
+
 test("buildStageBarChevronPoints expands zero span and keeps tip inside bar", () => {
 	const { roadmap } = loadRoadmapScript();
 	const yc = 50;
@@ -625,6 +741,7 @@ test("prepareSeriesData builds task bars and milestones into separate sublanes",
 					project: "PRJ-1",
 					subject: "Sprint A",
 					status: "Working",
+					progress: 35,
 					type: "Sprint",
 					entity_kind: "task_bar",
 					lane_key: "task_type:Sprint",
@@ -664,6 +781,7 @@ test("prepareSeriesData builds task bars and milestones into separate sublanes",
 	assert.equal(taskBars.length, 3);
 	assert.equal(taskBars[0].docType, "Task");
 	assert.equal(taskBars[0].value[3], "Sprint A");
+	assert.equal(taskBars[0].progress, 35);
 	assert.ok(categories.length > 1);
 	assert.ok(bars[0].value[0] < taskBars[0].value[0], "stage band should stay above task lanes");
 	assert.ok(
@@ -854,6 +972,38 @@ test("buildRoundedTaskLineGraphic falls back to a visible shared color when line
 
 	assert.equal(graphic.children[0].style.stroke, "#3366ff");
 	assert.equal(graphic.children[1].style.fill, "#3366ff");
+});
+
+test("buildRoundedTaskLineGraphic adds an inner progress overlay with proportional width", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const graphic = roadmap.buildRoundedTaskLineGraphic({
+		startX: 40,
+		endX: 180,
+		centerY: 80,
+		lineWidth: 8,
+		label: "Sprint Alpha",
+		lineColor: "#3366ff",
+		labelColor: "#3366ff",
+		progress: 35,
+		progressLineColor: "#84cc16",
+	});
+
+	assert.equal(graphic.children[0].type, "rect");
+	assert.equal(graphic.children[0].z2, 1);
+	assert.equal(graphic.children[0].style.fill, roadmap.hexToRgba("#3366ff", 0.22));
+	assert.equal(graphic.children[0].style.shadowColor, roadmap.hexToRgba("#3366ff", 0.22));
+	assert.equal(graphic.children[1].type, "rect");
+	assert.equal(graphic.children[1].z2, 2);
+	assert.equal(graphic.children[1].style.stroke, "#84cc16");
+	assert.equal(graphic.children[1].shape.x, 40);
+	assert.equal(graphic.children[1].shape.width, 49);
+	assert.ok(graphic.children[1].shape.height < graphic.children[0].shape.height);
+	assert.equal(graphic.children[2].type, "circle");
+	assert.equal(graphic.children[2].z2, 3);
+	assert.equal(graphic.children[2].shape.cx, 89);
+	assert.equal(graphic.children[2].style.stroke, "#ffffff");
+	assert.equal(graphic.children[3].type, "text");
 });
 
 test("prepareSeriesData uses widget status palette instead of per-stage color override", () => {
@@ -1555,7 +1705,7 @@ test("buildChartOptions keeps checkpoint diamonds at preferred size when it fits
 	assert.equal(options.series[1].symbolSize, 22);
 });
 
-test("buildChartOptions grows checkpoint diamonds to at least twenty percent of stage height", () => {
+test("buildChartOptions grows checkpoint diamonds to at least thirty percent of stage height", () => {
 	const { roadmap } = loadRoadmapScript();
 
 	const categories = ["Project A", "Project B"];
@@ -1577,6 +1727,42 @@ test("buildChartOptions grows checkpoint diamonds to at least twenty percent of 
 		options.series[1].symbolSize,
 		estimatedStageHeight * roadmap.ROADMAP_CHECKPOINT_MIN_STAGE_HEIGHT_RATIO
 	);
+	assert.equal(roadmap.ROADMAP_CHECKPOINT_MIN_STAGE_HEIGHT_RATIO, 0.3);
+	assert.equal(roadmap.getCheckpointDiamondSize(100, 10), 30);
+});
+
+test("gate checkpoint renderItem sizes diamonds from the current stage arrow height", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const options = roadmap.buildChartOptions({
+		categories: ["Project A"],
+		bars: [],
+		gates: [{ value: ["2026-01-15", 0], itemStyle: { color: "#739b7f" } }],
+		dataZoom: [],
+	});
+	const gateSeries = options.series.find((series) => series.name === "Gate checkpoints");
+	const graphic = gateSeries.renderItem(
+		{},
+		{
+			value(index) {
+				return ["2026-01-15", 0][index];
+			},
+			coord() {
+				return [50, 40];
+			},
+			size() {
+				return [0, 200];
+			},
+			style() {
+				return { fill: "#739b7f", stroke: "#ffffff", lineWidth: 2 };
+			},
+		}
+	);
+	const points = graphic.shape.points;
+	const ys = points.map((point) => point[1]);
+
+	assert.equal(gateSeries.type, "custom");
+	assert.equal(Math.max(...ys) - Math.min(...ys), 30);
 });
 
 test("buildChartOptions caps checkpoint diamonds at two thirds of stage height", () => {
@@ -1720,10 +1906,11 @@ test("buildChartOptions adds intro animation config for stages and gates", () =>
 	assert.equal(typeof options.series[0].animationDelay, "function");
 	assert.equal(options.series[0].animationDelay(0), 0);
 	assert.equal(options.series[0].animationDelay(1), roadmap.ROADMAP_STAGE_INTRO_ANIMATION_MAX_SPREAD_MS);
-	assert.equal(options.series[1].type, "scatter");
+	assert.equal(options.series[1].type, "custom");
 	assert.equal(options.series[1].animationDuration, roadmap.ROADMAP_INTRO_ANIMATION_DURATION_MS);
 	assert.equal(options.series[1].animationDurationUpdate, 0);
 	assert.equal(typeof options.series[1].animationDelay, "function");
+	assert.equal(typeof options.series[1].renderItem, "function");
 	assert.equal(options.series[1].animationDelay(0), 0);
 });
 
@@ -1929,6 +2116,57 @@ test("task custom renderItem can recover task type color from value payload when
 
 	assert.equal(graphic.children[0].style.stroke, "#f59e0b");
 	assert.equal(graphic.children[1].style.fill, "#f59e0b");
+});
+
+test("task custom renderItem reads progress from series data when params.data is absent", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const options = roadmap.buildChartOptions({
+		categories: [{ key: "PRJ-1::task_type:Sprint::0", projectLabel: "Alpha", laneLabel: "Sprint" }],
+		bars: [],
+		gates: [],
+		milestones: [],
+		taskBars: [
+			{
+				value: [0, "2026-01-21", "2026-01-29", "Sprint A", "Open", "Sprint", "#60a5fa"],
+				docType: "Task",
+				name: "Sprint A",
+				progress: 25,
+				hasProgress: true,
+				progressLineColor: "#60a5fa",
+				itemStyle: {
+					color: "#60a5fa",
+					labelColor: "#60a5fa",
+				},
+			},
+		],
+		dataZoom: [],
+	});
+
+	const graphic = options.series[3].renderItem(
+		{
+			dataIndex: 0,
+		},
+		{
+			value(index) {
+				return [0, "2026-01-21", "2026-01-29", "Sprint A", "Open", "Sprint", "#60a5fa"][index];
+			},
+			coord([x, y]) {
+				return [x === "2026-01-21" ? 10 : 110, y === 0 ? 50 : y];
+			},
+			size() {
+				return [100, 24];
+			},
+			style() {
+				return { color: "#2563eb" };
+			},
+		}
+	);
+
+	assert.equal(graphic.children[0].type, "rect");
+	assert.equal(graphic.children[1].type, "rect");
+	assert.equal(graphic.children[1].shape.width, 25);
+	assert.equal(graphic.children[1].style.fill, "#60a5fa");
 });
 
 test("buildChartOptions keeps explicit lane rows but hides their axis labels", () => {
@@ -2206,6 +2444,27 @@ test("formatTooltip renders stage details without duplicating the stage name", (
 		tooltip,
 		["Реализация", "Active", "2026-01-01 - 2026-02-01"].join("<br>")
 	);
+});
+
+test("formatTooltip renders task progress for task bars but not milestones", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const taskTooltip = roadmap.formatTooltip({
+		name: "Sprint Alpha",
+		data: { docType: "Task", entityKind: "task_bar", progress: 35 },
+		value: [0, "2026-01-01", "2026-01-10", "Sprint Alpha", "Working", "Sprint"],
+	});
+	const milestoneTooltip = roadmap.formatTooltip({
+		name: "Milestone A",
+		data: { docType: "Task", entityKind: "milestone" },
+		value: ["2026-01-10", 2, "Open"],
+	});
+
+	assert.equal(
+		taskTooltip,
+		["Sprint Alpha", "Working", "2026-01-01 - 2026-01-10", "Sprint", "35%"].join("<br>")
+	);
+	assert.equal(milestoneTooltip, ["Milestone A", "Open", "2026-01-10"].join("<br>"));
 });
 
 test("prepareSeriesData adds outlined checkpoint styling for contrast", () => {

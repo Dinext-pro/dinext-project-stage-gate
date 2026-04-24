@@ -108,6 +108,8 @@ frappe.query_reports["Project Stage Gate Roadmap"] = {
 		dinext_project_stage_gate.roadmap.ensure_chart_mount(report);
 		dinext_project_stage_gate.roadmap.ensure_theme_observer(report);
 		dinext_project_stage_gate.roadmap.ensureResizeHandler(report);
+		dinext_project_stage_gate.roadmap.ensureActionsMenuObserver(report);
+		dinext_project_stage_gate.roadmap.hideActionsMenu(report);
 		applyRoadmapStyle();
 	},
 
@@ -186,6 +188,52 @@ dinext_project_stage_gate.roadmap.wrapReportRefresh = function (report) {
 		return refreshResult;
 	};
 	report._dinextRoadmapRefreshWrapped = true;
+};
+
+dinext_project_stage_gate.roadmap.hideActionsMenu = function (report) {
+	const page = report?.page;
+	if (!page) {
+		return;
+	}
+
+	const actionsLabel = __("Actions");
+	const mobileActionsPrefix = `${actionsLabel} >`;
+
+	page.get_inner_group_button?.(actionsLabel)?.remove();
+
+	page.menu
+		?.find(".menu-item-label")
+		?.filter((_, element) => $(element).text().trim().startsWith(mobileActionsPrefix))
+		?.closest("li")
+		?.remove();
+};
+
+dinext_project_stage_gate.roadmap.ensureActionsMenuObserver = function (report) {
+	const page = report?.page;
+	if (
+		!page ||
+		page._dinextRoadmapActionsMenuObserverInstalled ||
+		typeof window?.MutationObserver !== "function"
+	) {
+		return;
+	}
+
+	const toolbarElement = page.inner_toolbar?.get?.(0) || page.inner_toolbar?.[0];
+	const menuElement = page.menu?.get?.(0) || page.menu?.[0];
+
+	const observer = new window.MutationObserver(() => {
+		dinext_project_stage_gate.roadmap.hideActionsMenu(report);
+	});
+
+	if (toolbarElement) {
+		observer.observe(toolbarElement, { childList: true, subtree: true });
+	}
+	if (menuElement) {
+		observer.observe(menuElement, { childList: true, subtree: true });
+	}
+
+	page._dinextRoadmapActionsMenuObserver = observer;
+	page._dinextRoadmapActionsMenuObserverInstalled = true;
 };
 
 dinext_project_stage_gate.roadmap.statusPalette = {
@@ -696,6 +744,19 @@ dinext_project_stage_gate.roadmap.getTaskTypeItemStyle = function (taskType, opt
 	};
 };
 
+dinext_project_stage_gate.roadmap.normalizeTaskProgress = function (value) {
+	const numericValue = Number(value);
+	if (!Number.isFinite(numericValue)) {
+		return 0;
+	}
+	return Math.min(100, Math.max(0, Math.round(numericValue)));
+};
+
+dinext_project_stage_gate.roadmap.getTaskProgressTrackColor = function (lineColor) {
+	const isDark = dinext_project_stage_gate.roadmap.getEChartsThemeName() === "dark";
+	return dinext_project_stage_gate.roadmap.hexToRgba(lineColor, isDark ? 0.38 : 0.32);
+};
+
 dinext_project_stage_gate.roadmap.getMilestoneItemStyle = function (status) {
 	const isDark = dinext_project_stage_gate.roadmap.getEChartsThemeName() === "dark";
 	const palette = isDark
@@ -794,11 +855,16 @@ dinext_project_stage_gate.roadmap.buildTaskBarSeries = function ({
 					dinext_project_stage_gate.roadmap.getTaskTypeItemStyle(taskType).lineColor,
 			},
 			renderItem(params, api) {
+				const dataItem =
+					params.data ||
+					data[params.dataIndex] ||
+					data[params.dataIndexInside] ||
+					data.find((entry) => entry?._taskDelayIndex === params.dataIndex);
 				const rowPosition = api.value(0);
 				const start = api.coord([api.value(1), rowPosition]);
 				const end = api.coord([api.value(2), rowPosition]);
 				const slotRatio = dinext_project_stage_gate.roadmap.getRowSlotHeightRatio(
-					params.data?.rowSpanUnits || rowSpanUnits
+					dataItem?.rowSpanUnits || rowSpanUnits
 				);
 				const slotHeight = api.size([0, 1])[1] * slotRatio;
 				const lineWidth = Math.max(6, Math.min(12, slotHeight * 0.36));
@@ -808,7 +874,7 @@ dinext_project_stage_gate.roadmap.buildTaskBarSeries = function ({
 					slotHeight,
 				});
 				const fromApi = api.style();
-				const itemStyle = params.data?.itemStyle || {};
+				const itemStyle = dataItem?.itemStyle || {};
 				const payloadColor = api.value(6);
 				const lineColor =
 					itemStyle.color ||
@@ -827,13 +893,16 @@ dinext_project_stage_gate.roadmap.buildTaskBarSeries = function ({
 					endX: end[0],
 					centerY: start[1],
 					lineWidth,
-					label: params.data?.name || api.value(3),
+					label: dataItem?.name || api.value(3),
 					lineColor,
 					labelColor,
 					shadowColor,
+					progress: dataItem?.progress,
+					hasProgress: dataItem?.hasProgress,
+					progressLineColor: dataItem?.progressLineColor || lineColor,
 					labelLayout,
 					animationDelay:
-						introAnimationDelays.taskBarDelays[params.data?._taskDelayIndex ?? params.dataIndex] ??
+						introAnimationDelays.taskBarDelays[dataItem?._taskDelayIndex ?? params.dataIndex] ??
 						0,
 					animationDuration: introAnimationDuration,
 					animationEasing: introAnimationEasing,
@@ -1036,11 +1105,13 @@ dinext_project_stage_gate.roadmap.formatTooltip = function (params) {
 		if (params?.data?.entityKind === "milestone") {
 			return [params?.name || "", value[2] || "", value[0] || ""].filter(Boolean).join("<br>");
 		}
+		const progress = dinext_project_stage_gate.roadmap.normalizeTaskProgress(params?.data?.progress);
 		return [
 			params?.data?.name || params?.name || value[3] || "",
 			value[4] || "",
 			dinext_project_stage_gate.roadmap.formatDateRange(value[1], value[2]),
 			value[5] || "",
+			`${progress}%`,
 		]
 			.filter(Boolean)
 			.filter((entry, index, parts) => parts.indexOf(entry) === index)
@@ -2036,9 +2107,10 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 			},
 			{
 				name: __("Gate checkpoints"),
-				type: "scatter",
+				type: "custom",
 				symbol: "diamond",
 				symbolSize: checkpointSymbolSize,
+				z: 8,
 				animationDuration: introAnimationDuration,
 				animationDurationUpdate: 0,
 				animationEasing: introAnimationEasing,
@@ -2048,6 +2120,60 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 				},
 				animationDelayUpdate() {
 					return 0;
+				},
+				renderItem(params, api) {
+					const center = api.coord([api.value(0), api.value(1)]);
+					const slotRatio = dinext_project_stage_gate.roadmap.getRowSlotHeightRatio(
+						params.data?.rowSpanUnits || rowSpanUnits
+					);
+					const stageHeight =
+						api.size([0, 1])[1] *
+						slotRatio *
+						dinext_project_stage_gate.roadmap.ROADMAP_SLOT_FILL_RATIO;
+					const size = dinext_project_stage_gate.roadmap.getCheckpointDiamondSize(stageHeight);
+					const half = size / 2;
+					const fromApi = api.style();
+					const itemStyle = params.data?.itemStyle || {};
+					const fill = fromApi.fill || fromApi.color || itemStyle.color;
+					const stroke =
+						fromApi.stroke || fromApi.borderColor || itemStyle.borderColor || itemStyle.stroke;
+					const lineWidth =
+						fromApi.lineWidth ?? fromApi.borderWidth ?? itemStyle.borderWidth ?? 2;
+					return {
+						type: "polygon",
+						shape: {
+							points: [
+								[center[0], center[1] - half],
+								[center[0] + half, center[1]],
+								[center[0], center[1] + half],
+								[center[0] - half, center[1]],
+							],
+						},
+						style: {
+							fill,
+							stroke,
+							lineWidth,
+							shadowBlur: itemStyle.shadowBlur,
+							shadowColor: itemStyle.shadowColor,
+						},
+						enterFrom: {
+							shape: {
+								points: [
+									[center[0], center[1]],
+									[center[0], center[1]],
+									[center[0], center[1]],
+									[center[0], center[1]],
+								],
+							},
+							style: { opacity: 0 },
+						},
+						enterAnimation: {
+							delay: introAnimationDelays.gateDelays[params.dataIndex] ?? 0,
+							duration: introAnimationDuration,
+							easing: introAnimationEasing,
+						},
+						transition: "all",
+					};
 				},
 				itemStyle: {
 					color: dinext_project_stage_gate.roadmap.getCheckpointItemStyle("Approved").color,
@@ -2678,11 +2804,16 @@ dinext_project_stage_gate.roadmap.prepareSeriesData = function (payload, options
 					laneKey: entity.lane_key,
 					colorMap: taskTypeColorMap,
 				});
+				const hasProgress = entity.progress != null && entity.progress !== "";
+				const progress = dinext_project_stage_gate.roadmap.normalizeTaskProgress(entity.progress);
 				taskBars.push({
 					name: entity.subject || entity.name,
 					docType: "Task",
 					docName: entity.name,
 					entityKind: "task_bar",
+					progress,
+					hasProgress,
+					progressLineColor: taskStyle.lineColor,
 					value: [
 						rowIndex,
 						entity.start_date,
@@ -2912,6 +3043,9 @@ dinext_project_stage_gate.roadmap.buildRoundedTaskLineGraphic = function ({
 	lineColor,
 	labelColor,
 	shadowColor,
+	progress,
+	hasProgress,
+	progressLineColor,
 	labelLayout = {},
 	animationDelay = 0,
 	animationDuration = dinext_project_stage_gate.roadmap.ROADMAP_INTRO_ANIMATION_DURATION_MS,
@@ -2926,17 +3060,66 @@ dinext_project_stage_gate.roadmap.buildRoundedTaskLineGraphic = function ({
 	};
 	const textY = centerY - layout.offsetY;
 	const effectiveColor = lineColor || labelColor || "#2563eb";
-	const children = [
-		{
+	const shouldRenderProgress =
+		hasProgress == null ? progress != null && progress !== "" : Boolean(hasProgress);
+	const normalizedProgress = dinext_project_stage_gate.roadmap.normalizeTaskProgress(progress);
+	const overlayEndX = x0 + span * (normalizedProgress / 100);
+	const trackColor =
+		shouldRenderProgress && normalizedProgress < 100
+			? dinext_project_stage_gate.roadmap.getTaskProgressTrackColor(effectiveColor)
+			: effectiveColor;
+	const baseShadowColor =
+		shouldRenderProgress && normalizedProgress < 100
+			? trackColor
+			: shadowColor || dinext_project_stage_gate.roadmap.hexToRgba(effectiveColor, 0.18);
+	const children = [];
+
+	if (shouldRenderProgress) {
+		const trackHeight = Math.max(4, lineWidth);
+		children.push({
+			type: "rect",
+			z2: 1,
+			shape: {
+				x: x0,
+				y: centerY - trackHeight / 2,
+				width: span,
+				height: trackHeight,
+				r: trackHeight / 2,
+			},
+			style: {
+				fill: trackColor,
+				stroke: trackColor,
+				lineWidth: 0,
+				shadowBlur: 6,
+				shadowColor: baseShadowColor,
+			},
+			enterFrom: {
+				shape: {
+					x: x0,
+					y: centerY - trackHeight / 2,
+					width: 0,
+					height: trackHeight,
+					r: trackHeight / 2,
+				},
+				style: { opacity: 0 },
+			},
+			enterAnimation: {
+				delay: animationDelay,
+				duration: animationDuration,
+				easing: animationEasing,
+			},
+			transition: "all",
+		});
+	} else {
+		children.push({
 			type: "line",
 			shape: { x1: x0, y1: centerY, x2: x1, y2: centerY },
 			style: {
-				stroke: effectiveColor,
+				stroke: trackColor,
 				lineWidth,
 				lineCap: "round",
 				shadowBlur: 6,
-				shadowColor:
-					shadowColor || dinext_project_stage_gate.roadmap.hexToRgba(effectiveColor, 0.18),
+				shadowColor: baseShadowColor,
 			},
 			enterFrom: {
 				shape: { x1: x0, y1: centerY, x2: x0, y2: centerY },
@@ -2948,8 +3131,80 @@ dinext_project_stage_gate.roadmap.buildRoundedTaskLineGraphic = function ({
 				easing: animationEasing,
 			},
 			transition: "all",
-		},
-	];
+		});
+	}
+
+	if (shouldRenderProgress && normalizedProgress > 0) {
+		const progressWidth = Math.max(0, overlayEndX - x0);
+		const progressHeight = Math.max(3, lineWidth * 0.72);
+		children.push({
+			type: "rect",
+			z2: 2,
+			shape: {
+				x: x0,
+				y: centerY - progressHeight / 2,
+				width: progressWidth,
+				height: progressHeight,
+				r: progressHeight / 2,
+			},
+			style: {
+				fill: progressLineColor || effectiveColor,
+				stroke: progressLineColor || effectiveColor,
+				lineWidth: 1,
+				shadowBlur: 8,
+				shadowColor: dinext_project_stage_gate.roadmap.hexToRgba(
+					progressLineColor || effectiveColor,
+					0.35
+				),
+			},
+			enterFrom: {
+				shape: {
+					x: x0,
+					y: centerY - progressHeight / 2,
+					width: 0,
+					height: progressHeight,
+					r: progressHeight / 2,
+				},
+				style: { opacity: 0 },
+			},
+			enterAnimation: {
+				delay: animationDelay,
+				duration: animationDuration,
+				easing: animationEasing,
+			},
+			transition: "all",
+			silent: true,
+		});
+		if (normalizedProgress < 100) {
+			const markerRadius = Math.max(2, lineWidth * 0.4);
+			children.push({
+				type: "circle",
+				z2: 3,
+				shape: { cx: overlayEndX, cy: centerY, r: markerRadius },
+				style: {
+					fill: progressLineColor || effectiveColor,
+					stroke: dinext_project_stage_gate.roadmap.getThemeVariableColor("--card-bg", "#ffffff"),
+					lineWidth: Math.max(1.5, markerRadius * 0.7),
+					shadowBlur: 10,
+					shadowColor: dinext_project_stage_gate.roadmap.hexToRgba(
+						progressLineColor || effectiveColor,
+						0.4
+					),
+				},
+				enterFrom: {
+					shape: { cx: x0, cy: centerY, r: markerRadius * 0.6 },
+					style: { opacity: 0 },
+				},
+				enterAnimation: {
+					delay: animationDelay,
+					duration: animationDuration,
+					easing: animationEasing,
+				},
+				transition: "all",
+				silent: true,
+			});
+		}
+	}
 
 	if (label && span >= layout.minSpanForLabel) {
 		children.push({
@@ -2988,6 +3243,9 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 	if (!report?.page?.main) {
 		return;
 	}
+
+	dinext_project_stage_gate.roadmap.ensureActionsMenuObserver(report);
+	dinext_project_stage_gate.roadmap.hideActionsMenu(report);
 
 	await dinext_project_stage_gate.roadmap.ensure_assets();
 	const mount = dinext_project_stage_gate.roadmap.ensure_chart_mount(report);
@@ -3167,5 +3425,6 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 	});
 
 	dinext_project_stage_gate.roadmap.attachChartClickNavigation(chart, projectDocsByLabel);
+	dinext_project_stage_gate.roadmap.hideActionsMenu(report);
 };
 
