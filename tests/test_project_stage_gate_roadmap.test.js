@@ -131,6 +131,129 @@ test("report defines project type, project status, milestone and task type filte
 	assert.equal(typeof taskTypes.get_data, "function");
 });
 
+test("render disposes existing chart and shows empty state when no projects match filters", async () => {
+	const { roadmap, context } = loadRoadmapScript();
+	const existingChart = {
+		disposeCalls: 0,
+		dispose() {
+			this.disposeCalls += 1;
+		},
+	};
+	const dom = {
+		_dinextRoadmapChart: existingChart,
+		style: {},
+		innerHTML: "",
+		textContent: "",
+	};
+	const mount = {
+		length: 1,
+		get() {
+			return dom;
+		},
+	};
+	const emptyResult = { length: 0 };
+	const wrapper = {
+		length: 1,
+		find(selector) {
+			if (selector === ".project-stage-gate-roadmap-chart") {
+				return mount;
+			}
+			return emptyResult;
+		},
+	};
+	const report = {
+		raw_data: {
+			message: {
+				projects: [],
+				stageBars: [],
+				gates: [],
+				taskEntities: [],
+			},
+		},
+		get_filter_value() {
+			return null;
+		},
+		page: {
+			main: {
+				find(selector) {
+					if (selector === ".project-stage-gate-roadmap") {
+						return wrapper;
+					}
+					return emptyResult;
+				},
+			},
+		},
+	};
+
+	context.echarts = {
+		getInstanceByDom(target) {
+			return target === dom ? existingChart : null;
+		},
+		init() {
+			throw new Error("echarts.init should not run for empty roadmap data");
+		},
+	};
+
+	await roadmap.render(report);
+
+	assert.equal(existingChart.disposeCalls, 1);
+	assert.equal(dom._dinextRoadmapChart, null);
+	assert.equal(dom._dinextRoadmapCategoryCount, 0);
+	assert.match(dom.innerHTML, /No projects match the selected filters\./);
+});
+
+test("onload wraps refresh to clear stale roadmap payload and rerender empty results", async () => {
+	const { roadmap, context } = loadRoadmapScript();
+	const reportDefinition = context.frappe.query_reports["Project Stage Gate Roadmap"];
+	const renderSnapshots = [];
+
+	context.document.createElement = function () {
+		return {
+			setAttribute() {},
+			textContent: "",
+		};
+	};
+	context.document.head = {
+		appendChild() {},
+	};
+	roadmap.ensure_chart_mount = function () {};
+	roadmap.ensure_theme_observer = function () {};
+	roadmap.ensureResizeHandler = function () {};
+	roadmap.render = async function (report) {
+		renderSnapshots.push(report.raw_data?.message?.projects || null);
+	};
+
+	const report = {
+		page: { main: {} },
+		data: [{ project: "PRJ-1" }],
+		raw_data: {
+			message: {
+				projects: [{ name: "PRJ-1" }],
+				stageBars: [{ name: "PSI-1" }],
+				gates: [{ name: "PGC-1" }],
+				taskEntities: [{ name: "TASK-1" }],
+			},
+		},
+		refreshCalls: 0,
+		refresh() {
+			this.refreshCalls += 1;
+			this.data = [];
+			return Promise.resolve({ ok: true });
+		},
+	};
+
+	reportDefinition.onload(report);
+	await report.refresh();
+
+	assert.equal(report.refreshCalls, 1);
+	assert.equal(renderSnapshots.length, 1);
+	assert.deepEqual(Array.from(renderSnapshots[0]), []);
+	assert.deepEqual(Array.from(report.raw_data.message.projects), []);
+	assert.deepEqual(Array.from(report.raw_data.message.stageBars), []);
+	assert.deepEqual(Array.from(report.raw_data.message.gates), []);
+	assert.deepEqual(Array.from(report.raw_data.message.taskEntities), []);
+});
+
 test("buildStageBarChevronPoints expands zero span and keeps tip inside bar", () => {
 	const { roadmap } = loadRoadmapScript();
 	const yc = 50;
