@@ -34,7 +34,7 @@ frappe.query_reports["Project Stage Gate Roadmap"] = {
 			fieldname: "project_status",
 			label: __("Project Status"),
 			fieldtype: "Select",
-			options: ["", __("Open"), __("Completed"), __("Cancelled")].join("\n"),
+			options: ["", "Open", "Completed", "Cancelled"].join("\n"),
 		},
 		{
 			fieldname: "project_manager",
@@ -98,6 +98,7 @@ frappe.query_reports["Project Stage Gate Roadmap"] = {
 	],
 
 	onload(report) {
+		dinext_project_stage_gate.roadmap.wrapReportRefresh(report);
 		dinext_project_stage_gate.roadmap.ensure_chart_mount(report);
 		dinext_project_stage_gate.roadmap.ensure_theme_observer(report);
 		dinext_project_stage_gate.roadmap.ensureResizeHandler(report);
@@ -105,6 +106,10 @@ frappe.query_reports["Project Stage Gate Roadmap"] = {
 	},
 
 	after_datatable_render(_datatable) {
+		if (frappe.query_report?._dinextRoadmapSkipNextDatatableRender) {
+			frappe.query_report._dinextRoadmapSkipNextDatatableRender = false;
+			return;
+		}
 		dinext_project_stage_gate.roadmap.render(frappe.query_report);
 	},
 };
@@ -123,6 +128,59 @@ function applyRoadmapStyle() {
 }
 
 frappe.provide("dinext_project_stage_gate.roadmap");
+
+dinext_project_stage_gate.roadmap.getEmptyPayload = function () {
+	return {
+		projects: [],
+		stageBars: [],
+		gates: [],
+		taskEntities: [],
+	};
+};
+
+dinext_project_stage_gate.roadmap.normalizeReportPayload = function (report) {
+	if (Array.isArray(report?.data) && report.data.length) {
+		return report.raw_data;
+	}
+
+	report.raw_data = {
+		...(report.raw_data || {}),
+		result: [],
+		message: dinext_project_stage_gate.roadmap.getEmptyPayload(),
+	};
+	return report.raw_data;
+};
+
+dinext_project_stage_gate.roadmap.wrapReportRefresh = function (report) {
+	if (!report || typeof report.refresh !== "function" || report._dinextRoadmapRefreshWrapped) {
+		return;
+	}
+
+	const baseRefresh = report.refresh.bind(report);
+	report.refresh = function (...args) {
+		report._dinextRoadmapSkipNextDatatableRender = true;
+		const refreshResult = baseRefresh(...args);
+		const renderAfterRefresh = () => {
+			report._dinextRoadmapSkipNextDatatableRender = false;
+			dinext_project_stage_gate.roadmap.normalizeReportPayload(report);
+			return Promise.resolve(dinext_project_stage_gate.roadmap.render(report));
+		};
+
+		if (refreshResult && typeof refreshResult.then === "function") {
+			return refreshResult.then(
+				(value) => renderAfterRefresh().then(() => value),
+				(error) => {
+					report._dinextRoadmapSkipNextDatatableRender = false;
+					throw error;
+				}
+			);
+		}
+
+		renderAfterRefresh();
+		return refreshResult;
+	};
+	report._dinextRoadmapRefreshWrapped = true;
+};
 
 dinext_project_stage_gate.roadmap.statusPalette = {
 	light: {
@@ -2291,6 +2349,22 @@ dinext_project_stage_gate.roadmap.ensureResizeHandler = function (report) {
 	dinext_project_stage_gate.roadmap._resize_handler = handler;
 };
 
+dinext_project_stage_gate.roadmap.showEmptyState = function (dom, message) {
+	if (!dom) {
+		return;
+	}
+
+	dom.innerHTML = `<div class="project-stage-gate-roadmap-empty-state" style="padding: 32px 16px; text-align: center; color: var(--text-muted);">${message}</div>`;
+};
+
+dinext_project_stage_gate.roadmap.clearEmptyState = function (dom) {
+	if (!dom) {
+		return;
+	}
+
+	dom.innerHTML = "";
+};
+
 /**
  * Build categories, stage bars, and gate markers from report payload (for chart and tests).
  * @param {{ projects?: unknown[], stageBars?: unknown[], gates?: unknown[] }} payload
@@ -2786,6 +2860,17 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 	if (existing) {
 		existing.dispose();
 	}
+	if (!categories.length) {
+		dom._dinextRoadmapChart = null;
+		dom._dinextRoadmapViewportState = null;
+		dinext_project_stage_gate.roadmap.applyChartHeight(dom, 0, 1);
+		dinext_project_stage_gate.roadmap.showEmptyState(
+			dom,
+			__("No projects match the selected filters.")
+		);
+		return;
+	}
+	dinext_project_stage_gate.roadmap.clearEmptyState(dom);
 	const chart = echarts.init(dom, dinext_project_stage_gate.roadmap.getEChartsThemeName());
 	dom._dinextRoadmapChart = chart;
 	const dataZoom = dinext_project_stage_gate.roadmap.buildDataZoomConfig({
