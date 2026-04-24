@@ -945,7 +945,7 @@ test("buildChartOptions makes y-axis project labels explicit and readable", () =
 	assert.equal(options.yAxis.triggerEvent, true);
 	assert.equal(options.yAxis.axisLabel.show, true);
 	assert.equal(options.yAxis.axisLabel.interval, 0);
-	assert.equal(options.yAxis.axisLabel.width, 176);
+	assert.equal(options.yAxis.axisLabel.width, 190);
 	assert.equal(options.yAxis.axisLabel.fontSize, 12);
 	assert.equal(options.yAxis.axisLabel.lineHeight, 14);
 	assert.equal(options.yAxis.axisLabel.align, "right");
@@ -968,6 +968,10 @@ test("buildChartOptions makes y-axis project labels explicit and readable", () =
 	assert.equal(options.toolbox.feature.restore.title, "Restore");
 	assert.ok(options.toolbox.feature.saveAsImage);
 	assert.equal(options.toolbox.feature.saveAsImage.title, "Save as Image");
+	assert.ok(options.toolbox.feature.myShowFullWidth);
+	assert.equal(options.toolbox.feature.myShowFullWidth.title, "Show Full Width");
+	assert.ok(options.toolbox.feature.myShowFullHeight);
+	assert.equal(options.toolbox.feature.myShowFullHeight.title, "Show Full Height");
 	assert.ok(options.toolbox.feature.myShowAllData);
 	assert.equal(options.toolbox.feature.myShowAllData.title, "Show All");
 	assert.equal(typeof options.xAxis.axisLabel.formatter, "function");
@@ -1651,6 +1655,72 @@ test("buildShowAllDataZoomConfig updates all x and y zoom entries consistently",
 	assert.equal(dataZoom[1].endValue, "2026-03-01");
 	assert.equal(dataZoom[2].startValue, 0);
 	assert.equal(dataZoom[3].endValue, 2);
+});
+
+test("buildAxisFitDataZoomConfig expands only the horizontal viewport", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const dataZoom = roadmap.buildAxisFitDataZoomConfig({
+		axis: "horizontal",
+		viewportState: {
+			horizontal: {
+				startValue: "2026-02-01",
+				endValue: "2026-02-20",
+			},
+			vertical: {
+				startValue: 2,
+				endValue: 6,
+			},
+		},
+		categories: new Array(10).fill("row"),
+		bars: [{ value: [0, "2026-01-01", "2026-03-01"] }],
+		gates: [{ value: ["2026-03-15", 0] }],
+		fromDate: "2025-12-01",
+		toDate: "2026-04-01",
+	});
+
+	assert.equal(dataZoom.length, 4);
+	assert.equal(dataZoom[0].startValue, "2026-01-01");
+	assert.equal(dataZoom[0].endValue, "2026-03-15");
+	assert.equal(dataZoom[1].startValue, "2026-01-01");
+	assert.equal(dataZoom[1].endValue, "2026-03-15");
+	assert.equal(dataZoom[2].startValue, 2);
+	assert.equal(dataZoom[2].endValue, 6);
+	assert.equal(dataZoom[3].startValue, 2);
+	assert.equal(dataZoom[3].endValue, 6);
+});
+
+test("buildAxisFitDataZoomConfig expands only the vertical viewport", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const dataZoom = roadmap.buildAxisFitDataZoomConfig({
+		axis: "vertical",
+		viewportState: {
+			horizontal: {
+				startValue: "2026-02-01",
+				endValue: "2026-02-20",
+			},
+			vertical: {
+				startValue: 2,
+				endValue: 6,
+			},
+		},
+		categories: new Array(10).fill("row"),
+		bars: [{ value: [0, "2026-01-01", "2026-03-01"] }],
+		gates: [{ value: ["2026-03-15", 0] }],
+		fromDate: "2025-12-01",
+		toDate: "2026-04-01",
+	});
+
+	assert.equal(dataZoom.length, 4);
+	assert.equal(dataZoom[0].startValue, "2026-02-01");
+	assert.equal(dataZoom[0].endValue, "2026-02-20");
+	assert.equal(dataZoom[1].startValue, "2026-02-01");
+	assert.equal(dataZoom[1].endValue, "2026-02-20");
+	assert.equal(dataZoom[2].startValue, 0);
+	assert.equal(dataZoom[2].endValue, 9);
+	assert.equal(dataZoom[3].startValue, 0);
+	assert.equal(dataZoom[3].endValue, 9);
 });
 
 test("wrapAxisLabel splits long project names into at most two lines", () => {

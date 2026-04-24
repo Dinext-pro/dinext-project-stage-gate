@@ -287,6 +287,21 @@ dinext_project_stage_gate.roadmap.persistViewportState = function (target, viewp
 		dinext_project_stage_gate.roadmap.cloneViewportState(viewportState);
 };
 
+dinext_project_stage_gate.roadmap.applyViewportDataZoom = function (chart, dom, dataZoom) {
+	if (!chart || typeof chart.setOption !== "function" || !Array.isArray(dataZoom)) {
+		return;
+	}
+
+	chart.setOption({
+		dataZoom,
+	});
+	dinext_project_stage_gate.roadmap.persistViewportState(
+		dom,
+		dinext_project_stage_gate.roadmap.getViewportStateFromDataZoom(dataZoom)
+	);
+	dinext_project_stage_gate.roadmap.updateXAxisLabelDensity(chart);
+};
+
 dinext_project_stage_gate.roadmap.clampHorizontalViewport = function (viewport, bounds) {
 	const startTime = dinext_project_stage_gate.roadmap._parseTimeMs(viewport?.startValue);
 	const endTime = dinext_project_stage_gate.roadmap._parseTimeMs(viewport?.endValue);
@@ -1252,6 +1267,67 @@ dinext_project_stage_gate.roadmap.buildShowAllDataZoomConfig = function ({
 	];
 };
 
+dinext_project_stage_gate.roadmap.buildAxisFitDataZoomConfig = function ({
+	axis,
+	viewportState,
+	categories,
+	bars,
+	gates,
+	taskBars,
+	milestones,
+	fromDate,
+	toDate,
+} = {}) {
+	const safeAxis = axis === "vertical" ? "vertical" : "horizontal";
+	const fullHorizontalViewport = dinext_project_stage_gate.roadmap.getFullHorizontalViewport({
+		bars,
+		gates,
+		taskBars,
+		milestones,
+		fromDate,
+		toDate,
+	});
+	const fullVerticalViewport = dinext_project_stage_gate.roadmap.getFullVerticalViewport(categories);
+	const savedViewport = dinext_project_stage_gate.roadmap.cloneViewportState(viewportState);
+	const currentHorizontalViewport =
+		(savedViewport?.horizontal &&
+			dinext_project_stage_gate.roadmap.clampHorizontalViewport(
+				savedViewport.horizontal,
+				fullHorizontalViewport
+			)) ||
+		fullHorizontalViewport;
+	const currentVerticalViewport =
+		(savedViewport?.vertical &&
+			dinext_project_stage_gate.roadmap.clampVerticalViewport(
+				savedViewport.vertical,
+				categories
+			)) ||
+		fullVerticalViewport;
+	const horizontalViewport =
+		safeAxis === "horizontal" ? fullHorizontalViewport : currentHorizontalViewport;
+	const verticalViewport =
+		safeAxis === "vertical" ? fullVerticalViewport : currentVerticalViewport;
+
+	return [
+		{
+			startValue: horizontalViewport.startValue,
+			endValue: horizontalViewport.endValue,
+		},
+		{
+			startValue: horizontalViewport.startValue,
+			endValue: horizontalViewport.endValue,
+		},
+		{
+			startValue: verticalViewport.startValue,
+			endValue: verticalViewport.endValue,
+		},
+		{
+			startValue: verticalViewport.startValue,
+			endValue: verticalViewport.endValue,
+		},
+	];
+};
+
 dinext_project_stage_gate.roadmap.buildDataZoomConfig = function ({
 	categories,
 	bars,
@@ -1432,6 +1508,8 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 	milestones,
 	dataZoom,
 	onShowAllData,
+	onShowFullWidth,
+	onShowFullHeight,
 	monthOnlyXAxisLabels = false,
 	rowSpanUnits = 1,
 } = {}) {
@@ -1545,6 +1623,22 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 				restore: {
 					title: __("Restore"),
 				},
+				myShowFullWidth: {
+					show: true,
+					title: __("Show Full Width"),
+					icon: "path://M2 10H18M6 6L2 10L6 14M14 6L18 10L14 14",
+					onclick() {
+						onShowFullWidth?.();
+					},
+				},
+				myShowFullHeight: {
+					show: true,
+					title: __("Show Full Height"),
+					icon: "path://M10 2V18M6 6L10 2L14 6M6 14L10 18L14 14",
+					onclick() {
+						onShowFullHeight?.();
+					},
+				},
 				myShowAllData: {
 					show: true,
 					title: __("Show All"),
@@ -1608,7 +1702,7 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 			axisLabel: {
 				show: true,
 				interval: 0,
-				width: 176,
+				width: 190,
 				overflow: "break",
 				fontSize: 12,
 				lineHeight: 14,
@@ -2681,6 +2775,13 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 	});
 	const monthOnlyXAxisLabels =
 		dinext_project_stage_gate.roadmap.getMonthOnlyXAxisLabelsForDataZoom(dataZoom);
+	const getCurrentViewportState = function () {
+		return (
+			dinext_project_stage_gate.roadmap.captureViewportStateFromChart(chart) ||
+			dom._dinextRoadmapViewportState ||
+			null
+		);
+	};
 
 	chart.setOption(
 		dinext_project_stage_gate.roadmap.buildChartOptions({
@@ -2692,15 +2793,44 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 			dataZoom,
 			monthOnlyXAxisLabels,
 			rowSpanUnits,
-			onShowAllData() {
-				chart.setOption({
-					dataZoom: showAllDataZoom,
+			onShowFullWidth() {
+				const fitWidthDataZoom = dinext_project_stage_gate.roadmap.buildAxisFitDataZoomConfig({
+					axis: "horizontal",
+					viewportState: getCurrentViewportState(),
+					categories,
+					bars,
+					gates,
+					taskBars,
+					milestones,
+					fromDate,
+					toDate,
 				});
-				dinext_project_stage_gate.roadmap.persistViewportState(
+				dinext_project_stage_gate.roadmap.applyViewportDataZoom(
+					chart,
 					dom,
-					dinext_project_stage_gate.roadmap.getViewportStateFromDataZoom(showAllDataZoom)
+					fitWidthDataZoom
 				);
-				dinext_project_stage_gate.roadmap.updateXAxisLabelDensity(chart);
+			},
+			onShowFullHeight() {
+				const fitHeightDataZoom = dinext_project_stage_gate.roadmap.buildAxisFitDataZoomConfig({
+					axis: "vertical",
+					viewportState: getCurrentViewportState(),
+					categories,
+					bars,
+					gates,
+					taskBars,
+					milestones,
+					fromDate,
+					toDate,
+				});
+				dinext_project_stage_gate.roadmap.applyViewportDataZoom(
+					chart,
+					dom,
+					fitHeightDataZoom
+				);
+			},
+			onShowAllData() {
+				dinext_project_stage_gate.roadmap.applyViewportDataZoom(chart, dom, showAllDataZoom);
 			},
 		})
 	);
