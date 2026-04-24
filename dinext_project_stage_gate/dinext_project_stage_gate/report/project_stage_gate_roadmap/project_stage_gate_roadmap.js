@@ -276,8 +276,8 @@ dinext_project_stage_gate.roadmap.ROADMAP_ROW_USABLE_HEIGHT_RATIO = 0.8;
 dinext_project_stage_gate.roadmap.ROADMAP_SLOT_FILL_RATIO = 0.625;
 
 dinext_project_stage_gate.roadmap.taskTypePalette = {
-	light: ["#2563eb", "#7c3aed", "#0f766e", "#dc6803", "#c2410c", "#db2777", "#4f46e5"],
-	dark: ["#60a5fa", "#a78bfa", "#2dd4bf", "#f59e0b", "#fb923c", "#f472b6", "#818cf8"],
+	light: ["#7fa6cf", "#b197d6", "#6faea5", "#d6a06c", "#c88f79", "#c988ac", "#8f96d6"],
+	dark: ["#90b5dd", "#c0a8e3", "#83c0b6", "#e0b382", "#dba08b", "#d89fbd", "#a5ace6"],
 };
 
 dinext_project_stage_gate.roadmap.formatXAxisLabel = function (value, options = {}) {
