@@ -991,8 +991,8 @@ test("buildRoundedTaskLineGraphic adds an inner progress overlay with proportion
 
 	assert.equal(graphic.children[0].type, "rect");
 	assert.equal(graphic.children[0].z2, 1);
-	assert.equal(graphic.children[0].style.fill, roadmap.hexToRgba("#3366ff", 0.22));
-	assert.equal(graphic.children[0].style.shadowColor, roadmap.hexToRgba("#3366ff", 0.22));
+	assert.equal(graphic.children[0].style.fill, roadmap.getTaskProgressTrackColor("#3366ff"));
+	assert.equal(graphic.children[0].style.shadowColor, roadmap.getTaskProgressTrackColor("#3366ff"));
 	assert.equal(graphic.children[1].type, "rect");
 	assert.equal(graphic.children[1].z2, 2);
 	assert.equal(graphic.children[1].style.stroke, "#84cc16");
@@ -1762,6 +1762,7 @@ test("gate checkpoint renderItem sizes diamonds from the current stage arrow hei
 	const ys = points.map((point) => point[1]);
 
 	assert.equal(gateSeries.type, "custom");
+	assert.equal(gateSeries.clip, true);
 	assert.equal(Math.max(...ys) - Math.min(...ys), 30);
 });
 
