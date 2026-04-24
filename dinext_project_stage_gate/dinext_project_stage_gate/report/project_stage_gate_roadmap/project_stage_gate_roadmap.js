@@ -2108,6 +2108,7 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 			{
 				name: __("Gate checkpoints"),
 				type: "custom",
+				clip: true,
 				symbol: "diamond",
 				symbolSize: checkpointSymbolSize,
 				z: 8,
