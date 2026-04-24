@@ -123,16 +123,61 @@ frappe.query_reports["Project Stage Gate Roadmap"] = {
 };
 
 function applyRoadmapStyle() {
-    // Your CSS as text 
-    var styles = `
+	var styles = `
         .multiselect-list.dropdown {
 	        width: 100%;
         }	
+		.project-stage-gate-roadmap-shell {
+			margin: 0 0 16px 0;
+			position: relative;
+		}
+		.project-stage-gate-roadmap-sort-menu {
+			background: var(--card-bg);
+			border: 1px solid var(--border-color);
+			border-radius: 6px;
+			box-shadow: var(--shadow-md);
+			min-width: 240px;
+			padding: 6px;
+			position: absolute;
+			right: 8px;
+			top: 28px;
+			z-index: 30;
+		}
+		.project-stage-gate-roadmap-sort-menu-title {
+			color: var(--text-muted);
+			font-size: 11px;
+			font-weight: 600;
+			padding: 4px 8px 6px;
+			text-transform: uppercase;
+		}
+		.project-stage-gate-roadmap-sort-menu-item {
+			align-items: center;
+			background: transparent;
+			border: 0;
+			border-radius: 4px;
+			color: var(--text-color);
+			display: flex;
+			font-size: 12px;
+			justify-content: space-between;
+			padding: 6px 8px;
+			text-align: left;
+			width: 100%;
+		}
+		.project-stage-gate-roadmap-sort-menu-item:hover,
+		.project-stage-gate-roadmap-sort-menu-item.is-active {
+			background: var(--control-bg);
+		}
+		.project-stage-gate-roadmap-sort-menu-direction-icon {
+			color: var(--text-muted);
+			font-size: 13px;
+			font-weight: 700;
+			line-height: 1;
+		}
     `;
-    
-    var styleSheet = document.createElement("style");
-    styleSheet.textContent = styles;
-    document.head.appendChild(styleSheet);
+
+	var styleSheet = document.createElement("style");
+	styleSheet.textContent = styles;
+	document.head.appendChild(styleSheet);
 }
 
 frappe.provide("dinext_project_stage_gate.roadmap");
@@ -1291,6 +1336,231 @@ dinext_project_stage_gate.roadmap._coerceToCheck = function (value, defaultValue
 	return value ? 1 : 0;
 };
 
+dinext_project_stage_gate.roadmap.DEFAULT_SORT_STATE = {
+	field: "current_order",
+	direction: "asc",
+};
+
+dinext_project_stage_gate.roadmap.PROJECT_SORT_FIELDS = [
+	"current_order",
+	"project_name",
+	"expected_start_date",
+	"expected_end_date",
+];
+
+dinext_project_stage_gate.roadmap.normalizeSortState = function (sortState) {
+	const field = dinext_project_stage_gate.roadmap.PROJECT_SORT_FIELDS.includes(sortState?.field)
+		? sortState.field
+		: dinext_project_stage_gate.roadmap.DEFAULT_SORT_STATE.field;
+	const direction = sortState?.direction === "desc" ? "desc" : "asc";
+	return { field, direction };
+};
+
+dinext_project_stage_gate.roadmap.compareProjectNames = function (left, right) {
+	const leftLabel = String(left?.project_name || left?.name || "");
+	const rightLabel = String(right?.project_name || right?.name || "");
+	const labelComparison = leftLabel.localeCompare(rightLabel);
+	if (labelComparison !== 0) {
+		return labelComparison;
+	}
+	return String(left?.name || "").localeCompare(String(right?.name || ""));
+};
+
+dinext_project_stage_gate.roadmap.compareProjectDates = function (left, right, field) {
+	const leftTime = dinext_project_stage_gate.roadmap._parseTimeMs(left?.[field]);
+	const rightTime = dinext_project_stage_gate.roadmap._parseTimeMs(right?.[field]);
+	const leftHasDate = Number.isFinite(leftTime);
+	const rightHasDate = Number.isFinite(rightTime);
+	if (leftHasDate && rightHasDate && leftTime !== rightTime) {
+		return leftTime - rightTime;
+	}
+	if (leftHasDate !== rightHasDate) {
+		return leftHasDate ? -1 : 1;
+	}
+	return dinext_project_stage_gate.roadmap.compareProjectNames(left, right);
+};
+
+dinext_project_stage_gate.roadmap.sortProjectsForRoadmap = function (projects, sortState) {
+	const sortedProjects = Array.isArray(projects) ? [...projects] : [];
+	const normalized = dinext_project_stage_gate.roadmap.normalizeSortState(sortState);
+	if (normalized.field === "current_order") {
+		return normalized.direction === "desc" ? sortedProjects.reverse() : sortedProjects;
+	}
+	const multiplier = normalized.direction === "desc" ? -1 : 1;
+	return sortedProjects.sort((left, right) => {
+		if (normalized.field === "project_name") {
+			return multiplier * dinext_project_stage_gate.roadmap.compareProjectNames(left, right);
+		}
+		const comparison = dinext_project_stage_gate.roadmap.compareProjectDates(
+			left,
+			right,
+			normalized.field
+		);
+		const leftHasDate = Number.isFinite(
+			dinext_project_stage_gate.roadmap._parseTimeMs(left?.[normalized.field])
+		);
+		const rightHasDate = Number.isFinite(
+			dinext_project_stage_gate.roadmap._parseTimeMs(right?.[normalized.field])
+		);
+		if (leftHasDate && rightHasDate) {
+			return multiplier * comparison;
+		}
+		return comparison;
+	});
+};
+
+dinext_project_stage_gate.roadmap.getSortStateFromChartDom = function (dom) {
+	return dinext_project_stage_gate.roadmap.normalizeSortState(dom?._dinextRoadmapSortState);
+};
+
+dinext_project_stage_gate.roadmap.getViewportStateForSortChange = function (viewportState) {
+	const savedViewport = dinext_project_stage_gate.roadmap.cloneViewportState(viewportState);
+	return savedViewport || { horizontal: {}, vertical: {} };
+};
+
+dinext_project_stage_gate.roadmap.handleRoadmapSortChange = function (report, dom, sortState) {
+	if (!dom) {
+		return Promise.resolve();
+	}
+	const chart =
+		(typeof echarts !== "undefined" &&
+			typeof echarts.getInstanceByDom === "function" &&
+			echarts.getInstanceByDom(dom)) ||
+		dom._dinextRoadmapChart ||
+		null;
+	const viewportState =
+		dinext_project_stage_gate.roadmap.captureViewportStateFromChart(chart) ||
+		dom._dinextRoadmapViewportState ||
+		null;
+	dom._dinextRoadmapSortState = dinext_project_stage_gate.roadmap.normalizeSortState(sortState);
+	dom._dinextRoadmapViewportState =
+		dinext_project_stage_gate.roadmap.getViewportStateForSortChange(viewportState);
+	dom._dinextRoadmapIgnoreChartViewportOnce = true;
+	return Promise.resolve(dinext_project_stage_gate.roadmap.render(report));
+};
+
+dinext_project_stage_gate.roadmap.PROJECT_SORT_MENU_FIELDS = [
+	{ field: "current_order", label: "Current order" },
+	{ field: "project_name", label: "Project Name" },
+	{ field: "expected_start_date", label: "Forecast Start Date" },
+	{ field: "expected_end_date", label: "Forecast End Date" },
+];
+
+dinext_project_stage_gate.roadmap.PROJECT_SORT_MENU_DIRECTIONS = [
+	{ direction: "asc", label: "Ascending", icon: "&#8593;" },
+	{ direction: "desc", label: "Descending", icon: "&#8595;" },
+];
+
+dinext_project_stage_gate.roadmap.getSortMenuItems = function (sortState) {
+	const activeState = dinext_project_stage_gate.roadmap.normalizeSortState(sortState);
+	return dinext_project_stage_gate.roadmap.PROJECT_SORT_MENU_FIELDS.flatMap((fieldEntry) =>
+		dinext_project_stage_gate.roadmap.PROJECT_SORT_MENU_DIRECTIONS.map((directionEntry) => ({
+			field: fieldEntry.field,
+			direction: directionEntry.direction,
+			label: __(fieldEntry.label),
+			directionLabel: __(directionEntry.label),
+			directionIcon: directionEntry.icon,
+			active:
+				activeState.field === fieldEntry.field &&
+				activeState.direction === directionEntry.direction,
+		}))
+	);
+};
+
+dinext_project_stage_gate.roadmap.closeSortMenu = function (dom) {
+	if (!dom?._dinextRoadmapSortMenu) {
+		return;
+	}
+	if (typeof dom._dinextRoadmapSortMenu.remove === "function") {
+		dom._dinextRoadmapSortMenu.remove();
+	}
+	dom._dinextRoadmapSortMenu = null;
+};
+
+dinext_project_stage_gate.roadmap.getSortMenuContainer = function (dom) {
+	if (dom?._dinextRoadmapShell) {
+		return dom._dinextRoadmapShell;
+	}
+	if (typeof $ === "function") {
+		const chartElement = $(dom);
+		if (typeof chartElement.parent === "function") {
+			return chartElement.parent();
+		}
+	}
+	return null;
+};
+
+dinext_project_stage_gate.roadmap.buildSortMenu = function (report, dom) {
+	const items = dinext_project_stage_gate.roadmap.getSortMenuItems(
+		dom?._dinextRoadmapSortState
+	);
+	const itemMarkup = items
+		.map(
+			(item) => `
+				<button
+					type="button"
+					class="project-stage-gate-roadmap-sort-menu-item${item.active ? " is-active" : ""}"
+					data-roadmap-sort-menu-item
+					data-roadmap-sort-field="${item.field}"
+					data-roadmap-sort-direction="${item.direction}"
+				>
+					<span>${item.label}</span>
+					<span
+						class="project-stage-gate-roadmap-sort-menu-direction-icon"
+						aria-label="${item.directionLabel}"
+						title="${item.directionLabel}"
+					>${item.directionIcon}</span>
+				</button>
+			`
+		)
+		.join("");
+	const menu = $(`
+		<div class="project-stage-gate-roadmap-sort-menu" role="menu">
+			<div class="project-stage-gate-roadmap-sort-menu-title">${__("Project sorting")}</div>
+			${itemMarkup}
+		</div>
+	`);
+	if (typeof menu.on === "function") {
+		menu.on("click", "[data-roadmap-sort-menu-item]", function () {
+			const item = $(this);
+			const field = typeof item.attr === "function" ? item.attr("data-roadmap-sort-field") : null;
+			const direction =
+				typeof item.attr === "function" ? item.attr("data-roadmap-sort-direction") : null;
+			dinext_project_stage_gate.roadmap.closeSortMenu(dom);
+			dinext_project_stage_gate.roadmap.handleRoadmapSortChange(report, dom, {
+				field,
+				direction,
+			});
+		});
+		menu.on("mouseleave", () => {
+			dinext_project_stage_gate.roadmap.closeSortMenu(dom);
+		});
+	}
+	return menu;
+};
+
+dinext_project_stage_gate.roadmap.toggleSortMenu = function (report, dom) {
+	if (!dom) {
+		return null;
+	}
+	if (dom._dinextRoadmapSortMenu) {
+		dinext_project_stage_gate.roadmap.closeSortMenu(dom);
+		return null;
+	}
+	const menu = dinext_project_stage_gate.roadmap.buildSortMenu(report, dom);
+	const container = dinext_project_stage_gate.roadmap.getSortMenuContainer(dom);
+	if (container && typeof container.append === "function") {
+		container.append(menu);
+	} else if (typeof $ === "function") {
+		const chartElement = $(dom);
+		if (typeof chartElement.after === "function") {
+			chartElement.after(menu);
+		}
+	}
+	dom._dinextRoadmapSortMenu = menu;
+	return menu;
+};
+
 dinext_project_stage_gate.roadmap.normalizeVisibilityFilters = function (filters) {
 	const normalized = {
 		...(filters || {}),
@@ -1843,6 +2113,7 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 	onShowAllData,
 	onShowFullWidth,
 	onShowFullHeight,
+	onSortProjects,
 	monthOnlyXAxisLabels = false,
 	rowSpanUnits = 1,
 } = {}) {
@@ -1955,6 +2226,14 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 			feature: {
 				restore: {
 					title: __("Restore"),
+				},
+				mySortProjects: {
+					show: true,
+					title: __("Sort projects"),
+					icon: "path://M4 5H16M4 10H13M4 15H10M16 13L19 16L22 13M19 4V16",
+					onclick() {
+						onSortProjects?.();
+					},
 				},
 				myShowFullWidth: {
 					show: true,
@@ -2591,11 +2870,16 @@ dinext_project_stage_gate.roadmap.ensure_chart_mount = function (report) {
 		return existingWrapper;
 	}
 
+	const wrapper = $('<div class="project-stage-gate-roadmap-shell" style="margin: 0 0 16px 0;"></div>');
 	const chart = $(
-		'<div class="project-stage-gate-roadmap-chart project-stage-gate-roadmap" style="margin: 0 0 16px 0;"></div>'
+		'<div class="project-stage-gate-roadmap-chart project-stage-gate-roadmap"></div>'
 	);
+	wrapper.append(chart);
 	dinext_project_stage_gate.roadmap.applyChartHeight(chart.get(0), 0);
-	report.page.main.prepend(chart);
+	if (chart.get(0)) {
+		chart.get(0)._dinextRoadmapShell = wrapper;
+	}
+	report.page.main.prepend(wrapper);
 	return chart;
 };
 
@@ -2678,8 +2962,12 @@ dinext_project_stage_gate.roadmap.clearEmptyState = function (dom) {
  */
 dinext_project_stage_gate.roadmap.prepareSeriesData = function (payload, options) {
 	const safe = payload || { projects: [], stageBars: [], gates: [], taskEntities: [] };
-	const laneLayout = dinext_project_stage_gate.roadmap.buildProjectLaneRows(
+	const sortedProjects = dinext_project_stage_gate.roadmap.sortProjectsForRoadmap(
 		safe.projects || [],
+		options?.sortState
+	);
+	const laneLayout = dinext_project_stage_gate.roadmap.buildProjectLaneRows(
+		sortedProjects,
 		safe.taskEntities || [],
 		options?.taskTypeOrder
 	);
@@ -3296,11 +3584,14 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 	const taskTypeOrder = dinext_project_stage_gate.roadmap._coerceToArray(
 		report.get_filter_value?.("task_types")
 	);
+	const dom = mount.get(0);
+	const sortState = dinext_project_stage_gate.roadmap.getSortStateFromChartDom(dom);
 	const { categories, bars, gates, taskBars, milestones, rowSpanUnits, projectDocsByLabel } =
 		dinext_project_stage_gate.roadmap.prepareSeriesData(seriesPayload, {
 			fromDate,
 			toDate,
 			taskTypeOrder,
+			sortState,
 		});
 	const showAllDataZoom = dinext_project_stage_gate.roadmap.buildShowAllDataZoomConfig({
 		categories,
@@ -3311,7 +3602,6 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 		fromDate,
 		toDate,
 	});
-	const dom = mount.get(0);
 	dom._dinextRoadmapCategoryCount = categories.length;
 	dom._dinextRoadmapRowSpanUnits = rowSpanUnits;
 	dinext_project_stage_gate.roadmap.applyChartHeight(dom, categories, rowSpanUnits);
@@ -3319,11 +3609,16 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 		(typeof echarts.getInstanceByDom === "function" && echarts.getInstanceByDom(dom)) ||
 		dom._dinextRoadmapChart ||
 		null;
+	const shouldIgnoreExistingViewport = dom._dinextRoadmapIgnoreChartViewportOnce;
+	dom._dinextRoadmapIgnoreChartViewportOnce = false;
 	const savedViewportState =
-		dinext_project_stage_gate.roadmap.captureViewportStateFromChart(existing) ||
+		(shouldIgnoreExistingViewport
+			? null
+			: dinext_project_stage_gate.roadmap.captureViewportStateFromChart(existing)) ||
 		dom._dinextRoadmapViewportState ||
 		null;
 	dinext_project_stage_gate.roadmap.persistViewportState(dom, savedViewportState);
+	dinext_project_stage_gate.roadmap.closeSortMenu(dom);
 	if (existing) {
 		existing.dispose();
 	}
@@ -3409,6 +3704,9 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 			},
 			onShowAllData() {
 				dinext_project_stage_gate.roadmap.applyViewportDataZoom(chart, dom, showAllDataZoom);
+			},
+			onSortProjects() {
+				dinext_project_stage_gate.roadmap.toggleSortMenu(report, dom);
 			},
 		})
 	);

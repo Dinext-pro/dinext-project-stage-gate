@@ -864,6 +864,320 @@ test("prepareSeriesData expands projects into explicit lane rows", () => {
 	assert.equal(data.projectDocsByLabel["PRJ-1::milestone"], undefined);
 });
 
+test("sortProjectsForRoadmap sorts by project name in both directions", () => {
+	const { roadmap } = loadRoadmapScript();
+	const projects = [
+		{ name: "PRJ-2", project_name: "Beta" },
+		{ name: "PRJ-1", project_name: "Alpha" },
+		{ name: "PRJ-3", project_name: "Gamma" },
+	];
+
+	assert.deepEqual(
+		Array.from(roadmap
+			.sortProjectsForRoadmap(projects, { field: "project_name", direction: "asc" })
+			.map((project) => project.name)),
+		["PRJ-1", "PRJ-2", "PRJ-3"]
+	);
+	assert.deepEqual(
+		Array.from(roadmap
+			.sortProjectsForRoadmap(projects, { field: "project_name", direction: "desc" })
+			.map((project) => project.name)),
+		["PRJ-3", "PRJ-2", "PRJ-1"]
+	);
+	assert.deepEqual(
+		projects.map((project) => project.name),
+		["PRJ-2", "PRJ-1", "PRJ-3"],
+		"sorting should not mutate the server payload"
+	);
+	assert.deepEqual(
+		Array.from(roadmap
+			.sortProjectsForRoadmap(projects, { field: "current_order", direction: "desc" })
+			.map((project) => project.name)),
+		["PRJ-3", "PRJ-1", "PRJ-2"]
+	);
+});
+
+test("sortProjectsForRoadmap sorts by expected project dates with empty dates last", () => {
+	const { roadmap } = loadRoadmapScript();
+	const projects = [
+		{ name: "PRJ-1", project_name: "Alpha", expected_start_date: "2026-05-01", expected_end_date: "2026-09-30" },
+		{ name: "PRJ-2", project_name: "Beta", expected_start_date: "", expected_end_date: null },
+		{ name: "PRJ-3", project_name: "Gamma", expected_start_date: "2026-02-01", expected_end_date: "2026-07-15" },
+	];
+
+	assert.deepEqual(
+		Array.from(roadmap
+			.sortProjectsForRoadmap(projects, { field: "expected_start_date", direction: "asc" })
+			.map((project) => project.name)),
+		["PRJ-3", "PRJ-1", "PRJ-2"]
+	);
+	assert.deepEqual(
+		Array.from(roadmap
+			.sortProjectsForRoadmap(projects, { field: "expected_end_date", direction: "desc" })
+			.map((project) => project.name)),
+		["PRJ-1", "PRJ-3", "PRJ-2"]
+	);
+});
+
+test("prepareSeriesData applies roadmap sort state before assigning y-axis rows", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const data = roadmap.prepareSeriesData(
+		{
+			projects: [
+				{ name: "PRJ-1", project_name: "Alpha", expected_start_date: "2026-05-01" },
+				{ name: "PRJ-2", project_name: "Beta", expected_start_date: "2026-02-01" },
+			],
+			stageBars: [
+				{
+					name: "PSI-1",
+					project: "PRJ-1",
+					stage: "Discovery",
+					status: "Active",
+					sequence: 1,
+					planned_start_date: "2026-05-01",
+					planned_end_date: "2026-05-31",
+				},
+				{
+					name: "PSI-2",
+					project: "PRJ-2",
+					stage: "Delivery",
+					status: "Active",
+					sequence: 1,
+					planned_start_date: "2026-02-01",
+					planned_end_date: "2026-02-28",
+				},
+			],
+			gates: [],
+			taskEntities: [],
+		},
+		{ sortState: { field: "expected_start_date", direction: "asc" } }
+	);
+
+	assert.deepEqual(
+		Array.from(data.categories.map((category) => category.projectName)),
+		["PRJ-2", "PRJ-1"]
+	);
+	assert.equal(data.bars.find((bar) => bar.docName === "PSI-2").value[0], 0);
+	assert.equal(data.bars.find((bar) => bar.docName === "PSI-1").value[0], 1);
+});
+
+test("prepareSeriesData keeps all entity rows aligned after project sorting", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const data = roadmap.prepareSeriesData(
+		{
+			projects: [
+				{ name: "PRJ-1", project_name: "Alpha", expected_start_date: "2026-05-01" },
+				{ name: "PRJ-2", project_name: "Beta", expected_start_date: "2026-02-01" },
+			],
+			stageBars: [
+				{
+					name: "PSI-1",
+					project: "PRJ-1",
+					stage: "Discovery",
+					status: "Active",
+					sequence: 1,
+					planned_start_date: "2026-05-01",
+					planned_end_date: "2026-05-31",
+				},
+				{
+					name: "PSI-2",
+					project: "PRJ-2",
+					stage: "Delivery",
+					status: "Active",
+					sequence: 1,
+					planned_start_date: "2026-02-01",
+					planned_end_date: "2026-02-28",
+				},
+			],
+			gates: [
+				{
+					name: "PGC-2",
+					project: "PRJ-2",
+					approval_date: "2026-02-20",
+					status: "Approved",
+					checkpoint_level: "Gate 2",
+				},
+			],
+			taskEntities: [
+				{
+					name: "TASK-2",
+					project: "PRJ-2",
+					subject: "Sprint B",
+					status: "Working",
+					type: "Sprint",
+					entity_kind: "task_bar",
+					lane_key: "task_type:Sprint",
+					lane_label: "Sprint",
+					start_date: "2026-02-05",
+					end_date: "2026-02-15",
+				},
+				{
+					name: "MILESTONE-2",
+					project: "PRJ-2",
+					subject: "Beta milestone",
+					status: "Open",
+					entity_kind: "milestone",
+					lane_key: "milestone",
+					point_date: "2026-02-18",
+				},
+			],
+		},
+		{ sortState: { field: "expected_start_date", direction: "asc" }, taskTypeOrder: ["Sprint"] }
+	);
+
+	assert.deepEqual(
+		Array.from(data.categories.map((category) => category.key)),
+		["PRJ-2::base", "PRJ-2::task_type:Sprint::0", "PRJ-2::milestone", "PRJ-1::base"]
+	);
+	assert.equal(data.gates.find((gate) => gate.docName === "PGC-2").value[1], 0);
+	assert.equal(data.taskBars.find((task) => task.docName === "TASK-2").value[0], 1);
+	assert.equal(data.milestones.find((milestone) => milestone.docName === "MILESTONE-2").value[1], 2);
+	assert.equal(data.projectDocsByLabel["PRJ-2::base"].docName, "PRJ-2");
+});
+
+test("handleRoadmapSortChange preserves chart zoom while rerendering without report refresh", async () => {
+	const { roadmap } = loadRoadmapScript();
+	const dom = {
+		_dinextRoadmapViewportState: {
+			horizontal: {
+				startValue: "2026-02-01",
+				endValue: "2026-05-01",
+			},
+			vertical: {
+				startValue: 4,
+				endValue: 8,
+			},
+		},
+	};
+	const report = {
+		refresh() {
+			throw new Error("sort changes should not refresh the report");
+		},
+	};
+	const renderCalls = [];
+	roadmap.render = async function (nextReport) {
+		renderCalls.push(nextReport);
+	};
+
+	await roadmap.handleRoadmapSortChange(report, dom, {
+		field: "expected_end_date",
+		direction: "desc",
+	});
+
+	assert.equal(dom._dinextRoadmapSortState.field, "expected_end_date");
+	assert.equal(dom._dinextRoadmapSortState.direction, "desc");
+	assert.equal(dom._dinextRoadmapViewportState.horizontal.startValue, "2026-02-01");
+	assert.equal(dom._dinextRoadmapViewportState.horizontal.endValue, "2026-05-01");
+	assert.equal(dom._dinextRoadmapViewportState.vertical.startValue, 4);
+	assert.equal(dom._dinextRoadmapViewportState.vertical.endValue, 8);
+	assert.equal(dom._dinextRoadmapIgnoreChartViewportOnce, true);
+	assert.deepEqual(renderCalls, [report]);
+});
+
+test("buildChartOptions adds toolbox sort feature", () => {
+	const { roadmap } = loadRoadmapScript();
+	let sortCalls = 0;
+
+	const options = roadmap.buildChartOptions({
+		categories: ["Project A"],
+		bars: [],
+		gates: [],
+		dataZoom: [],
+		onSortProjects() {
+			sortCalls += 1;
+		},
+	});
+
+	assert.ok(options.toolbox.feature.mySortProjects);
+	assert.equal(options.toolbox.feature.mySortProjects.title, "Sort projects");
+	assert.match(options.toolbox.feature.mySortProjects.icon, /^path:\/\//);
+
+	options.toolbox.feature.mySortProjects.onclick();
+
+	assert.equal(sortCalls, 1);
+});
+
+test("toggleSortMenu opens toolbox dropdown and menu item applies sorting", async () => {
+	const { roadmap, context } = loadRoadmapScript();
+	const createdMenus = [];
+	const wrapper = {
+		appended: [],
+		append(item) {
+			this.appended.push(item);
+		},
+	};
+	const dom = {
+		_dinextRoadmapShell: wrapper,
+	};
+	const report = {
+		refresh() {
+			throw new Error("sort menu should not refresh the report");
+		},
+	};
+	const renderCalls = [];
+	roadmap.render = async function (nextReport) {
+		renderCalls.push(nextReport);
+	};
+	context.$ = function (target) {
+		if (typeof target === "string" && target.trim().startsWith("<")) {
+			const menu = {
+				html: target,
+				length: 1,
+				removed: false,
+				handlers: {},
+				on(event, selector, handler) {
+					if (typeof handler === "function") {
+						this.handlers[event] = { selector, handler };
+					} else {
+						this.handlers[event] = { handler: selector };
+					}
+				},
+				remove() {
+					this.removed = true;
+				},
+			};
+			createdMenus.push(menu);
+			return menu;
+		}
+		return target;
+	};
+
+	roadmap.toggleSortMenu(report, dom);
+
+	assert.equal(createdMenus.length, 1);
+	assert.strictEqual(wrapper.appended[0], createdMenus[0]);
+	assert.equal(dom._dinextRoadmapSortMenu, createdMenus[0]);
+	assert.equal(createdMenus[0].handlers.click.selector, "[data-roadmap-sort-menu-item]");
+	assert.ok(createdMenus[0].handlers.mouseleave);
+	assert.match(createdMenus[0].html, /project-stage-gate-roadmap-sort-menu-direction-icon/);
+	assert.doesNotMatch(createdMenus[0].html, />Ascending</);
+	assert.doesNotMatch(createdMenus[0].html, />Descending</);
+
+	createdMenus[0].handlers.mouseleave.handler();
+
+	assert.equal(createdMenus[0].removed, true);
+	assert.equal(dom._dinextRoadmapSortMenu, null);
+
+	roadmap.toggleSortMenu(report, dom);
+
+	await createdMenus[1].handlers.click.handler.call({
+		attr(name) {
+			return {
+				"data-roadmap-sort-field": "expected_start_date",
+				"data-roadmap-sort-direction": "desc",
+			}[name];
+		},
+	});
+
+	assert.equal(createdMenus[1].removed, true);
+	assert.equal(dom._dinextRoadmapSortMenu, null);
+	assert.equal(dom._dinextRoadmapSortState.field, "expected_start_date");
+	assert.equal(dom._dinextRoadmapSortState.direction, "desc");
+	assert.deepEqual(renderCalls, [report]);
+});
+
 test("getTaskTypeItemStyle switches palette across themes and task types", () => {
 	const { roadmap, context } = loadRoadmapScript();
 

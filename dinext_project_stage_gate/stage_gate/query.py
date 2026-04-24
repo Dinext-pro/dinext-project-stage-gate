@@ -20,6 +20,8 @@ def _project_fields():
 		"status",
 		"company",
 		"customer",
+		"expected_start_date",
+		"expected_end_date",
 		"custom_project_portfolio",
 		"governance_model",
 		"stage_chain_version",
