@@ -1610,7 +1610,7 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 				interval: 0,
 				width: 176,
 				overflow: "break",
-				fontSize: 11,
+				fontSize: 12,
 				lineHeight: 14,
 				margin: 12,
 				align: "right",
