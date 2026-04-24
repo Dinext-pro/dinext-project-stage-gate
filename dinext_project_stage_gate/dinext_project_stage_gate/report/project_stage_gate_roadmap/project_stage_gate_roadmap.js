@@ -280,6 +280,49 @@ dinext_project_stage_gate.roadmap.taskTypePalette = {
 	dark: ["#90b5dd", "#c0a8e3", "#83c0b6", "#e0b382", "#dba08b", "#d89fbd", "#a5ace6"],
 };
 
+dinext_project_stage_gate.roadmap.milestoneStatusPalette = {
+	light: {
+		Draft: { lineColor: "#8295ab" },
+		"In Review": { lineColor: "#c7a16d" },
+		Approved: { lineColor: "#7ea693" },
+		Rejected: { lineColor: "#c98d7a" },
+		Canceled: { lineColor: "#aa98be" },
+		Overdue: { lineColor: "#d08d61" },
+		fallback: { lineColor: "#8ea0b3" },
+	},
+	dark: {
+		Draft: { lineColor: "#95a8bd" },
+		"In Review": { lineColor: "#dbb482" },
+		Approved: { lineColor: "#94baa7" },
+		Rejected: { lineColor: "#dda08c" },
+		Canceled: { lineColor: "#bbaace" },
+		Overdue: { lineColor: "#e2a173" },
+		fallback: { lineColor: "#a2b2c4" },
+	},
+};
+
+dinext_project_stage_gate.roadmap.normalizeMilestoneStatusKey = function (status) {
+	const normalized = String(status || "")
+		.trim()
+		.toLowerCase();
+	if (!normalized) {
+		return "";
+	}
+
+	const aliases = {
+		draft: "Draft",
+		"in review": "In Review",
+		approved: "Approved",
+		rejected: "Rejected",
+		canceled: "Canceled",
+		cancelled: "Canceled",
+		overdue: "Overdue",
+		"просрочено": "Overdue",
+	};
+
+	return aliases[normalized] || "";
+};
+
 dinext_project_stage_gate.roadmap.formatXAxisLabel = function (value, options = {}) {
 	const time = dinext_project_stage_gate.roadmap._parseTimeMs(value);
 	if (!Number.isFinite(time)) {
@@ -653,8 +696,14 @@ dinext_project_stage_gate.roadmap.getTaskTypeItemStyle = function (taskType, opt
 	};
 };
 
-dinext_project_stage_gate.roadmap.getMilestoneItemStyle = function () {
-	const lineColor = "#d13438";
+dinext_project_stage_gate.roadmap.getMilestoneItemStyle = function (status) {
+	const isDark = dinext_project_stage_gate.roadmap.getEChartsThemeName() === "dark";
+	const palette = isDark
+		? dinext_project_stage_gate.roadmap.milestoneStatusPalette.dark
+		: dinext_project_stage_gate.roadmap.milestoneStatusPalette.light;
+	const statusKey = dinext_project_stage_gate.roadmap.normalizeMilestoneStatusKey(status);
+	const colors = palette[statusKey] || palette.fallback;
+	const lineColor = colors.lineColor;
 	return {
 		lineColor,
 		labelColor: lineColor,
@@ -2567,10 +2616,10 @@ dinext_project_stage_gate.roadmap.prepareSeriesData = function (payload, options
 			},
 		}));
 
-	const milestoneStyle = dinext_project_stage_gate.roadmap.getMilestoneItemStyle();
 	const milestones = (safe.taskEntities || [])
 		.filter((entity) => entity?.entity_kind === "milestone")
 		.map((entity) => {
+			const milestoneStyle = dinext_project_stage_gate.roadmap.getMilestoneItemStyle(entity.status);
 			const rowIndex =
 				laneLayout.laneIndexByKey[`${entity.project}::milestone`] ?? getBaseLaneIndex(entity.project);
 			const symbolSize = Number(entity.symbolSize) || 14;
@@ -2597,6 +2646,7 @@ dinext_project_stage_gate.roadmap.prepareSeriesData = function (payload, options
 				},
 				value: [entity.point_date, rowIndex, dinext_project_stage_gate.roadmap.translateStatus(entity.status)],
 				itemStyle: {
+					color: milestoneStyle.lineColor,
 					borderColor: milestoneStyle.borderColor,
 				},
 			};
