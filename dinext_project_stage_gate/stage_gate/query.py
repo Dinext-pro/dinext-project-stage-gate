@@ -311,6 +311,8 @@ def _build_task_entities(task_rows, project_meta, range_start, range_end, filter
 			"project_name": _get(project, "project_name") or _get(row, "project"),
 			"portfolio": _get(project, "custom_project_portfolio"),
 		}
+		if is_milestone:
+			entity.pop("progress", None)
 		task_entities.append(entity)
 
 	return task_entities
@@ -463,6 +465,7 @@ def get_roadmap_dataset(filters=None):
 				"project",
 				"subject",
 				"type",
+				"progress",
 				"status",
 				"is_milestone",
 				"exp_start_date",
