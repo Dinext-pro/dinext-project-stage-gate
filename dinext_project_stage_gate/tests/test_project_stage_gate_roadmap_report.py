@@ -71,3 +71,28 @@ class TestProjectStageGateRoadmapReport(unittest.TestCase):
 
 		self.assertEqual(rows[0]["project_manager"], "pm@example.com")
 		self.assertEqual(rows[0]["governance_model"], "Standard")
+
+	@patch(
+		"dinext_project_stage_gate.dinext_project_stage_gate.report.project_stage_gate_roadmap.project_stage_gate_roadmap.query.get_roadmap_dataset"
+	)
+	def test_execute_passes_project_type_and_project_status_filters_to_dataset_query(self, get_roadmap_dataset):
+		get_roadmap_dataset.return_value = {
+			"projects": [],
+			"stageBars": [],
+			"gates": [],
+			"taskEntities": [],
+		}
+
+		project_stage_gate_roadmap.execute(
+			{
+				"project_type": "Implementation",
+				"project_status": "Completed",
+			}
+		)
+
+		get_roadmap_dataset.assert_called_once_with(
+			{
+				"project_type": "Implementation",
+				"project_status": "Completed",
+			}
+		)

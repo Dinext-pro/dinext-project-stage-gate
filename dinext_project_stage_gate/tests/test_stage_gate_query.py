@@ -15,6 +15,15 @@ except ModuleNotFoundError:
 	_frappe_utils_stub = types.ModuleType("frappe.utils")
 	_frappe_utils_stub.add_months = lambda value, months: value
 	sys.modules["frappe.utils"] = _frappe_utils_stub
+else:
+	if not hasattr(frappe, "get_all"):
+		frappe.get_all = None
+	if not hasattr(frappe, "get_list"):
+		frappe.get_list = None
+	if not hasattr(frappe, "_"):
+		frappe._ = lambda value: value
+	if not hasattr(frappe, "db"):
+		frappe.db = types.SimpleNamespace(get_value=lambda *args, **kwargs: 1)
 
 from unittest.mock import Mock, patch
 
@@ -193,6 +202,32 @@ class TestStageGateQuery(unittest.TestCase):
 			project_filters["stage_gate_status"],
 			["in", ["Active", "Waiting Gate", "Blocked", "Rejected"]],
 		)
+
+	@patch.object(query, "_today", return_value=date(2026, 4, 19))
+	@patch("dinext_project_stage_gate.stage_gate.query.frappe.get_all")
+	@patch("dinext_project_stage_gate.stage_gate.query.frappe.get_list", create=True)
+	def test_get_roadmap_dataset_filters_projects_by_project_type(self, get_list, get_all, _mock_today):
+		get_list.side_effect = [[], []]
+		get_all.side_effect = [[], [], [], []]
+
+		query.get_roadmap_dataset({"project_type": "Implementation"})
+
+		project_filters = get_list.call_args_list[0].kwargs["filters"]
+		self.assertEqual(project_filters["project_type"], "Implementation")
+
+	@patch.object(query, "_today", return_value=date(2026, 4, 19))
+	@patch("dinext_project_stage_gate.stage_gate.query.frappe.get_all")
+	@patch("dinext_project_stage_gate.stage_gate.query.frappe.get_list", create=True)
+	def test_get_roadmap_dataset_filters_projects_by_standard_project_status(
+		self, get_list, get_all, _mock_today
+	):
+		get_list.side_effect = [[], []]
+		get_all.side_effect = [[], [], [], []]
+
+		query.get_roadmap_dataset({"project_status": "Completed"})
+
+		project_filters = get_list.call_args_list[0].kwargs["filters"]
+		self.assertEqual(project_filters["status"], "Completed")
 
 	@patch.object(query, "_today", return_value=date(2026, 4, 19))
 	@patch("dinext_project_stage_gate.stage_gate.query.frappe.get_all")
