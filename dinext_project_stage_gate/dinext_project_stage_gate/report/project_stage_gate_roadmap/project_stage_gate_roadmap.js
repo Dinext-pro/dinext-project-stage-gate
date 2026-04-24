@@ -25,6 +25,18 @@ frappe.query_reports["Project Stage Gate Roadmap"] = {
 			options: "Project",
 		},
 		{
+			fieldname: "project_type",
+			label: __("Project Type"),
+			fieldtype: "Link",
+			options: "Project Type",
+		},
+		{
+			fieldname: "project_status",
+			label: __("Project Status"),
+			fieldtype: "Select",
+			options: ["", __("Open"), __("Completed"), __("Cancelled")].join("\n"),
+		},
+		{
 			fieldname: "project_manager",
 			label: __("Project Manager"),
 			fieldtype: "Link",
@@ -89,12 +101,26 @@ frappe.query_reports["Project Stage Gate Roadmap"] = {
 		dinext_project_stage_gate.roadmap.ensure_chart_mount(report);
 		dinext_project_stage_gate.roadmap.ensure_theme_observer(report);
 		dinext_project_stage_gate.roadmap.ensureResizeHandler(report);
+		applyRoadmapStyle();
 	},
 
 	after_datatable_render(_datatable) {
 		dinext_project_stage_gate.roadmap.render(frappe.query_report);
 	},
 };
+
+function applyRoadmapStyle() {
+    // Your CSS as text 
+    var styles = `
+        .multiselect-list.dropdown {
+	        width: 100%;
+        }	
+    `;
+    
+    var styleSheet = document.createElement("style");
+    styleSheet.textContent = styles;
+    document.head.appendChild(styleSheet);
+}
 
 frappe.provide("dinext_project_stage_gate.roadmap");
 

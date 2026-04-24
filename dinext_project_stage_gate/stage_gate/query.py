@@ -16,6 +16,8 @@ def _project_fields():
 	return [
 		"name",
 		"project_name",
+		"project_type",
+		"status",
 		"company",
 		"customer",
 		"custom_project_portfolio",
@@ -299,6 +301,10 @@ def get_roadmap_dataset(filters=None):
 		project_filters["customer"] = filters["customer"]
 	if filters.get("project"):
 		project_filters["name"] = filters["project"]
+	if filters.get("project_type"):
+		project_filters["project_type"] = filters["project_type"]
+	if filters.get("project_status"):
+		project_filters["status"] = filters["project_status"]
 	if filters.get("governance_model"):
 		project_filters["governance_model"] = filters["governance_model"]
 	if filters.get("active_only"):

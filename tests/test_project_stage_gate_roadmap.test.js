@@ -103,12 +103,22 @@ function loadRoadmapScript(translations = {}) {
 	};
 }
 
-test("report defines milestone and task type filters", () => {
+test("report defines project type, project status, milestone and task type filters", () => {
 	const { context } = loadRoadmapScript();
 	const report = context.frappe.query_reports["Project Stage Gate Roadmap"];
 
 	assert.ok(report);
 	assert.ok(Array.isArray(report.filters));
+
+	const projectType = report.filters.find((filter) => filter.fieldname === "project_type");
+	assert.ok(projectType);
+	assert.equal(projectType.fieldtype, "Link");
+	assert.equal(projectType.options, "Project Type");
+
+	const projectStatus = report.filters.find((filter) => filter.fieldname === "project_status");
+	assert.ok(projectStatus);
+	assert.equal(projectStatus.fieldtype, "Select");
+	assert.equal(projectStatus.options, ["", "Open", "Completed", "Cancelled"].join("\n"));
 
 	const showMilestones = report.filters.find((filter) => filter.fieldname === "show_milestones");
 	assert.ok(showMilestones);
