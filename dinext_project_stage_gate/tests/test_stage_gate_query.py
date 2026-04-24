@@ -125,6 +125,40 @@ class TestStageGateQuery(unittest.TestCase):
 	@patch.object(query, "_today", return_value=date(2026, 4, 19))
 	@patch("dinext_project_stage_gate.stage_gate.query.frappe.get_all")
 	@patch("dinext_project_stage_gate.stage_gate.query.frappe.get_list", create=True)
+	def test_get_roadmap_dataset_returns_project_expected_dates(self, get_list, get_all, _mock_today):
+		get_list.side_effect = [
+			[
+				{
+					"name": "PROJ-001",
+					"project_name": "Alpha",
+					"project_type": "Implementation",
+					"status": "Open",
+					"company": "Dinext",
+					"customer": "Customer A",
+					"custom_project_portfolio": "Portfolio A",
+					"governance_model": "Standard",
+					"stage_chain_version": 1,
+					"current_stage": "Discovery",
+					"stage_gate_status": "Active",
+					"expected_start_date": "2026-05-01",
+					"expected_end_date": "2026-09-30",
+				}
+			],
+			[],
+		]
+		get_all.side_effect = [[], [], []]
+
+		result = query.get_roadmap_dataset({"project": "PROJ-001"})
+
+		project_call = get_list.call_args_list[0]
+		self.assertIn("expected_start_date", project_call.kwargs["fields"])
+		self.assertIn("expected_end_date", project_call.kwargs["fields"])
+		self.assertEqual(result["projects"][0]["expected_start_date"], "2026-05-01")
+		self.assertEqual(result["projects"][0]["expected_end_date"], "2026-09-30")
+
+	@patch.object(query, "_today", return_value=date(2026, 4, 19))
+	@patch("dinext_project_stage_gate.stage_gate.query.frappe.get_all")
+	@patch("dinext_project_stage_gate.stage_gate.query.frappe.get_list", create=True)
 	def test_get_roadmap_dataset_returns_checkpoint_level_field(self, get_list, get_all, _mock_today):
 		get_list.side_effect = [
 			[
