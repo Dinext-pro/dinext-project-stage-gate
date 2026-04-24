@@ -33,6 +33,28 @@ from dinext_project_stage_gate.stage_gate import query
 
 
 class TestStageGateQuery(unittest.TestCase):
+	def test_normalize_roadmap_visibility_filters_reenables_stages_when_no_other_entities_selected(self):
+		filters = query._normalize_roadmap_visibility_filters(
+			{
+				"show_stages_and_checkpoints": 0,
+				"show_milestones": 0,
+				"task_types": [],
+			}
+		)
+
+		self.assertEqual(filters["show_stages_and_checkpoints"], 1)
+
+	def test_normalize_roadmap_visibility_filters_keeps_stages_hidden_when_other_entities_selected(self):
+		filters = query._normalize_roadmap_visibility_filters(
+			{
+				"show_stages_and_checkpoints": 0,
+				"show_milestones": 1,
+				"task_types": [],
+			}
+		)
+
+		self.assertEqual(filters["show_stages_and_checkpoints"], 0)
+
 	def test_get_project_stage_chain_uses_stage_name_from_docname_and_checkpoint_level(self):
 		get_all = Mock()
 		get_all.side_effect = [
@@ -187,6 +209,62 @@ class TestStageGateQuery(unittest.TestCase):
 
 		stage_meta_call = get_all.call_args_list[2]
 		self.assertEqual(stage_meta_call.args[0], "Project Stage")
+
+	@patch.object(query, "_today", return_value=date(2026, 4, 19))
+	@patch("dinext_project_stage_gate.stage_gate.query.frappe.get_all")
+	@patch("dinext_project_stage_gate.stage_gate.query.frappe.get_list", create=True)
+	def test_get_roadmap_dataset_skips_stage_and_gate_queries_when_hidden(self, get_list, get_all, _mock_today):
+		get_list.side_effect = [
+			[
+				{
+					"name": "PROJ-001",
+					"project_name": "Alpha",
+					"company": "Dinext",
+					"customer": "Customer A",
+					"custom_project_portfolio": "Portfolio A",
+					"governance_model": "Standard",
+					"stage_chain_version": 1,
+					"current_stage": "Discovery",
+					"stage_gate_status": "Active",
+				}
+			],
+			[
+				{
+					"name": "TASK-001",
+					"project": "PROJ-001",
+					"subject": "Kickoff",
+					"type": "Sprint",
+					"status": "Open",
+					"is_milestone": 0,
+					"exp_start_date": "2026-04-12",
+					"exp_end_date": "2026-04-18",
+				}
+			],
+		]
+		get_all.side_effect = [
+			[],
+			[],
+		]
+
+		result = query.get_roadmap_dataset(
+			{
+				"show_stages_and_checkpoints": 0,
+				"show_milestones": 0,
+				"task_types": ["Sprint"],
+			}
+		)
+
+		self.assertEqual(result["stageBars"], [])
+		self.assertEqual(result["gates"], [])
+		self.assertEqual(result["appliedFilters"]["show_stages_and_checkpoints"], 0)
+		self.assertEqual(
+			[call.args[0] for call in get_list.call_args_list],
+			["Project", "Task"],
+		)
+		self.assertNotIn(
+			"Project Gate Checkpoint",
+			[call.args[0] for call in get_all.call_args_list],
+		)
 
 	@patch.object(query, "_today", return_value=date(2026, 4, 19))
 	@patch("dinext_project_stage_gate.stage_gate.query.frappe.get_all")

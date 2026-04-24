@@ -31,6 +31,7 @@ def execute(filters=None):
 		"stageBars": dataset["stageBars"],
 		"gates": dataset["gates"],
 		"taskEntities": dataset.get("taskEntities", []),
+		"appliedFilters": dataset.get("appliedFilters", {}),
 	}
 	return columns, data, message, chart, report_summary
 

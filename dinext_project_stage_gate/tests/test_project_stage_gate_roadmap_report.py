@@ -96,3 +96,23 @@ class TestProjectStageGateRoadmapReport(unittest.TestCase):
 				"project_status": "Completed",
 			}
 		)
+
+	@patch(
+		"dinext_project_stage_gate.dinext_project_stage_gate.report.project_stage_gate_roadmap.project_stage_gate_roadmap.query.get_roadmap_dataset"
+	)
+	def test_execute_exposes_applied_filters_from_dataset_message(self, get_roadmap_dataset):
+		get_roadmap_dataset.return_value = {
+			"projects": [],
+			"stageBars": [],
+			"gates": [],
+			"taskEntities": [],
+			"appliedFilters": {
+				"show_stages_and_checkpoints": 1,
+			},
+		}
+
+		_columns, _data, message, _chart, _summary = project_stage_gate_roadmap.execute(
+			{"show_stages_and_checkpoints": 0}
+		)
+
+		self.assertEqual(message["appliedFilters"]["show_stages_and_checkpoints"], 1)

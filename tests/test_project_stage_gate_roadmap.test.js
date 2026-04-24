@@ -103,7 +103,7 @@ function loadRoadmapScript(translations = {}) {
 	};
 }
 
-test("report defines project type, project status, milestone and task type filters", () => {
+test("report defines project type, project status, stage visibility, milestone and task type filters", () => {
 	const { context } = loadRoadmapScript();
 	const report = context.frappe.query_reports["Project Stage Gate Roadmap"];
 
@@ -124,11 +124,247 @@ test("report defines project type, project status, milestone and task type filte
 	assert.ok(showMilestones);
 	assert.equal(showMilestones.fieldtype, "Check");
 
+	const showStages = report.filters.find(
+		(filter) => filter.fieldname === "show_stages_and_checkpoints"
+	);
+	assert.ok(showStages);
+	assert.equal(showStages.fieldtype, "Check");
+	assert.equal(showStages.default, 1);
+
 	const taskTypes = report.filters.find((filter) => filter.fieldname === "task_types");
 	assert.ok(taskTypes);
 	assert.equal(taskTypes.fieldtype, "MultiSelectList");
 	assert.equal(taskTypes.options, "Task Type");
 	assert.equal(typeof taskTypes.get_data, "function");
+});
+
+test("normalizeVisibilityFilters re-enables stages when no other project entities are selected", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const normalized = roadmap.normalizeVisibilityFilters({
+		show_stages_and_checkpoints: 0,
+		show_milestones: 0,
+		task_types: [],
+	});
+
+	assert.equal(normalized.show_stages_and_checkpoints, 1);
+});
+
+test("normalizeVisibilityFilters keeps stages hidden when milestones or task types are selected", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const normalized = roadmap.normalizeVisibilityFilters({
+		show_stages_and_checkpoints: 0,
+		show_milestones: 1,
+		task_types: [],
+	});
+	assert.equal(normalized.show_stages_and_checkpoints, 0);
+
+	const normalizedWithTaskTypes = roadmap.normalizeVisibilityFilters({
+		show_stages_and_checkpoints: 0,
+		show_milestones: 0,
+		task_types: ["Sprint"],
+	});
+	assert.equal(normalizedWithTaskTypes.show_stages_and_checkpoints, 0);
+});
+
+test("isStageVisibilityMandatory returns true only when no other entities are selected", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	assert.equal(
+		roadmap.isStageVisibilityMandatory({
+			show_stages_and_checkpoints: 1,
+			show_milestones: 0,
+			task_types: [],
+		}),
+		true
+	);
+	assert.equal(
+		roadmap.isStageVisibilityMandatory({
+			show_stages_and_checkpoints: 1,
+			show_milestones: 1,
+			task_types: [],
+		}),
+		false
+	);
+	assert.equal(
+		roadmap.isStageVisibilityMandatory({
+			show_stages_and_checkpoints: 0,
+			show_milestones: 0,
+			task_types: ["Sprint"],
+		}),
+		false
+	);
+});
+
+test("render syncs server-applied stage visibility without triggering a second report refresh", async () => {
+	const { roadmap, context } = loadRoadmapScript();
+	const dom = {};
+	const mount = {
+		length: 1,
+		get() {
+			return dom;
+		},
+	};
+	const field = {
+		value: 0,
+		df: {
+			read_only: 0,
+		},
+		setValueCalls: [],
+		reportNoRefreshValues: [],
+		refreshCalls: 0,
+		async set_value(value) {
+			this.reportNoRefreshValues.push(report._no_refresh);
+			this.value = value;
+			this.setValueCalls.push(value);
+		},
+		refresh() {
+			this.refreshCalls += 1;
+		},
+		get_value() {
+			return this.value;
+		},
+	};
+	const report = {
+		raw_data: {
+			message: {
+				projects: [],
+				stageBars: [],
+				gates: [],
+				taskEntities: [],
+				appliedFilters: {
+					show_stages_and_checkpoints: 1,
+					show_milestones: 0,
+					task_types: [],
+				},
+			},
+		},
+		page: { main: {} },
+		get_filter_value(fieldname) {
+			if (fieldname === "show_stages_and_checkpoints") {
+				return field.value;
+			}
+			if (fieldname === "task_types") {
+				return [];
+			}
+			return null;
+		},
+		get_filter(fieldname) {
+			return fieldname === "show_stages_and_checkpoints" ? field : null;
+		},
+		set_filter_value() {
+			throw new Error("render should not trigger report.set_filter_value during server sync");
+		},
+	};
+
+	roadmap.ensure_assets = async function () {};
+	roadmap.ensure_chart_mount = function () {
+		return mount;
+	};
+	roadmap.ensureResizeHandler = function () {};
+	context.echarts = {
+		getInstanceByDom() {
+			return null;
+		},
+		init() {
+			return {
+				setOption() {},
+				on() {},
+			};
+		},
+	};
+
+	await roadmap.render(report);
+
+	assert.deepEqual(field.setValueCalls, [1]);
+	assert.deepEqual(field.reportNoRefreshValues, [true]);
+	assert.equal(field.value, 1);
+	assert.equal(field.df.read_only, 1);
+	assert.equal(field.refreshCalls, 1);
+});
+
+test("render preserves a user-disabled stage toggle when other entities are selected", async () => {
+	const { roadmap, context } = loadRoadmapScript();
+	const dom = {};
+	const mount = {
+		length: 1,
+		get() {
+			return dom;
+		},
+	};
+	const field = {
+		value: 0,
+		df: {
+			read_only: 0,
+		},
+		setValueCalls: [],
+		refreshCalls: 0,
+		async set_value(value) {
+			this.value = value;
+			this.setValueCalls.push(value);
+		},
+		refresh() {
+			this.refreshCalls += 1;
+		},
+		get_value() {
+			return this.value;
+		},
+	};
+	const report = {
+		raw_data: {
+			message: {
+				projects: [],
+				stageBars: [{ name: "PSI-1" }],
+				gates: [{ name: "PGC-1" }],
+				taskEntities: [{ name: "TASK-1", entity_kind: "milestone", project: "PRJ-1" }],
+				appliedFilters: {
+					show_stages_and_checkpoints: 1,
+					show_milestones: 1,
+					task_types: [],
+				},
+			},
+		},
+		page: { main: {} },
+		get_filter_value(fieldname) {
+			if (fieldname === "show_stages_and_checkpoints") {
+				return field.value;
+			}
+			if (fieldname === "show_milestones") {
+				return 1;
+			}
+			if (fieldname === "task_types") {
+				return [];
+			}
+			return null;
+		},
+		get_filter(fieldname) {
+			return fieldname === "show_stages_and_checkpoints" ? field : null;
+		},
+	};
+
+	roadmap.ensure_assets = async function () {};
+	roadmap.ensure_chart_mount = function () {
+		return mount;
+	};
+	roadmap.ensureResizeHandler = function () {};
+	context.echarts = {
+		getInstanceByDom() {
+			return null;
+		},
+		init() {
+			return {
+				setOption() {},
+				on() {},
+			};
+		},
+	};
+
+	await roadmap.render(report);
+
+	assert.deepEqual(field.setValueCalls, []);
+	assert.equal(field.value, 0);
+	assert.equal(field.df.read_only, 0);
 });
 
 test("render disposes existing chart and shows empty state when no projects match filters", async () => {
