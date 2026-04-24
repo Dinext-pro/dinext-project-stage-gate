@@ -87,6 +87,39 @@ def _coerce_to_list(value):
 	return [value]
 
 
+def _coerce_to_check(value, default=0):
+	if value is None or value == "":
+		return 1 if default else 0
+	if isinstance(value, str):
+		return 1 if value.strip().lower() in {"1", "true", "yes", "on"} else 0
+	return 1 if bool(value) else 0
+
+
+def _normalize_roadmap_visibility_filters(filters=None):
+	normalized = dict(filters or {})
+	normalized["task_types"] = _coerce_to_list(normalized.get("task_types"))
+	normalized["show_milestones"] = _coerce_to_check(normalized.get("show_milestones"), default=0)
+	normalized["show_stages_and_checkpoints"] = _coerce_to_check(
+		normalized.get("show_stages_and_checkpoints"), default=1
+	)
+	if (
+		not normalized["show_stages_and_checkpoints"]
+		and not normalized["show_milestones"]
+		and not normalized["task_types"]
+	):
+		normalized["show_stages_and_checkpoints"] = 1
+	return normalized
+
+
+def _get_applied_roadmap_filters(filters=None):
+	normalized = _normalize_roadmap_visibility_filters(filters)
+	return {
+		"show_stages_and_checkpoints": normalized["show_stages_and_checkpoints"],
+		"show_milestones": normalized["show_milestones"],
+		"task_types": list(normalized["task_types"]),
+	}
+
+
 def _get_project_team_rows(project_names, role_name=None):
 	if not project_names:
 		return []
@@ -288,8 +321,13 @@ def _should_include_task_entities(filters=None):
 	return bool(filters.get("show_milestones")) or bool(_coerce_to_list(filters.get("task_types")))
 
 
-def get_roadmap_dataset(filters=None):
+def _should_include_stage_and_gate_entities(filters=None):
 	filters = filters or {}
+	return bool(filters.get("show_stages_and_checkpoints", 1))
+
+
+def get_roadmap_dataset(filters=None):
+	filters = _normalize_roadmap_visibility_filters(filters)
 	range_start, range_end = _resolve_report_range(filters)
 	project_manager_role = _get_project_manager_role(filters)
 	project_filters = {}
@@ -338,79 +376,82 @@ def get_roadmap_dataset(filters=None):
 		row["project_manager"] = ", ".join(labels) if labels else None
 
 	project_meta = {_get(row, "name"): row for row in project_rows}
-	stage_filters = {"project": ["in", project_names]} if project_names else {"project": ["in", [""]]}
-	has_user_from = bool(filters.get("from_date"))
-	has_user_to = bool(filters.get("to_date"))
-	if has_user_from:
-		stage_filters["planned_end_date"] = [">=", filters["from_date"]]
-	elif not has_user_from and not has_user_to:
-		stage_filters["planned_end_date"] = [">=", range_start]
-	if has_user_to:
-		stage_filters["planned_start_date"] = ["<=", filters["to_date"]]
-	elif not has_user_from and not has_user_to:
-		stage_filters["planned_start_date"] = ["<=", range_end]
-	stage_rows = _get_permission_aware_list(
-		"Project Stage Instance",
-		filters=stage_filters,
-		fields=[
-			"name",
-			"project",
-			"stage",
-			"status",
-			"sequence",
-			"stage_chain_version",
-			"planned_start_date",
-			"planned_end_date",
-			"actual_start_date",
-			"actual_end_date",
-			"gate_due_date",
-			"gate_result",
-		],
-		order_by="project asc, sequence asc",
-	)
-	filtered_stage_rows = []
-	stage_names = {_get(row, "stage") for row in stage_rows if _get(row, "stage")}
-	stage_meta = {
-		_get(row, "name"): row
-		for row in frappe.get_all(
-			"Project Stage",
-			filters={"name": ["in", list(stage_names)]} if stage_names else {},
-			fields=["name", "color"],
+	stage_rows = []
+	gate_rows = []
+	if _should_include_stage_and_gate_entities(filters):
+		stage_filters = {"project": ["in", project_names]} if project_names else {"project": ["in", [""]]}
+		has_user_from = bool(filters.get("from_date"))
+		has_user_to = bool(filters.get("to_date"))
+		if has_user_from:
+			stage_filters["planned_end_date"] = [">=", filters["from_date"]]
+		elif not has_user_from and not has_user_to:
+			stage_filters["planned_end_date"] = [">=", range_start]
+		if has_user_to:
+			stage_filters["planned_start_date"] = ["<=", filters["to_date"]]
+		elif not has_user_from and not has_user_to:
+			stage_filters["planned_start_date"] = ["<=", range_end]
+		stage_rows = _get_permission_aware_list(
+			"Project Stage Instance",
+			filters=stage_filters,
+			fields=[
+				"name",
+				"project",
+				"stage",
+				"status",
+				"sequence",
+				"stage_chain_version",
+				"planned_start_date",
+				"planned_end_date",
+				"actual_start_date",
+				"actual_end_date",
+				"gate_due_date",
+				"gate_result",
+			],
+			order_by="project asc, sequence asc",
 		)
-	}
-	for row in stage_rows:
-		project = project_meta.get(_get(row, "project"), {})
-		want_ver = int(_get(project, "stage_chain_version") or 1)
-		if int(_get(row, "stage_chain_version") or 1) != want_ver:
-			continue
-		stage = stage_meta.get(_get(row, "stage"), {})
-		row["project_name"] = _get(project, "project_name") or _get(row, "project")
-		row["portfolio"] = _get(project, "custom_project_portfolio")
-		row["stage_name"] = _get(stage, "name", _get(row, "stage"))
-		row["color"] = _get(stage, "color")
-		filtered_stage_rows.append(row)
-	stage_rows = filtered_stage_rows
-	stage_instance_names = [_get(row, "name") for row in stage_rows]
-	gate_rows = frappe.get_all(
-		"Project Gate Checkpoint",
-		filters={"stage_instance": ["in", stage_instance_names]}
-		if stage_instance_names
-		else {"stage_instance": ["in", [""]]},
-		fields=[
-			"name",
-			"project",
-			"stage_instance",
-			"status",
-			"approval_date",
-			"gate_due_date",
-			"checkpoint_level",
-		],
-		order_by="project asc, creation asc",
-	)
-	for row in gate_rows:
-		project = project_meta.get(_get(row, "project"), {})
-		row["project_name"] = _get(project, "project_name") or _get(row, "project")
-		row["portfolio"] = _get(project, "custom_project_portfolio")
+		filtered_stage_rows = []
+		stage_names = {_get(row, "stage") for row in stage_rows if _get(row, "stage")}
+		stage_meta = {
+			_get(row, "name"): row
+			for row in frappe.get_all(
+				"Project Stage",
+				filters={"name": ["in", list(stage_names)]} if stage_names else {},
+				fields=["name", "color"],
+			)
+		}
+		for row in stage_rows:
+			project = project_meta.get(_get(row, "project"), {})
+			want_ver = int(_get(project, "stage_chain_version") or 1)
+			if int(_get(row, "stage_chain_version") or 1) != want_ver:
+				continue
+			stage = stage_meta.get(_get(row, "stage"), {})
+			row["project_name"] = _get(project, "project_name") or _get(row, "project")
+			row["portfolio"] = _get(project, "custom_project_portfolio")
+			row["stage_name"] = _get(stage, "name", _get(row, "stage"))
+			row["color"] = _get(stage, "color")
+			filtered_stage_rows.append(row)
+		stage_rows = filtered_stage_rows
+		stage_instance_names = [_get(row, "name") for row in stage_rows]
+		gate_rows = frappe.get_all(
+			"Project Gate Checkpoint",
+			filters={"stage_instance": ["in", stage_instance_names]}
+			if stage_instance_names
+			else {"stage_instance": ["in", [""]]},
+			fields=[
+				"name",
+				"project",
+				"stage_instance",
+				"status",
+				"approval_date",
+				"gate_due_date",
+				"checkpoint_level",
+			],
+			order_by="project asc, creation asc",
+		)
+		for row in gate_rows:
+			project = project_meta.get(_get(row, "project"), {})
+			row["project_name"] = _get(project, "project_name") or _get(row, "project")
+			row["portfolio"] = _get(project, "custom_project_portfolio")
 
 	task_entities = []
 	if _should_include_task_entities(filters):
@@ -436,5 +477,6 @@ def get_roadmap_dataset(filters=None):
 		"stageBars": stage_rows,
 		"gates": gate_rows,
 		"taskEntities": task_entities,
+		"appliedFilters": _get_applied_roadmap_filters(filters),
 	}
 

@@ -81,6 +81,12 @@ frappe.query_reports["Project Stage Gate Roadmap"] = {
 			default: 1,
 		},
 		{
+			fieldname: "show_stages_and_checkpoints",
+			label: __("Show Stages & Checkpoints"),
+			fieldtype: "Check",
+			default: 1,
+		},
+		{
 			fieldname: "show_milestones",
 			label: __("Show Milestones"),
 			fieldtype: "Check",
@@ -1153,6 +1159,129 @@ dinext_project_stage_gate.roadmap._coerceToArray = function (value) {
 			.filter(Boolean);
 	}
 	return [value];
+};
+
+dinext_project_stage_gate.roadmap._coerceToCheck = function (value, defaultValue = 0) {
+	if (value == null || value === "") {
+		return defaultValue ? 1 : 0;
+	}
+	if (typeof value === "string") {
+		return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase()) ? 1 : 0;
+	}
+	return value ? 1 : 0;
+};
+
+dinext_project_stage_gate.roadmap.normalizeVisibilityFilters = function (filters) {
+	const normalized = {
+		...(filters || {}),
+		show_stages_and_checkpoints: dinext_project_stage_gate.roadmap._coerceToCheck(
+			filters?.show_stages_and_checkpoints,
+			1
+		),
+		show_milestones: dinext_project_stage_gate.roadmap._coerceToCheck(filters?.show_milestones, 0),
+		task_types: dinext_project_stage_gate.roadmap._coerceToArray(filters?.task_types),
+	};
+	if (
+		!normalized.show_stages_and_checkpoints &&
+		!normalized.show_milestones &&
+		!normalized.task_types.length
+	) {
+		normalized.show_stages_and_checkpoints = 1;
+	}
+	return normalized;
+};
+
+dinext_project_stage_gate.roadmap.getVisibilityFiltersFromReport = function (report) {
+	return {
+		show_stages_and_checkpoints: report?.get_filter_value?.("show_stages_and_checkpoints"),
+		show_milestones: report?.get_filter_value?.("show_milestones"),
+		task_types: report?.get_filter_value?.("task_types"),
+	};
+};
+
+dinext_project_stage_gate.roadmap.getAppliedVisibilityFilters = function (
+	payload,
+	fallbackFilters = {}
+) {
+	return dinext_project_stage_gate.roadmap.normalizeVisibilityFilters({
+		...fallbackFilters,
+		...(payload?.appliedFilters || {}),
+	});
+};
+
+dinext_project_stage_gate.roadmap.isStageVisibilityMandatory = function (filters) {
+	const normalized = dinext_project_stage_gate.roadmap.normalizeVisibilityFilters(filters);
+	return !normalized.show_milestones && !normalized.task_types.length;
+};
+
+dinext_project_stage_gate.roadmap.getEffectiveVisibilityFilters = function (
+	requestedFilters,
+	appliedFilters
+) {
+	const requested = dinext_project_stage_gate.roadmap.normalizeVisibilityFilters(requestedFilters);
+	const applied = dinext_project_stage_gate.roadmap.normalizeVisibilityFilters(appliedFilters);
+	if (dinext_project_stage_gate.roadmap.isStageVisibilityMandatory(requested)) {
+		return applied;
+	}
+	return {
+		...applied,
+		show_stages_and_checkpoints: requested.show_stages_and_checkpoints,
+		show_milestones: requested.show_milestones,
+		task_types: requested.task_types,
+	};
+};
+
+dinext_project_stage_gate.roadmap.syncVisibilityFilters = async function (report, appliedFilters) {
+	if (!report || !appliedFilters) {
+		return false;
+	}
+	const currentValue = dinext_project_stage_gate.roadmap._coerceToCheck(
+		report.get_filter_value?.("show_stages_and_checkpoints"),
+		1
+	);
+	if (currentValue === appliedFilters.show_stages_and_checkpoints) {
+		return false;
+	}
+	const filter =
+		(typeof report.get_filter === "function" &&
+			report.get_filter("show_stages_and_checkpoints")) ||
+		null;
+	if (!filter || typeof filter.set_value !== "function") {
+		return false;
+	}
+	const oldNoRefresh = report._no_refresh;
+	report._no_refresh = true;
+	try {
+		await filter.set_value(appliedFilters.show_stages_and_checkpoints, true);
+	} finally {
+		report._no_refresh = oldNoRefresh;
+	}
+	return true;
+};
+
+dinext_project_stage_gate.roadmap.applyStageVisibilityAvailability = function (
+	report,
+	appliedFilters
+) {
+	if (!report || !appliedFilters || typeof report.get_filter !== "function") {
+		return;
+	}
+	const filter = report.get_filter("show_stages_and_checkpoints");
+	if (!filter || !filter.df) {
+		return;
+	}
+	const shouldBeReadOnly = dinext_project_stage_gate.roadmap.isStageVisibilityMandatory(
+		appliedFilters
+	)
+		? 1
+		: 0;
+	if ((filter.df.read_only ? 1 : 0) === shouldBeReadOnly) {
+		return;
+	}
+	filter.df.read_only = shouldBeReadOnly;
+	if (typeof filter.refresh === "function") {
+		filter.refresh();
+	}
 };
 
 dinext_project_stage_gate.roadmap._addUtcMonths = function (value, months) {
@@ -2823,6 +2952,35 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 		stageBars: [],
 		gates: [],
 		taskEntities: [],
+		appliedFilters: {},
+	};
+	const requestedVisibilityFilters = dinext_project_stage_gate.roadmap.normalizeVisibilityFilters(
+		dinext_project_stage_gate.roadmap.getVisibilityFiltersFromReport(report)
+	);
+	const appliedVisibilityFilters =
+		dinext_project_stage_gate.roadmap.getAppliedVisibilityFilters(
+			payload,
+			requestedVisibilityFilters
+		);
+	const effectiveVisibilityFilters =
+		dinext_project_stage_gate.roadmap.getEffectiveVisibilityFilters(
+			requestedVisibilityFilters,
+			appliedVisibilityFilters
+		);
+	if (dinext_project_stage_gate.roadmap.isStageVisibilityMandatory(requestedVisibilityFilters)) {
+		await dinext_project_stage_gate.roadmap.syncVisibilityFilters(
+			report,
+			effectiveVisibilityFilters
+		);
+	}
+	dinext_project_stage_gate.roadmap.applyStageVisibilityAvailability(
+		report,
+		effectiveVisibilityFilters
+	);
+	const seriesPayload = {
+		...payload,
+		stageBars: effectiveVisibilityFilters.show_stages_and_checkpoints ? payload.stageBars || [] : [],
+		gates: effectiveVisibilityFilters.show_stages_and_checkpoints ? payload.gates || [] : [],
 	};
 	const fromDate = report.get_filter_value?.("from_date");
 	const toDate = report.get_filter_value?.("to_date");
@@ -2830,7 +2988,7 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 		report.get_filter_value?.("task_types")
 	);
 	const { categories, bars, gates, taskBars, milestones, rowSpanUnits, projectDocsByLabel } =
-		dinext_project_stage_gate.roadmap.prepareSeriesData(payload, {
+		dinext_project_stage_gate.roadmap.prepareSeriesData(seriesPayload, {
 			fromDate,
 			toDate,
 			taskTypeOrder,
