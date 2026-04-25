@@ -350,7 +350,7 @@ def get_roadmap_dataset(filters=None):
 	if filters.get("governance_model"):
 		project_filters["governance_model"] = filters["governance_model"]
 	if filters.get("active_only"):
-		project_filters["stage_gate_status"] = ["in", ["Active", "Waiting Gate", "Blocked", "Rejected"]]
+		project_filters["is_active"] = "Yes"
 
 	project_rows = _get_permission_aware_list(
 		"Project",
