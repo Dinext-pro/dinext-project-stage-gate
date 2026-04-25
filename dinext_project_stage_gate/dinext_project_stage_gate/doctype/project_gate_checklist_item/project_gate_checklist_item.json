@@ -1,0 +1,120 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-04-11 20:00:05.099179",
+ "description": "Checklist item for a project gate checkpoint.",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "item_title",
+  "is_mandatory",
+  "status",
+  "assigned_to",
+  "column_break_eqzn",
+  "description",
+  "section_break_tauv",
+  "linked_doctype",
+  "column_break_hlmz",
+  "linked_docname",
+  "is_evidence_mandatory",
+  "section_break_emhu",
+  "comments"
+ ],
+ "fields": [
+  {
+   "fieldname": "item_title",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Item Title",
+   "reqd": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "is_mandatory",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Is Mandatory",
+   "permlevel": 1
+  },
+  {
+   "default": "Open",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Open\nDone\nCanceled"
+  },
+  {
+   "fieldname": "assigned_to",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Assigned To",
+   "link_filters": "[[\"User\",\"enabled\",\"=\",1]]",
+   "options": "User"
+  },
+  {
+   "fieldname": "linked_doctype",
+   "fieldtype": "Link",
+   "label": "Linked DocType",
+   "mandatory_depends_on": "eval:doc.is_evidence_mandatory && doc.status == __(\"Done\")",
+   "options": "DocType"
+  },
+  {
+   "fieldname": "linked_docname",
+   "fieldtype": "Dynamic Link",
+   "in_list_view": 1,
+   "label": "Linked Document Name",
+   "mandatory_depends_on": "eval:doc.is_evidence_mandatory && doc.status == __(\"Done\")",
+   "options": "linked_doctype"
+  },
+  {
+   "fieldname": "comments",
+   "fieldtype": "Small Text",
+   "label": "Comments"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description"
+  },
+  {
+   "fieldname": "section_break_tauv",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "column_break_hlmz",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "section_break_emhu",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "column_break_eqzn",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_evidence_mandatory",
+   "fieldtype": "Check",
+   "label": "Is Evidence Mandatory",
+   "permlevel": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-04-18 15:45:39.258126",
+ "modified_by": "Administrator",
+ "module": "Dinext Project Stage Gate",
+ "name": "Project Gate Checklist Item",
+ "owner": "ikhmel@dinord.ru",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

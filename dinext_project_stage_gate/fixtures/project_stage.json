@@ -1,0 +1,46 @@
+[
+ {
+  "description": "",
+  "docstatus": 0,
+  "doctype": "Project Stage",
+  "enabled": 1,
+  "is_gate_required": 1,
+  "modified": "2026-04-13 00:30:22.524664",
+  "name": "Идея",
+  "sequence_hint": 0,
+  "stage_code": "IDEA"
+ },
+ {
+  "description": "",
+  "docstatus": 0,
+  "doctype": "Project Stage",
+  "enabled": 1,
+  "is_gate_required": 1,
+  "modified": "2026-04-13 00:30:11.551469",
+  "name": "Инициирование",
+  "sequence_hint": 0,
+  "stage_code": "INITIATION"
+ },
+ {
+  "description": "",
+  "docstatus": 0,
+  "doctype": "Project Stage",
+  "enabled": 1,
+  "is_gate_required": 1,
+  "modified": "2026-04-12 00:41:33.130983",
+  "name": "Реализация",
+  "sequence_hint": 0,
+  "stage_code": "IMPLEMENTATION"
+ },
+ {
+  "description": "",
+  "docstatus": 0,
+  "doctype": "Project Stage",
+  "enabled": 1,
+  "is_gate_required": 1,
+  "modified": "2026-04-12 00:41:28.315101",
+  "name": "Завершение",
+  "sequence_hint": 0,
+  "stage_code": "CLOSURE"
+ }
+]
