@@ -116,3 +116,40 @@ class TestProjectStageGateRoadmapReport(unittest.TestCase):
 		)
 
 		self.assertEqual(message["appliedFilters"]["show_stages_and_checkpoints"], 1)
+
+	@patch(
+		"dinext_project_stage_gate.dinext_project_stage_gate.report.project_stage_gate_roadmap.project_stage_gate_roadmap.query.get_roadmap_dataset"
+	)
+	def test_execute_sends_roadmap_client_translations_through_frappe(self, get_roadmap_dataset):
+		get_roadmap_dataset.return_value = {
+			"projects": [],
+			"stageBars": [],
+			"gates": [],
+			"taskEntities": [{"type": "Sprint", "lane_label": "Phase"}],
+			"taskBars": [{"value": [0, "2026-01-01", "2026-01-10", "Task 1", "Open", "Stage"]}],
+		}
+		translate = types.SimpleNamespace(
+			get_all_translations=lambda lang: {
+				"Gate checkpoints": "Контрольные точки",
+				"Milestones": "Вехи",
+				"Sort projects": "Сортировать проекты",
+				"Forecast Start Date": "Прогнозная дата начала",
+				"Sprint": "Спринт",
+				"Phase": "Фаза",
+				"Stage": "Стадия",
+			},
+			send_translations=unittest.mock.Mock(),
+		)
+
+		with patch.object(project_stage_gate_roadmap.frappe, "local", types.SimpleNamespace(lang="ru"), create=True):
+			with patch.object(project_stage_gate_roadmap.frappe, "translate", translate, create=True):
+				project_stage_gate_roadmap.execute({})
+
+		translate.send_translations.assert_called_once()
+		sent_translations = translate.send_translations.call_args.args[0]
+		self.assertEqual(sent_translations["Gate checkpoints"], "Контрольные точки")
+		self.assertEqual(sent_translations["Sort projects"], "Сортировать проекты")
+		self.assertEqual(sent_translations["Forecast Start Date"], "Прогнозная дата начала")
+		self.assertEqual(sent_translations["Sprint"], "Спринт")
+		self.assertEqual(sent_translations["Phase"], "Фаза")
+		self.assertEqual(sent_translations["Stage"], "Стадия")
