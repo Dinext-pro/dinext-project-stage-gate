@@ -1992,7 +1992,7 @@ dinext_project_stage_gate.roadmap.buildDataZoomConfig = function ({
 		{
 			type: "inside",
 			yAxisIndex: 0,
-			filterMode: "none",
+			filterMode: "filter",
 			zoomOnMouseWheel: false,
 			moveOnMouseWheel: false,
 			startValue: vertical.startValue,
@@ -2001,7 +2001,7 @@ dinext_project_stage_gate.roadmap.buildDataZoomConfig = function ({
 		{
 			type: "slider",
 			yAxisIndex: 0,
-			filterMode: "none",
+			filterMode: "filter",
 			width: 18,
 			right: 4,
 			top: 44,
