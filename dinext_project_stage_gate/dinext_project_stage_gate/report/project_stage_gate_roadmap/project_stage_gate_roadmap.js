@@ -3,48 +3,61 @@ frappe.query_reports["Project Stage Gate Roadmap"] = {
 		{
 			fieldname: "company",
 			label: __("Company"),
+			description: __("Limit roadmap to projects from a specific company."),
 			fieldtype: "Link",
 			options: "Company",
 		},
 		{
 			fieldname: "portfolio",
 			label: __("Portfolio"),
+			description: __("Show only projects that belong to the selected portfolio."),
 			fieldtype: "Link",
 			options: "Project Portfolio",
 		},
 		{
 			fieldname: "customer",
 			label: __("Customer"),
+			description: __("Filter roadmap entries by customer."),
 			fieldtype: "Link",
 			options: "Customer",
 		},
 		{
 			fieldname: "project",
 			label: __("Project"),
+			description: __("Focus roadmap on a single project."),
 			fieldtype: "Link",
 			options: "Project",
 		},
 		{
 			fieldname: "project_type",
 			label: __("Project Type"),
+			description: __("Filter projects by project type."),
 			fieldtype: "Link",
 			options: "Project Type",
 		},
 		{
 			fieldname: "project_status",
 			label: __("Project Status"),
+			description: __("Filter projects by lifecycle status."),
 			fieldtype: "Select",
-			options: ["", "Open", "Completed", "Cancelled"].join("\n"),
+			options: [
+				"",
+				{ value: "Open", label: __("Open") },
+				{ value: "Completed", label: __("Completed") },
+				{ value: "Cancelled", label: __("Cancelled") },
+			],
 		},
 		{
 			fieldname: "project_manager",
 			label: __("Project Manager"),
+			description: __("Show projects assigned to the selected project manager."),
 			fieldtype: "Link",
 			options: "User",
 		},
 		{
 			fieldname: "project_manager_role",
 			label: __("Project Manager Role"),
+			description: __("Role used to identify the project manager in project team members."),
 			fieldtype: "Link",
 			options: "Project Role",
 			default: "Руководитель проекта",
@@ -59,46 +72,55 @@ frappe.query_reports["Project Stage Gate Roadmap"] = {
 		{
 			fieldname: "governance_model",
 			label: __("Governance Model"),
+			description: __("Filter by the governance model assigned to the project."),
 			fieldtype: "Link",
 			options: "Project Governance Model",
 		},
 		{
 			fieldname: "from_date",
 			label: __("From"),
+			description: __("Start date of the roadmap time window."),
 			fieldtype: "Date",
 			default: frappe.datetime.add_months(frappe.datetime.get_today(), -12),
 		},
 		{
 			fieldname: "to_date",
 			label: __("To"),
+			description: __("End date of the roadmap time window."),
 			fieldtype: "Date",
 			default: frappe.datetime.add_months(frappe.datetime.get_today(), 36),
 		},
 		{
 			fieldname: "active_only",
 			label: __("Active Only"),
+			description: __("Show only active projects in the roadmap."),
 			fieldtype: "Check",
 			default: 1,
 		},
 		{
 			fieldname: "show_stages_and_checkpoints",
 			label: __("Show Stages & Checkpoints"),
+			description: __("Display stage bars and gate checkpoint markers."),
 			fieldtype: "Check",
 			default: 1,
 		},
 		{
 			fieldname: "show_milestones",
 			label: __("Show Milestones"),
+			description: __("Display milestone points on the roadmap."),
 			fieldtype: "Check",
 			default: 0,
 		},
 		{
 			fieldname: "task_types",
 			label: __("Task Types"),
+			description: __("Display task bars only for selected task types."),
 			fieldtype: "MultiSelectList",
 			options: "Task Type",
 			get_data(txt) {
-				return frappe.db.get_link_options("Task Type", txt);
+				return dinext_project_stage_gate.roadmap.translateLinkOptions(
+					frappe.db.get_link_options("Task Type", txt)
+				);
 			},
 		},
 	],
@@ -181,6 +203,58 @@ function applyRoadmapStyle() {
 }
 
 frappe.provide("dinext_project_stage_gate.roadmap");
+
+dinext_project_stage_gate.roadmap.translateLinkOption = function (option) {
+	if (typeof option === "string") {
+		return {
+			value: option,
+			label: __(option),
+			description: __(option),
+		};
+	}
+	if (!option) {
+		return option;
+	}
+	const value = option.value || option.label || "";
+	const label = option.label || value;
+	const description = option.description || label;
+	return {
+		...option,
+		value,
+		label: label ? __(label) : label,
+		description: description ? __(description) : description,
+	};
+};
+
+dinext_project_stage_gate.roadmap.translateLinkOptions = function (options) {
+	if (options && typeof options.then === "function") {
+		return options.then((resolvedOptions) =>
+			dinext_project_stage_gate.roadmap.translateLinkOptions(resolvedOptions)
+		);
+	}
+	return (options || []).map(dinext_project_stage_gate.roadmap.translateLinkOption);
+};
+
+dinext_project_stage_gate.roadmap.translateReportFilterControls = function (report) {
+	(report?.filters || []).forEach((df) => {
+		if (!df?.fieldname || typeof report.get_filter !== "function") {
+			return;
+		}
+		const field = report.get_filter(df.fieldname);
+		if (!field?.df) {
+			return;
+		}
+		if (field.df.label && typeof field.set_label === "function") {
+			field._label = null;
+			field.set_label();
+		}
+		if (field.df.description && typeof field.set_description === "function") {
+			field._description = null;
+			field.set_description();
+		}
+		field.$list_wrapper?.find?.(".clear-selections")?.text?.(__("Clear All"));
+	});
+};
 
 dinext_project_stage_gate.roadmap.getEmptyPayload = function () {
 	return {
@@ -826,11 +900,20 @@ dinext_project_stage_gate.roadmap.buildLegendData = function ({
 	milestones = [],
 } = {}) {
 	const legendData = [
-		{ name: __("Stages"), icon: dinext_project_stage_gate.roadmap.LEGEND_ICON_CHEVRON },
-		{ name: __("Gate checkpoints"), icon: "diamond" },
+		{
+			name: __("Stages"),
+			icon: dinext_project_stage_gate.roadmap.LEGEND_ICON_CHEVRON,
+		},
+		{
+			name: __("Gate checkpoints"),
+			icon: "diamond",
+		},
 	];
 	if (Array.isArray(milestones) && milestones.length) {
-		legendData.push({ name: __("Milestones"), icon: "diamond" });
+		legendData.push({
+			name: __("Milestones"),
+			icon: "diamond",
+		});
 	}
 
 	const seenTaskTypes = new Set();
@@ -841,7 +924,7 @@ dinext_project_stage_gate.roadmap.buildLegendData = function ({
 		}
 		seenTaskTypes.add(taskType);
 		legendData.push({
-			name: taskType,
+			name: __(taskType),
 			icon: dinext_project_stage_gate.roadmap.LEGEND_ICON_LINE,
 		});
 	});
@@ -865,6 +948,7 @@ dinext_project_stage_gate.roadmap.groupTaskBarsByType = function (taskBars = [])
 	});
 	return orderedTypes.map((taskType) => ({
 		taskType,
+		taskTypeLabel: __(taskType),
 		data: groupedBars[taskType],
 	}));
 };
@@ -877,8 +961,8 @@ dinext_project_stage_gate.roadmap.buildTaskBarSeries = function ({
 	rowSpanUnits = 1,
 } = {}) {
 	return dinext_project_stage_gate.roadmap.groupTaskBarsByType(taskBars).map(
-		({ taskType, data }) => ({
-			name: taskType,
+		({ taskType, taskTypeLabel, data }) => ({
+			name: taskTypeLabel,
 			type: "custom",
 			clip: true,
 			animationDuration: introAnimationDuration,
@@ -1010,9 +1094,9 @@ dinext_project_stage_gate.roadmap.buildLegendProxySeries = function ({
 			},
 		});
 	}
-	dinext_project_stage_gate.roadmap.groupTaskBarsByType(taskBars).forEach(({ taskType, data }) => {
+	dinext_project_stage_gate.roadmap.groupTaskBarsByType(taskBars).forEach(({ taskType, taskTypeLabel, data }) => {
 		legendSeries.push({
-			name: taskType,
+			name: taskTypeLabel,
 			type: "line",
 			data: [],
 			silent: true,
@@ -1155,7 +1239,7 @@ dinext_project_stage_gate.roadmap.formatTooltip = function (params) {
 			params?.data?.name || params?.name || value[3] || "",
 			value[4] || "",
 			dinext_project_stage_gate.roadmap.formatDateRange(value[1], value[2]),
-			value[5] || "",
+			__(value[5] || ""),
 			`${progress}%`,
 		]
 			.filter(Boolean)
@@ -3535,6 +3619,7 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 
 	dinext_project_stage_gate.roadmap.ensureActionsMenuObserver(report);
 	dinext_project_stage_gate.roadmap.hideActionsMenu(report);
+	dinext_project_stage_gate.roadmap.translateReportFilterControls(report);
 
 	await dinext_project_stage_gate.roadmap.ensure_assets();
 	const mount = dinext_project_stage_gate.roadmap.ensure_chart_mount(report);

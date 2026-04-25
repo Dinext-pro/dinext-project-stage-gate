@@ -5,6 +5,8 @@ const vm = require("node:vm");
 
 const ROADMAP_SCRIPT_PATH =
 	"/home/frappe/frappe-bench/apps/dinext_project_stage_gate/dinext_project_stage_gate/dinext_project_stage_gate/report/project_stage_gate_roadmap/project_stage_gate_roadmap.js";
+const RU_TRANSLATIONS_PATH =
+	"/home/frappe/frappe-bench/apps/dinext_project_stage_gate/dinext_project_stage_gate/translations/ru.csv";
 
 function loadRoadmapScript(translations = {}) {
 	const script = fs.readFileSync(ROADMAP_SCRIPT_PATH, "utf8");
@@ -13,6 +15,7 @@ function loadRoadmapScript(translations = {}) {
 		setRouteCalls: [],
 		msgprintCalls: [],
 		windowListeners: {},
+		linkOptions: [],
 	};
 
 	const context = {
@@ -79,6 +82,11 @@ function loadRoadmapScript(translations = {}) {
 			msgprint(msg) {
 				state.msgprintCalls.push(msg);
 			},
+			db: {
+				get_link_options() {
+					return state.linkOptions;
+				},
+			},
 			require(_files, callback) {
 				if (callback) {
 					callback();
@@ -103,6 +111,18 @@ function loadRoadmapScript(translations = {}) {
 	};
 }
 
+function toPlainJson(value) {
+	return JSON.parse(JSON.stringify(value));
+}
+
+test("roadmap translations are provided only through Frappe i18n services", () => {
+	const script = fs.readFileSync(ROADMAP_SCRIPT_PATH, "utf8");
+
+	assert.doesNotMatch(script, /ROADMAP_[A-Z_]*RU_FALLBACKS/);
+	assert.doesNotMatch(script, /isRussianLanguage/);
+	assert.doesNotMatch(script, /frappe\?\.boot\?\.lang/);
+});
+
 test("report defines project type, project status, stage visibility, milestone and task type filters", () => {
 	const { context } = loadRoadmapScript();
 	const report = context.frappe.query_reports["Project Stage Gate Roadmap"];
@@ -118,7 +138,12 @@ test("report defines project type, project status, stage visibility, milestone a
 	const projectStatus = report.filters.find((filter) => filter.fieldname === "project_status");
 	assert.ok(projectStatus);
 	assert.equal(projectStatus.fieldtype, "Select");
-	assert.equal(projectStatus.options, ["", "Open", "Completed", "Cancelled"].join("\n"));
+	assert.deepEqual(toPlainJson(projectStatus.options), [
+		"",
+		{ value: "Open", label: "Open" },
+		{ value: "Completed", label: "Completed" },
+		{ value: "Cancelled", label: "Cancelled" },
+	]);
 
 	const showMilestones = report.filters.find((filter) => filter.fieldname === "show_milestones");
 	assert.ok(showMilestones);
@@ -136,6 +161,290 @@ test("report defines project type, project status, stage visibility, milestone a
 	assert.equal(taskTypes.fieldtype, "MultiSelectList");
 	assert.equal(taskTypes.options, "Task Type");
 	assert.equal(typeof taskTypes.get_data, "function");
+
+	const filtersWithDescriptions = [
+		"company",
+		"portfolio",
+		"customer",
+		"project",
+		"project_type",
+		"project_status",
+		"project_manager",
+		"project_manager_role",
+		"governance_model",
+		"from_date",
+		"to_date",
+		"active_only",
+		"show_stages_and_checkpoints",
+		"show_milestones",
+		"task_types",
+	];
+	for (const fieldname of filtersWithDescriptions) {
+		const filter = report.filters.find((entry) => entry.fieldname === fieldname);
+		assert.ok(filter, `Filter ${fieldname} should exist`);
+		assert.equal(typeof filter.description, "string");
+		assert.ok(filter.description.trim().length > 0, `Filter ${fieldname} should have description`);
+	}
+});
+
+test("roadmap refreshes filter labels and descriptions after Frappe translations are synced", () => {
+	const { context, roadmap } = loadRoadmapScript({
+		"Project Manager Role": "Роль руководителя проекта",
+		"Show Stages & Checkpoints": "Показывать стадии и контрольные точки",
+		"Display stage bars and gate checkpoint markers.":
+			"Показывать полосы стадий и маркеры контрольных точек гейтов.",
+	});
+	const sourceFilters = context.frappe.query_reports["Project Stage Gate Roadmap"].filters;
+	const controls = {};
+	for (const df of sourceFilters) {
+		controls[df.fieldname] = {
+			df: { ...df },
+			_label: df.label,
+			_description: df.description,
+			set_label() {
+				this.renderedLabel = context.__(this.df.label);
+				this._label = this.df.label;
+			},
+			set_description() {
+				this.renderedDescription = context.__(this.df.description);
+				this._description = this.df.description;
+			},
+		};
+	}
+	const report = {
+		filters: sourceFilters,
+		get_filter(fieldname) {
+			return controls[fieldname];
+		},
+	};
+
+	roadmap.translateReportFilterControls(report);
+
+	assert.equal(controls.project_manager_role.renderedLabel, "Роль руководителя проекта");
+	assert.equal(
+		controls.show_stages_and_checkpoints.renderedLabel,
+		"Показывать стадии и контрольные точки"
+	);
+	assert.equal(
+		controls.show_stages_and_checkpoints.renderedDescription,
+		"Показывать полосы стадий и маркеры контрольных точек гейтов."
+	);
+});
+
+test("task type filter translates option labels and descriptions while preserving values", () => {
+	const { context, state } = loadRoadmapScript({
+		Issue: "Задача",
+		Sprint: "Спринт",
+		Phase: "Фаза",
+		Stage: "Стадия",
+	});
+	state.linkOptions = [
+		{ value: "Issue", label: "Issue", description: "Issue" },
+		{ value: "Sprint", label: "Sprint", description: "Sprint" },
+		{ value: "Phase", label: "Phase", description: "Phase" },
+		{ value: "Stage", label: "Stage", description: "Stage" },
+	];
+	const report = context.frappe.query_reports["Project Stage Gate Roadmap"];
+	const taskTypes = report.filters.find((filter) => filter.fieldname === "task_types");
+
+	const options = taskTypes.get_data("");
+
+	assert.deepEqual(toPlainJson(options), [
+		{ value: "Issue", label: "Задача", description: "Задача" },
+		{ value: "Sprint", label: "Спринт", description: "Спринт" },
+		{ value: "Phase", label: "Фаза", description: "Фаза" },
+		{ value: "Stage", label: "Стадия", description: "Стадия" },
+	]);
+});
+
+test("roadmap static labels translate while status filter keeps stable values", () => {
+	const { context, roadmap } = loadRoadmapScript({
+		Stages: "Стадии",
+		Open: "Открыто",
+		Completed: "Завершено",
+		Cancelled: "Отменено",
+		"Gate checkpoints": "Контрольные точки гейтов",
+		Milestones: "Вехи",
+		Sprint: "Спринт",
+		Task: "Задача",
+		"Project sorting": "Сортировка проектов",
+		"Forecast Start Date": "Прогнозная дата начала",
+		Descending: "По убыванию",
+		"No projects match the selected filters.": "Нет проектов по выбранным фильтрам.",
+	});
+	const report = context.frappe.query_reports["Project Stage Gate Roadmap"];
+	const projectStatus = report.filters.find((filter) => filter.fieldname === "project_status");
+
+	assert.deepEqual(toPlainJson(projectStatus.options), [
+		"",
+		{ value: "Open", label: "Открыто" },
+		{ value: "Completed", label: "Завершено" },
+		{ value: "Cancelled", label: "Отменено" },
+	]);
+	const legendData = roadmap.buildLegendData({
+		taskBars: [{ value: [0, "2026-01-01", "2026-01-02", "", "", "Sprint"] }],
+		milestones: [{ name: "M1" }],
+	});
+	assert.deepEqual(
+		toPlainJson(legendData),
+		[
+			{ name: "Стадии", icon: roadmap.LEGEND_ICON_CHEVRON },
+			{ name: "Контрольные точки гейтов", icon: "diamond" },
+			{ name: "Вехи", icon: "diamond" },
+			{ name: "Спринт", icon: roadmap.LEGEND_ICON_LINE },
+		]
+	);
+	const taskSeries = roadmap.buildTaskBarSeries({
+		taskBars: [{ value: [0, "2026-01-01", "2026-01-02", "Task 1", "", "Sprint"] }],
+		introAnimationDelays: { taskBarDelays: [] },
+	});
+	assert.equal(taskSeries[0].name, "Спринт");
+
+	const proxySeries = roadmap.buildLegendProxySeries({
+		taskBars: [{ value: [0, "2026-01-01", "2026-01-02", "Task 1", "", "Sprint"] }],
+	});
+	assert.equal(proxySeries.find((series) => series.name === "Спринт")?.name, "Спринт");
+	assert.equal(roadmap.groupTaskBarsByType([{ value: [] }])[0].taskType, "Задача");
+
+	const sortMenuItems = roadmap.getSortMenuItems({
+		field: "expected_start_date",
+		direction: "desc",
+	});
+	const translatedSortItem = sortMenuItems.find(
+		(item) => item.field === "expected_start_date" && item.direction === "desc"
+	);
+	assert.equal(translatedSortItem.label, "Прогнозная дата начала");
+	assert.equal(translatedSortItem.directionLabel, "По убыванию");
+
+	const dom = { innerHTML: "" };
+	roadmap.showEmptyState(dom, context.__("No projects match the selected filters."));
+	assert.match(dom.innerHTML, /Нет проектов по выбранным фильтрам\./);
+});
+
+test("roadmap legend uses Frappe translations", () => {
+	const { roadmap } = loadRoadmapScript({
+		Stages: "Стадии",
+		"Gate checkpoints": "Контрольные точки гейтов",
+		Milestones: "Вехи",
+	});
+
+	const legendData = roadmap.buildLegendData({
+		taskBars: [],
+		milestones: [{ name: "M1" }],
+	});
+	const proxySeries = roadmap.buildLegendProxySeries({
+		milestones: [{ name: "M1" }],
+	});
+	const options = roadmap.buildChartOptions({
+		categories: ["Project A"],
+		bars: [],
+		gates: [],
+		taskBars: [],
+		milestones: [{ name: "M1" }],
+		dataZoom: [],
+	});
+
+	assert.deepEqual(
+		Array.from(legendData, (item) => item.name),
+		["Стадии", "Контрольные точки гейтов", "Вехи"]
+	);
+	assert.ok(proxySeries.some((series) => series.name === "Контрольные точки гейтов"));
+	assert.ok(proxySeries.some((series) => series.name === "Вехи"));
+	assert.deepEqual(
+		Array.from(options.legend.data, (item) => item.name),
+		["Стадии", "Контрольные точки гейтов", "Вехи"]
+	);
+	assert.ok(options.series.some((series) => series.name === "Контрольные точки гейтов"));
+	assert.ok(options.series.some((series) => series.name === "Вехи"));
+});
+
+test("roadmap tooltip, toolbox, and sort menu use Frappe translations", () => {
+	const { roadmap } = loadRoadmapScript({
+		Sprint: "Спринт",
+		"Forecast Start Date": "Прогнозная дата начала",
+		Descending: "По убыванию",
+		Restore: "Восстановить",
+		"Sort projects": "Сортировать проекты",
+		"Show Full Width": "Показать во всю ширину",
+		"Show Full Height": "Показать во всю высоту",
+		"Show All": "Показать все",
+		"Save as Image": "Сохранить как изображение",
+	});
+
+	const taskTooltip = roadmap.formatTooltip({
+		name: "Task Alpha",
+		data: { docType: "Task", entityKind: "task_bar", progress: 35 },
+		value: [0, "2026-01-01", "2026-01-10", "Task Alpha", "Working", "Sprint"],
+	});
+	assert.match(taskTooltip, /Спринт/);
+
+	const sortItems = roadmap.getSortMenuItems({
+		field: "expected_start_date",
+		direction: "desc",
+	});
+	const activeSort = sortItems.find(
+		(item) => item.field === "expected_start_date" && item.direction === "desc"
+	);
+	assert.equal(activeSort.label, "Прогнозная дата начала");
+	assert.equal(activeSort.directionLabel, "По убыванию");
+
+	const options = roadmap.buildChartOptions({
+		categories: ["Project A"],
+		bars: [],
+		gates: [],
+		taskBars: [],
+		milestones: [{ name: "M1" }],
+		dataZoom: [],
+	});
+	assert.equal(options.toolbox.feature.restore.title, "Восстановить");
+	assert.equal(options.toolbox.feature.mySortProjects.title, "Сортировать проекты");
+	assert.equal(options.toolbox.feature.myShowFullWidth.title, "Показать во всю ширину");
+	assert.equal(options.toolbox.feature.myShowFullHeight.title, "Показать во всю высоту");
+	assert.equal(options.toolbox.feature.myShowAllData.title, "Показать все");
+	assert.equal(options.toolbox.feature.saveAsImage.title, "Сохранить как изображение");
+});
+
+test("roadmap Russian translation file covers static labels used by the chart", () => {
+	const csv = fs.readFileSync(RU_TRANSLATIONS_PATH, "utf8");
+	const requiredKeys = [
+		"Actions",
+		"Ascending",
+		"Cancelled",
+		"Clear All",
+		"Current order",
+		"Descending",
+		"Forecast End Date",
+		"Forecast Start Date",
+		"Gate checkpoints",
+		"Issue",
+		"Milestones",
+		"No projects match the selected filters.",
+		"Phase",
+		"Project Name",
+		"Project Manager Role",
+		"Project sorting",
+		"Project Status",
+		"Project Type",
+		"Restore",
+		"Save as Image",
+		"Show All",
+		"Show Full Height",
+		"Show Full Width",
+		"Show Milestones",
+		"Show Stages & Checkpoints",
+		"Sort projects",
+		"Sprint",
+		"Stage",
+		"Stages",
+		"Task",
+		"Task Types",
+		"Limit roadmap to projects from a specific company.",
+		"Display task bars only for selected task types.",
+	];
+
+	for (const key of requiredKeys) {
+		assert.match(csv, new RegExp(`^${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")},[^,]+,`, "m"));
+	}
 });
 
 test("normalizeVisibilityFilters re-enables stages when no other project entities are selected", () => {
