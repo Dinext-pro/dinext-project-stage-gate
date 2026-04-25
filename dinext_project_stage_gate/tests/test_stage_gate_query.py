@@ -303,17 +303,15 @@ class TestStageGateQuery(unittest.TestCase):
 	@patch.object(query, "_today", return_value=date(2026, 4, 19))
 	@patch("dinext_project_stage_gate.stage_gate.query.frappe.get_all")
 	@patch("dinext_project_stage_gate.stage_gate.query.frappe.get_list", create=True)
-	def test_get_roadmap_dataset_active_only_keeps_legacy_inflight_statuses(self, get_list, get_all, _mock_today):
+	def test_get_roadmap_dataset_active_only_filters_by_project_is_active(self, get_list, get_all, _mock_today):
 		get_list.side_effect = [[], []]
 		get_all.side_effect = [[], [], [], []]
 
 		query.get_roadmap_dataset({"active_only": 1})
 
 		project_filters = get_list.call_args_list[0].kwargs["filters"]
-		self.assertEqual(
-			project_filters["stage_gate_status"],
-			["in", ["Active", "Waiting Gate", "Blocked", "Rejected"]],
-		)
+		self.assertEqual(project_filters["is_active"], "Yes")
+		self.assertNotIn("stage_gate_status", project_filters)
 
 	@patch.object(query, "_today", return_value=date(2026, 4, 19))
 	@patch("dinext_project_stage_gate.stage_gate.query.frappe.get_all")
