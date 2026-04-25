@@ -1,0 +1,224 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "prompt",
+ "creation": "2026-04-11 20:00:05.175674",
+ "description": "Actual stage execution record for a project.",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "status",
+  "project",
+  "governance_model",
+  "stage",
+  "stage_chain_version",
+  "sequence",
+  "is_skippable",
+  "gate_result",
+  "is_gate_required",
+  "column_break_zzpr",
+  "planned_start_date",
+  "planned_end_date",
+  "column_break_ffmj",
+  "actual_start_date",
+  "actual_end_date",
+  "section_break_dcyn",
+  "previous_stage_instance",
+  "entry_criteria_text",
+  "column_break_rrfq",
+  "next_stage_instance",
+  "exit_criteria_text"
+ ],
+ "fields": [
+  {
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Project",
+   "options": "Project",
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "stage",
+   "fieldtype": "Link",
+   "hidden": 1,
+   "in_list_view": 1,
+   "label": "Stage",
+   "options": "Project Stage",
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "governance_model",
+   "fieldtype": "Link",
+   "label": "Governance Model",
+   "options": "Project Governance Model",
+   "reqd": 1,
+   "set_only_once": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "stage_chain_version",
+   "fieldtype": "Int",
+   "hidden": 1,
+   "label": "Stage Chain Version",
+   "non_negative": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "sequence",
+   "fieldtype": "Int",
+   "hidden": 1,
+   "in_list_view": 1,
+   "label": "Sequence",
+   "set_only_once": 1
+  },
+  {
+   "default": "Planned",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Planned\nActive\nSkipped\nCompleted\nCanceled",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "is_skippable",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Is Skippable",
+   "read_only": 1
+  },
+  {
+   "fieldname": "planned_start_date",
+   "fieldtype": "Date",
+   "label": "Planned Start Date"
+  },
+  {
+   "fieldname": "planned_end_date",
+   "fieldtype": "Date",
+   "label": "Planned End Date"
+  },
+  {
+   "fieldname": "actual_start_date",
+   "fieldtype": "Date",
+   "label": "Actual Start Date"
+  },
+  {
+   "fieldname": "actual_end_date",
+   "fieldtype": "Date",
+   "label": "Actual End Date"
+  },
+  {
+   "default": "0",
+   "fieldname": "gate_result",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Gate Result"
+  },
+  {
+   "fieldname": "previous_stage_instance",
+   "fieldtype": "Link",
+   "label": "Previous Stage Instance",
+   "options": "Project Stage Instance",
+   "read_only": 1
+  },
+  {
+   "fieldname": "next_stage_instance",
+   "fieldtype": "Link",
+   "label": "Next Stage Instance",
+   "options": "Project Stage Instance",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_zzpr",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_ffmj",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "section_break_dcyn",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "column_break_rrfq",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fetch_from": "stage.is_gate_required",
+   "fieldname": "is_gate_required",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Is Gate Required"
+  },
+  {
+   "fieldname": "entry_criteria_text",
+   "fieldtype": "Small Text",
+   "label": "Entry Criteria"
+  },
+  {
+   "fieldname": "exit_criteria_text",
+   "fieldtype": "Small Text",
+   "label": "Exit Criteria"
+  }
+ ],
+ "grid_page_length": 50,
+ "in_create": 1,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-04-20 00:07:35.160871",
+ "modified_by": "Administrator",
+ "module": "Dinext Project Stage Gate",
+ "name": "Project Stage Instance",
+ "naming_rule": "Set by user",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "show_title_field_in_link": 1,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [
+  {
+   "color": "Blue",
+   "title": "Active"
+  },
+  {
+   "color": "Green",
+   "title": "Completed"
+  },
+  {
+   "color": "Gray",
+   "title": "Skipped"
+  },
+  {
+   "color": "Gray",
+   "title": "Canceled"
+  },
+  {
+   "color": "Gray",
+   "title": "Planned"
+  }
+ ],
+ "title_field": "stage",
+ "track_changes": 1,
+ "translated_doctype": 1
+}

@@ -1,0 +1,83 @@
+[
+ {
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "icon": "",
+  "modified": "2026-04-17 01:12:54.771510",
+  "name": "Planned",
+  "style": "",
+  "workflow_state_name": "Planned"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "icon": "",
+  "modified": "2026-04-19 00:52:11.149440",
+  "name": "Active",
+  "style": "Primary",
+  "workflow_state_name": "Active"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "icon": "",
+  "modified": "2026-04-19 00:52:34.264725",
+  "name": "Skipped",
+  "style": "Inverse",
+  "workflow_state_name": "Skipped"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "icon": "",
+  "modified": "2026-04-19 00:52:20.321041",
+  "name": "Completed",
+  "style": "Success",
+  "workflow_state_name": "Completed"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "icon": "ok-sign",
+  "modified": "2023-02-21 18:24:43.333321",
+  "name": "Approved",
+  "style": "Success",
+  "workflow_state_name": "Approved"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "icon": "remove",
+  "modified": "2023-02-21 18:24:43.335944",
+  "name": "Rejected",
+  "style": "Danger",
+  "workflow_state_name": "Rejected"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "icon": "",
+  "modified": "2026-04-11 20:06:07.191871",
+  "name": "In Review",
+  "style": "Primary",
+  "workflow_state_name": "In Review"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "icon": "",
+  "modified": "2026-04-19 00:51:36.669052",
+  "name": "Draft",
+  "style": "Primary",
+  "workflow_state_name": "Draft"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "icon": "",
+  "modified": "2026-04-19 00:54:21.044680",
+  "name": "Canceled",
+  "style": "Warning",
+  "workflow_state_name": "Canceled"
+ }
+]

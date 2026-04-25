@@ -1,0 +1,61 @@
+[
+ {
+  "company": "",
+  "description": "Модель управления со стадиями Идея, Инициирование, Реализация и Завершение",
+  "docstatus": 0,
+  "doctype": "Project Governance Model",
+  "enabled": 1,
+  "modified": "2026-04-19 01:29:17.314887",
+  "name": "Тестовая модель управления",
+  "stages": [
+   {
+    "checkpoint_template": "Шаблон гейта — Идея (портфель)",
+    "entry_criteria_text": "Инициатива согласована на уровне портфеля",
+    "exit_criteria_text": "Портфельный гейт пройден, можно переходить к инициированию",
+    "expected_duration_days": 14,
+    "is_skippable": 0,
+    "parent": "Тестовая модель управления",
+    "parentfield": "stages",
+    "parenttype": "Project Governance Model",
+    "sequence": 1,
+    "stage": "Идея"
+   },
+   {
+    "checkpoint_template": "Шаблон гейта — Инициирование (проектный комитет)",
+    "entry_criteria_text": "Идея утверждена, есть спонсор",
+    "exit_criteria_text": "Устав и бюджет утверждены проектным комитетом",
+    "expected_duration_days": 21,
+    "is_skippable": 1,
+    "parent": "Тестовая модель управления",
+    "parentfield": "stages",
+    "parenttype": "Project Governance Model",
+    "sequence": 2,
+    "stage": "Инициирование"
+   },
+   {
+    "checkpoint_template": "Шаблон гейта — Реализация (рабочая группа)",
+    "entry_criteria_text": "План работ утверждён",
+    "exit_criteria_text": "Итерация/волна принята рабочей группой",
+    "expected_duration_days": 45,
+    "is_skippable": 0,
+    "parent": "Тестовая модель управления",
+    "parentfield": "stages",
+    "parenttype": "Project Governance Model",
+    "sequence": 3,
+    "stage": "Реализация"
+   },
+   {
+    "checkpoint_template": "Шаблон гейта — Завершение (руководитель проекта)",
+    "entry_criteria_text": "Основной объём работ сдан",
+    "exit_criteria_text": "Проект формально закрыт руководителем",
+    "expected_duration_days": 14,
+    "is_skippable": 0,
+    "parent": "Тестовая модель управления",
+    "parentfield": "stages",
+    "parenttype": "Project Governance Model",
+    "sequence": 4,
+    "stage": "Завершение"
+   }
+  ]
+ }
+]

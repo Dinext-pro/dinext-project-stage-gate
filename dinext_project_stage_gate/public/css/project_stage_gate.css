@@ -1,0 +1,327 @@
+.stage-gate-widget-root {
+	margin-bottom: 4px;
+	padding: 2px 4px;
+	border: none;
+	border-radius: 8px;
+	background: transparent;
+}
+
+.stage-gate-widget-header {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px;
+	margin-bottom: 12px;
+}
+
+.stage-gate-widget-title {
+	font-size: 14px;
+	font-weight: 600;
+	color: var(--text-color);
+}
+
+.stage-gate-widget-subtitle {
+	font-size: 12px;
+	color: var(--text-muted);
+	margin-top: 2px;
+}
+
+.stage-gate-widget-empty {
+	color: var(--text-muted);
+	font-size: 13px;
+}
+
+.stage-gate-chain {
+	--stage-gate-notch: 14px;
+	--stage-gate-tip: 14px;
+	--stage-gate-enter-duration: 2s;
+	--stage-gate-enter-step: 0.08s;
+	--stage-gate-enter-easing: cubic-bezier(0.22, 1, 0.36, 1);
+	--stage-gate-hover-scale: 1.1;
+	display: flex;
+	align-items: center;
+	gap: 1px;
+	width: 100%;
+	min-width: 0;
+	overflow: visible;
+}
+
+.stage-gate-node {
+	display: flex;
+	flex: 1 1 0;
+	align-items: center;
+	justify-content: center;
+	min-width: 0;
+	height: 24px;
+	padding: 0 calc(var(--stage-gate-tip) + 4px) 0 calc(var(--stage-gate-notch) + 4px);
+	border: none;
+	background: var(--gray-100);
+	cursor: pointer;
+	color: var(--gray-900);
+	clip-path: polygon(
+		0 0,
+		calc(100% - var(--stage-gate-tip)) 0,
+		100% 50%,
+		calc(100% - var(--stage-gate-tip)) 100%,
+		0 100%,
+		var(--stage-gate-notch) 50%
+	);
+	translate: 0 0;
+	scale: 1;
+	animation: stage-gate-node-enter var(--stage-gate-enter-duration) var(--stage-gate-enter-easing) both;
+	animation-delay: calc(var(--stage-order, 0) * var(--stage-gate-enter-step));
+	transition:
+		background-color 0.16s ease,
+		color 0.16s ease,
+		opacity 0.16s ease,
+		scale 0.16s ease,
+		filter 0.16s ease;
+	will-change: translate, scale, opacity, filter;
+}
+
+.stage-gate-node:first-child {
+	z-index: 1;
+}
+
+.stage-gate-node:only-child {
+	padding: 0 calc(var(--stage-gate-tip) + 4px) 0 calc(var(--stage-gate-notch) + 4px);
+}
+
+.stage-gate-node:hover {
+	scale: var(--stage-gate-hover-scale);
+	filter: brightness(0.9);
+	z-index: 2;
+}
+
+.stage-gate-node:focus-visible {
+	scale: var(--stage-gate-hover-scale);
+	filter: brightness(0.94);
+	z-index: 2;
+	outline: 2px solid var(--primary);
+	outline-offset: 2px;
+}
+
+.stage-gate-checkpoint {
+	display: inline-flex;
+	flex: 0 0 auto;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	padding: 0;
+	border: none;
+	background: var(--gray-300);
+	color: var(--gray-900);
+	cursor: pointer;
+	clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+	translate: 0 0;
+	scale: 1;
+	animation: stage-gate-node-enter var(--stage-gate-enter-duration) var(--stage-gate-enter-easing) both;
+	animation-delay: calc(var(--stage-order, 0) * var(--stage-gate-enter-step));
+	transition:
+		background-color 0.16s ease,
+		color 0.16s ease,
+		opacity 0.16s ease,
+		scale 0.16s ease,
+		filter 0.16s ease;
+	will-change: translate, scale, opacity, filter;
+}
+
+.stage-gate-checkpoint:hover {
+	scale: 1.12;
+	filter: brightness(0.92);
+	z-index: 2;
+}
+
+.stage-gate-checkpoint:focus-visible {
+	scale: 1.12;
+	filter: brightness(0.94);
+	z-index: 2;
+	outline: 2px solid var(--primary);
+	outline-offset: 2px;
+}
+
+.stage-gate-checkpoint-dot {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: currentColor;
+	opacity: 0.9;
+}
+
+.stage-gate-node-label {
+	display: block;
+	width: 100%;
+	overflow: hidden;
+	font-size: 11px;
+	font-weight: 600;
+	line-height: 1;
+	text-align: center;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.stage-gate-status-active {
+	background: #7f95c1;
+	color: white;
+}
+
+.stage-gate-status-completed,
+.stage-gate-status-approved {
+	background: #739b7f;
+	color: white;
+}
+
+.stage-gate-status-waiting-gate,
+.stage-gate-status-planned {
+	background: #8f9aa8;
+	color: white;
+}
+
+.stage-gate-status-rejected,
+.stage-gate-status-blocked {
+	background: #c08b8b;
+	color: white;
+}
+
+.stage-gate-status-skipped {
+	background: #b6b9bd;
+	color: white;
+}
+
+.stage-gate-status-canceled {
+	background: #9787b0;
+	color: white;
+}
+
+.stage-gate-cp-status-draft,
+.stage-gate-cp-status-pending {
+	background: #8f9aa8;
+	color: white;
+}
+
+.stage-gate-cp-status-in-review {
+	background: #8ba0c9;
+	color: white;
+}
+
+.stage-gate-cp-status-approved {
+	background: #739b7f;
+	color: white;
+}
+
+.stage-gate-cp-status-rejected {
+	background: #c08b8b;
+	color: white;
+}
+
+.stage-gate-cp-status-canceled {
+	background: #9787b0;
+	color: white;
+}
+
+[data-theme="dark"] .stage-gate-status-active {
+	background: #4f6fa8;
+	color: white;
+}
+
+[data-theme="dark"] .stage-gate-status-completed,
+[data-theme="dark"] .stage-gate-status-approved {
+	background: #4e7d5c;
+	color: white;
+}
+
+[data-theme="dark"] .stage-gate-status-waiting-gate,
+[data-theme="dark"] .stage-gate-status-planned {
+	background: #636f7c;
+	color: white;
+}
+
+[data-theme="dark"] .stage-gate-status-rejected,
+[data-theme="dark"] .stage-gate-status-blocked {
+	background: #a85c5c;
+	color: white;
+}
+
+[data-theme="dark"] .stage-gate-status-skipped {
+	background: #5c708a;
+	color: white;
+}
+
+[data-theme="dark"] .stage-gate-status-canceled {
+	background: #6b5b8f;
+	color: white;
+}
+
+.stage-gate-status-skipped .stage-gate-node-label,
+.stage-gate-status-canceled .stage-gate-node-label {
+	color: var(--text-muted);
+	opacity: 0.6;
+}
+
+[data-theme="dark"] .stage-gate-cp-status-draft,
+[data-theme="dark"] .stage-gate-cp-status-pending {
+	background: #6a7d92;
+	color: white;
+}
+
+[data-theme="dark"] .stage-gate-cp-status-in-review {
+	background: #5f7fbf;
+	color: white;
+}
+
+[data-theme="dark"] .stage-gate-cp-status-approved {
+	background: #4e7d5c;
+	color: white;
+}
+
+[data-theme="dark"] .stage-gate-cp-status-rejected {
+	background: #a85c5c;
+	color: white;
+}
+
+[data-theme="dark"] .stage-gate-cp-status-canceled {
+	background: #6b5b8f;
+	color: white;
+}
+
+@keyframes stage-gate-node-enter {
+	from {
+		opacity: 0;
+		translate: -8px 0;
+		scale: 0.98;
+	}
+
+	to {
+		opacity: 1;
+		translate: 0 0;
+		scale: 1;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.stage-gate-node {
+		animation: none;
+		transition:
+			background-color 0.16s ease,
+			color 0.16s ease,
+			opacity 0.16s ease;
+	}
+
+	.stage-gate-checkpoint {
+		animation: none;
+		transition:
+			background-color 0.16s ease,
+			color 0.16s ease,
+			opacity 0.16s ease;
+	}
+
+	.stage-gate-node:hover,
+	.stage-gate-node:focus-visible,
+	.stage-gate-checkpoint:hover,
+	.stage-gate-checkpoint:focus-visible {
+		scale: 1;
+		filter: none;
+	}
+}
+
