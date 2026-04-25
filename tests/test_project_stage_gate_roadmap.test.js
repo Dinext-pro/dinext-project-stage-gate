@@ -162,6 +162,11 @@ test("report defines project type, project status, stage visibility, milestone a
 	assert.equal(taskTypes.options, "Task Type");
 	assert.equal(typeof taskTypes.get_data, "function");
 
+	const projectFocus = report.filters.find((filter) => filter.fieldname === "roadmap_project_focus");
+	assert.ok(projectFocus);
+	assert.equal(projectFocus.fieldtype, "Check");
+	assert.equal(projectFocus.hidden, 1);
+
 	const filtersWithDescriptions = [
 		"company",
 		"portfolio",
@@ -178,6 +183,7 @@ test("report defines project type, project status, stage visibility, milestone a
 		"show_stages_and_checkpoints",
 		"show_milestones",
 		"task_types",
+		"roadmap_project_focus",
 	];
 	for (const fieldname of filtersWithDescriptions) {
 		const filter = report.filters.find((entry) => entry.fieldname === fieldname);
@@ -255,6 +261,180 @@ test("task type filter translates option labels and descriptions while preservin
 		{ value: "Phase", label: "Фаза", description: "Фаза" },
 		{ value: "Stage", label: "Стадия", description: "Стадия" },
 	]);
+});
+
+test("project focus route options normalize entity filters and project dates", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const filters = roadmap.getProjectFocusRouteFilters({
+		project: "PROJ-001",
+		roadmap_project_focus: 1,
+		from_date: "2026-01-15",
+		to_date: "2026-09-30",
+	});
+
+	assert.deepEqual(toPlainJson(filters), {
+		project: "PROJ-001",
+		show_stages_and_checkpoints: 1,
+		show_milestones: 1,
+		task_types: ["Phase", "Stage", "Sprint"],
+		from_date: "2026-01-15",
+		to_date: "2026-09-30",
+	});
+});
+
+test("applying project focus route options updates report filters and clears route flag", async () => {
+	const { context, roadmap } = loadRoadmapScript();
+	context.frappe.route_options = {
+		project: "PROJ-001",
+		roadmap_project_focus: 1,
+		show_stages_and_checkpoints: 1,
+		show_milestones: 1,
+		task_types: ["Phase", "Stage", "Sprint"],
+		from_date: "2026-01-15",
+		to_date: "2026-09-30",
+	};
+	const values = {};
+	const noRefreshValues = [];
+	const report = {
+		_no_refresh: false,
+		get_filter(fieldname) {
+			return {
+				async set_value(value) {
+					noRefreshValues.push(report._no_refresh);
+					values[fieldname] = value;
+				},
+			};
+		},
+	};
+
+	const applied = await roadmap.applyProjectFocusRouteOptions(report);
+
+	assert.equal(applied, true);
+	assert.equal(report._dinextRoadmapProjectFocusPending, true);
+	assert.deepEqual(toPlainJson(values), {
+		project: "PROJ-001",
+		show_stages_and_checkpoints: 1,
+		show_milestones: 1,
+		task_types: ["Phase", "Stage", "Sprint"],
+		from_date: "2026-01-15",
+		to_date: "2026-09-30",
+	});
+	assert.ok(noRefreshValues.every(Boolean));
+	assert.deepEqual(context.frappe.route_options, {
+		project: "PROJ-001",
+		show_stages_and_checkpoints: 1,
+		show_milestones: 1,
+		task_types: ["Phase", "Stage", "Sprint"],
+		from_date: "2026-01-15",
+		to_date: "2026-09-30",
+	});
+});
+
+test("project focus can be applied from hidden report filter after Frappe consumes route options", async () => {
+	const { context, roadmap } = loadRoadmapScript();
+	context.frappe.route_options = null;
+	const values = {
+		project: "PROJ-001",
+		roadmap_project_focus: 1,
+		show_stages_and_checkpoints: 1,
+		show_milestones: 1,
+		task_types: ["Phase", "Stage", "Sprint"],
+		from_date: "2026-01-15",
+		to_date: "2026-09-30",
+	};
+	const report = {
+		_no_refresh: false,
+		get_filter_value(fieldname) {
+			return values[fieldname];
+		},
+		get_filter(fieldname) {
+			return {
+				async set_value(value) {
+					values[fieldname] = value;
+				},
+			};
+		},
+	};
+
+	const applied = await roadmap.applyProjectFocusRouteOptions(report);
+
+	assert.equal(applied, true);
+	assert.equal(report._dinextRoadmapProjectFocusPending, true);
+	assert.equal(values.roadmap_project_focus, 0);
+	assert.equal(values.project, "PROJ-001");
+	assert.deepEqual(toPlainJson(values.task_types), ["Phase", "Stage", "Sprint"]);
+});
+
+test("ordinary report load does not apply project focus defaults", async () => {
+	const { context, roadmap } = loadRoadmapScript();
+	context.frappe.route_options = {
+		project: "PROJ-001",
+	};
+	const values = {};
+	const report = {
+		get_filter(fieldname) {
+			return {
+				async set_value(value) {
+					values[fieldname] = value;
+				},
+			};
+		},
+	};
+
+	const applied = await roadmap.applyProjectFocusRouteOptions(report);
+
+	assert.equal(applied, false);
+	assert.deepEqual(values, {});
+	assert.equal(report._dinextRoadmapProjectFocusPending, undefined);
+	assert.deepEqual(context.frappe.route_options, {
+		project: "PROJ-001",
+	});
+});
+
+test("project focus can apply missing date filters from selected project payload once", async () => {
+	const { roadmap } = loadRoadmapScript();
+	const values = {
+		project: "PROJ-001",
+		from_date: null,
+		to_date: null,
+	};
+	const report = {
+		_dinextRoadmapProjectFocusPending: true,
+		get_filter_value(fieldname) {
+			return values[fieldname];
+		},
+		get_filter(fieldname) {
+			return {
+				async set_value(value) {
+					values[fieldname] = value;
+				},
+			};
+		},
+	};
+	const payload = {
+		projects: [
+			{
+				name: "PROJ-001",
+				expected_start_date: "2026-02-01",
+				expected_end_date: "2026-11-30",
+			},
+		],
+	};
+
+	const applied = await roadmap.applyProjectFocusDatasetDateRange(report, payload);
+
+	assert.equal(applied, true);
+	assert.equal(report._dinextRoadmapProjectFocusDatesApplied, true);
+	assert.equal(values.from_date, "2026-02-01");
+	assert.equal(values.to_date, "2026-11-30");
+
+	values.from_date = null;
+	values.to_date = null;
+	const secondApply = await roadmap.applyProjectFocusDatasetDateRange(report, payload);
+	assert.equal(secondApply, false);
+	assert.equal(values.from_date, null);
+	assert.equal(values.to_date, null);
 });
 
 test("roadmap static labels translate while status filter keeps stable values", () => {
@@ -797,6 +977,70 @@ test("onload wraps refresh to clear stale roadmap payload and rerender empty res
 	assert.deepEqual(Array.from(report.raw_data.message.stageBars), []);
 	assert.deepEqual(Array.from(report.raw_data.message.gates), []);
 	assert.deepEqual(Array.from(report.raw_data.message.taskEntities), []);
+});
+
+test("project focus route filters are applied before the first wrapped refresh", async () => {
+	const { roadmap, context } = loadRoadmapScript();
+	const reportDefinition = context.frappe.query_reports["Project Stage Gate Roadmap"];
+	const values = {};
+	const refreshSnapshots = [];
+
+	context.frappe.route_options = {
+		project: "PROJ-001",
+		roadmap_project_focus: 1,
+		show_stages_and_checkpoints: 1,
+		show_milestones: 1,
+		task_types: ["Phase", "Stage", "Sprint"],
+		from_date: "2026-01-15",
+		to_date: "2026-09-30",
+	};
+	context.document.createElement = function () {
+		return {
+			setAttribute() {},
+			textContent: "",
+		};
+	};
+	context.document.head = {
+		appendChild() {},
+	};
+	roadmap.ensure_chart_mount = function () {};
+	roadmap.ensure_theme_observer = function () {};
+	roadmap.ensureResizeHandler = function () {};
+	roadmap.render = async function () {};
+
+	const report = {
+		page: { main: {} },
+		raw_data: { message: {} },
+		get_filter(fieldname) {
+			return {
+				set_value(value) {
+					return Promise.resolve().then(() => {
+						values[fieldname] = value;
+					});
+				},
+			};
+		},
+		refresh() {
+			refreshSnapshots.push({ ...values });
+			return Promise.resolve({ ok: true });
+		},
+	};
+
+	reportDefinition.onload(report);
+	const refreshPromise = report.refresh();
+	assert.deepEqual(refreshSnapshots, [], "refresh should wait for pending focus filters");
+	await refreshPromise;
+
+	assert.deepEqual(toPlainJson(refreshSnapshots), [
+		{
+			project: "PROJ-001",
+			show_stages_and_checkpoints: 1,
+			show_milestones: 1,
+			task_types: ["Phase", "Stage", "Sprint"],
+			from_date: "2026-01-15",
+			to_date: "2026-09-30",
+		},
+	]);
 });
 
 test("hideActionsMenu removes only the grouped Actions button and mirrored mobile items", () => {
@@ -2902,6 +3146,46 @@ test("buildShowAllDataZoomConfig updates all x and y zoom entries consistently",
 	assert.equal(dataZoom[1].endValue, "2026-03-01");
 	assert.equal(dataZoom[2].startValue, 0);
 	assert.equal(dataZoom[3].endValue, 2);
+});
+
+test("project focus initial viewport uses full horizontal and vertical ranges once", () => {
+	const { roadmap } = loadRoadmapScript();
+	const dom = {};
+	const report = { _dinextRoadmapProjectFocusPending: true };
+
+	const applied = roadmap.applyProjectFocusInitialViewport(report, dom, {
+		categories: ["Project", "Sprint", "Phase", "Stage"],
+		bars: [{ value: [0, "2026-02-01", "2026-04-15"] }],
+		gates: [{ value: ["2026-05-01", 0] }],
+		taskBars: [{ value: [1, "2026-01-15", "2026-09-30"] }],
+		milestones: [{ value: ["2026-08-01", 2] }],
+		fromDate: "2026-01-01",
+		toDate: "2026-12-31",
+	});
+
+	assert.equal(applied, true);
+	assert.deepEqual(toPlainJson(dom._dinextRoadmapViewportState), {
+		horizontal: {
+			startValue: "2026-01-15",
+			endValue: "2026-09-30",
+		},
+		vertical: {
+			startValue: 0,
+			endValue: 3,
+		},
+	});
+	assert.equal(report._dinextRoadmapProjectFocusPending, false);
+
+	const secondApply = roadmap.applyProjectFocusInitialViewport(report, dom, {
+		categories: ["Project"],
+		fromDate: "2026-01-01",
+		toDate: "2026-12-31",
+	});
+	assert.equal(secondApply, false);
+	assert.deepEqual(toPlainJson(dom._dinextRoadmapViewportState.vertical), {
+		startValue: 0,
+		endValue: 3,
+	});
 });
 
 test("buildAxisFitDataZoomConfig expands only the horizontal viewport", () => {

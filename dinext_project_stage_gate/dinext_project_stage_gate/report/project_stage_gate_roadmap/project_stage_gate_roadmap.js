@@ -123,9 +123,18 @@ frappe.query_reports["Project Stage Gate Roadmap"] = {
 				);
 			},
 		},
+		{
+			fieldname: "roadmap_project_focus",
+			label: __("Roadmap Project Focus"),
+			description: __("Internal flag used when opening the roadmap from a project."),
+			fieldtype: "Check",
+			hidden: 1,
+		},
 	],
 
 	onload(report) {
+		report._dinextRoadmapProjectFocusPromise =
+			dinext_project_stage_gate.roadmap.applyProjectFocusRouteOptions(report);
 		dinext_project_stage_gate.roadmap.wrapReportRefresh(report);
 		dinext_project_stage_gate.roadmap.ensure_chart_mount(report);
 		dinext_project_stage_gate.roadmap.ensure_theme_observer(report);
@@ -235,6 +244,164 @@ dinext_project_stage_gate.roadmap.translateLinkOptions = function (options) {
 	return (options || []).map(dinext_project_stage_gate.roadmap.translateLinkOption);
 };
 
+dinext_project_stage_gate.roadmap.PROJECT_FOCUS_TASK_TYPES = ["Phase", "Stage", "Sprint"];
+
+dinext_project_stage_gate.roadmap.getProjectFocusRouteFilters = function (routeOptions) {
+	if (!routeOptions || !dinext_project_stage_gate.roadmap._coerceToCheck(routeOptions.roadmap_project_focus)) {
+		return null;
+	}
+
+	const filters = {
+		project: routeOptions.project,
+		show_stages_and_checkpoints: 1,
+		show_milestones: 1,
+		task_types: [...dinext_project_stage_gate.roadmap.PROJECT_FOCUS_TASK_TYPES],
+	};
+	if (routeOptions.from_date) {
+		filters.from_date = routeOptions.from_date;
+	}
+	if (routeOptions.to_date) {
+		filters.to_date = routeOptions.to_date;
+	}
+	return filters;
+};
+
+dinext_project_stage_gate.roadmap.getProjectFocusAppliedFilters = function (report) {
+	if (!report || !dinext_project_stage_gate.roadmap._coerceToCheck(report.get_filter_value?.("roadmap_project_focus"))) {
+		return null;
+	}
+
+	const filters = {
+		project: report.get_filter_value?.("project"),
+		show_stages_and_checkpoints: 1,
+		show_milestones: 1,
+		task_types: [...dinext_project_stage_gate.roadmap.PROJECT_FOCUS_TASK_TYPES],
+		roadmap_project_focus: 0,
+	};
+	const fromDate = report.get_filter_value?.("from_date");
+	const toDate = report.get_filter_value?.("to_date");
+	if (fromDate) {
+		filters.from_date = fromDate;
+	}
+	if (toDate) {
+		filters.to_date = toDate;
+	}
+	return filters;
+};
+
+dinext_project_stage_gate.roadmap.setReportFilterValueSilently = async function (
+	report,
+	fieldname,
+	value
+) {
+	if (!report || !fieldname) {
+		return false;
+	}
+	const filter =
+		(typeof report.get_filter === "function" && report.get_filter(fieldname)) ||
+		null;
+	if (filter && typeof filter.set_value === "function") {
+		await filter.set_value(value, true);
+		return true;
+	}
+	if (typeof report.set_filter_value === "function") {
+		await report.set_filter_value(fieldname, value);
+		return true;
+	}
+	return false;
+};
+
+dinext_project_stage_gate.roadmap.applyProjectFocusRouteOptions = async function (report) {
+	const filters =
+		dinext_project_stage_gate.roadmap.getProjectFocusRouteFilters(frappe?.route_options) ||
+		dinext_project_stage_gate.roadmap.getProjectFocusAppliedFilters(report);
+	if (!filters) {
+		return false;
+	}
+
+	report._dinextRoadmapProjectFocusPending = true;
+	const oldNoRefresh = report._no_refresh;
+	report._no_refresh = true;
+	try {
+		for (const [fieldname, value] of Object.entries(filters)) {
+			if (value !== undefined && value !== null && value !== "") {
+				await dinext_project_stage_gate.roadmap.setReportFilterValueSilently(
+					report,
+					fieldname,
+					value
+				);
+			}
+		}
+	} finally {
+		report._no_refresh = oldNoRefresh;
+	}
+
+	if (frappe?.route_options) {
+		delete frappe.route_options.roadmap_project_focus;
+	}
+	return true;
+};
+
+dinext_project_stage_gate.roadmap.getSelectedProjectFromPayload = function (report, payload) {
+	const projectName = report?.get_filter_value?.("project");
+	if (!projectName) {
+		return null;
+	}
+	return (payload?.projects || []).find((project) => project?.name === projectName) || null;
+};
+
+dinext_project_stage_gate.roadmap.applyProjectFocusDatasetDateRange = async function (
+	report,
+	payload
+) {
+	if (
+		!report?._dinextRoadmapProjectFocusPending ||
+		report._dinextRoadmapProjectFocusDatesApplied
+	) {
+		return false;
+	}
+
+	const currentFrom = report.get_filter_value?.("from_date");
+	const currentTo = report.get_filter_value?.("to_date");
+	if (currentFrom && currentTo) {
+		report._dinextRoadmapProjectFocusDatesApplied = true;
+		return false;
+	}
+
+	const project = dinext_project_stage_gate.roadmap.getSelectedProjectFromPayload(report, payload);
+	if (!project) {
+		return false;
+	}
+
+	const updates = {};
+	if (!currentFrom && project.expected_start_date) {
+		updates.from_date = project.expected_start_date;
+	}
+	if (!currentTo && project.expected_end_date) {
+		updates.to_date = project.expected_end_date;
+	}
+	if (!Object.keys(updates).length) {
+		return false;
+	}
+
+	const oldNoRefresh = report._no_refresh;
+	report._no_refresh = true;
+	try {
+		for (const [fieldname, value] of Object.entries(updates)) {
+			await dinext_project_stage_gate.roadmap.setReportFilterValueSilently(
+				report,
+				fieldname,
+				value
+			);
+		}
+	} finally {
+		report._no_refresh = oldNoRefresh;
+	}
+
+	report._dinextRoadmapProjectFocusDatesApplied = true;
+	return true;
+};
+
 dinext_project_stage_gate.roadmap.translateReportFilterControls = function (report) {
 	(report?.filters || []).forEach((df) => {
 		if (!df?.fieldname || typeof report.get_filter !== "function") {
@@ -286,25 +453,43 @@ dinext_project_stage_gate.roadmap.wrapReportRefresh = function (report) {
 	const baseRefresh = report.refresh.bind(report);
 	report.refresh = function (...args) {
 		report._dinextRoadmapSkipNextDatatableRender = true;
-		const refreshResult = baseRefresh(...args);
 		const renderAfterRefresh = () => {
 			report._dinextRoadmapSkipNextDatatableRender = false;
 			dinext_project_stage_gate.roadmap.normalizeReportPayload(report);
 			return Promise.resolve(dinext_project_stage_gate.roadmap.render(report));
 		};
+		const runBaseRefresh = () => {
+			const refreshResult = baseRefresh(...args);
 
-		if (refreshResult && typeof refreshResult.then === "function") {
-			return refreshResult.then(
-				(value) => renderAfterRefresh().then(() => value),
+			if (refreshResult && typeof refreshResult.then === "function") {
+				return refreshResult.then(
+					(value) => renderAfterRefresh().then(() => value),
+					(error) => {
+						report._dinextRoadmapSkipNextDatatableRender = false;
+						throw error;
+					}
+				);
+			}
+
+			renderAfterRefresh();
+			return refreshResult;
+		};
+		const projectFocusPromise = report._dinextRoadmapProjectFocusPromise;
+		if (projectFocusPromise && typeof projectFocusPromise.then === "function") {
+			return projectFocusPromise.then(
+				() => {
+					report._dinextRoadmapProjectFocusPromise = null;
+					return runBaseRefresh();
+				},
 				(error) => {
+					report._dinextRoadmapProjectFocusPromise = null;
 					report._dinextRoadmapSkipNextDatatableRender = false;
 					throw error;
 				}
 			);
 		}
 
-		renderAfterRefresh();
-		return refreshResult;
+		return runBaseRefresh();
 	};
 	report._dinextRoadmapRefreshWrapped = true;
 };
@@ -1936,22 +2121,43 @@ dinext_project_stage_gate.roadmap.buildShowAllDataZoomConfig = function ({
 
 	return [
 		{
+			xAxisIndex: 0,
 			startValue: horizontal.startValue,
 			endValue: horizontal.endValue,
 		},
 		{
+			xAxisIndex: 0,
 			startValue: horizontal.startValue,
 			endValue: horizontal.endValue,
 		},
 		{
+			yAxisIndex: 0,
 			startValue: vertical.startValue,
 			endValue: vertical.endValue,
 		},
 		{
+			yAxisIndex: 0,
 			startValue: vertical.startValue,
 			endValue: vertical.endValue,
 		},
 	];
+};
+
+dinext_project_stage_gate.roadmap.applyProjectFocusInitialViewport = function (
+	report,
+	dom,
+	options = {}
+) {
+	if (!report?._dinextRoadmapProjectFocusPending || !dom) {
+		return false;
+	}
+	const dataZoom = dinext_project_stage_gate.roadmap.buildShowAllDataZoomConfig(options);
+	dinext_project_stage_gate.roadmap.persistViewportState(
+		dom,
+		dinext_project_stage_gate.roadmap.getViewportStateFromDataZoom(dataZoom)
+	);
+	report._dinextRoadmapProjectFocusPending = false;
+	return true;
 };
 
 dinext_project_stage_gate.roadmap.buildAxisFitDataZoomConfig = function ({
@@ -1997,18 +2203,22 @@ dinext_project_stage_gate.roadmap.buildAxisFitDataZoomConfig = function ({
 
 	return [
 		{
+			xAxisIndex: 0,
 			startValue: horizontalViewport.startValue,
 			endValue: horizontalViewport.endValue,
 		},
 		{
+			xAxisIndex: 0,
 			startValue: horizontalViewport.startValue,
 			endValue: horizontalViewport.endValue,
 		},
 		{
+			yAxisIndex: 0,
 			startValue: verticalViewport.startValue,
 			endValue: verticalViewport.endValue,
 		},
 		{
+			yAxisIndex: 0,
 			startValue: verticalViewport.startValue,
 			endValue: verticalViewport.endValue,
 		},
@@ -3664,6 +3874,7 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 		stageBars: effectiveVisibilityFilters.show_stages_and_checkpoints ? payload.stageBars || [] : [],
 		gates: effectiveVisibilityFilters.show_stages_and_checkpoints ? payload.gates || [] : [],
 	};
+	await dinext_project_stage_gate.roadmap.applyProjectFocusDatasetDateRange(report, payload);
 	const fromDate = report.get_filter_value?.("from_date");
 	const toDate = report.get_filter_value?.("to_date");
 	const taskTypeOrder = dinext_project_stage_gate.roadmap._coerceToArray(
@@ -3718,6 +3929,15 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 		return;
 	}
 	dinext_project_stage_gate.roadmap.clearEmptyState(dom);
+	dinext_project_stage_gate.roadmap.applyProjectFocusInitialViewport(report, dom, {
+		categories,
+		bars,
+		gates,
+		taskBars,
+		milestones,
+		fromDate,
+		toDate,
+	});
 	const chart = echarts.init(dom, dinext_project_stage_gate.roadmap.getEChartsThemeName());
 	dom._dinextRoadmapChart = chart;
 	const dataZoom = dinext_project_stage_gate.roadmap.buildDataZoomConfig({
