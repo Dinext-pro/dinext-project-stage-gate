@@ -1640,6 +1640,22 @@ test("buildDataZoomConfig returns slider and inside zoom for both axes", () => {
 	assert.equal(dataZoom[3].width, 18);
 });
 
+test("buildDataZoomConfig filters vertical zoom rows without filtering horizontal spans", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const dataZoom = roadmap.buildDataZoomConfig({
+		categories: new Array(12).fill("row"),
+		fromDate: "2025-10-01",
+		toDate: "2026-12-31",
+		today: "2026-01-01",
+	});
+
+	assert.equal(dataZoom[0].filterMode, "none");
+	assert.equal(dataZoom[1].filterMode, "none");
+	assert.equal(dataZoom[2].filterMode, "filter");
+	assert.equal(dataZoom[3].filterMode, "filter");
+});
+
 test("getViewportStateFromDataZoom extracts horizontal and vertical ranges", () => {
 	const { roadmap } = loadRoadmapScript();
 
