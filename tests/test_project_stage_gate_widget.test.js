@@ -13,6 +13,7 @@ function loadWidgetScript() {
 		prependCount: 0,
 		callCount: 0,
 		lastHtml: "",
+		setRouteCalls: [],
 	};
 	let page;
 
@@ -76,6 +77,11 @@ function loadWidgetScript() {
 					on() {},
 				},
 			},
+			model: {
+				can_read() {
+					return true;
+				},
+			},
 			call: async () => {
 				state.callCount += 1;
 				return { message: [] };
@@ -91,7 +97,18 @@ function loadWidgetScript() {
 			scrub(value) {
 				return String(value).toLowerCase().replace(/\s+/g, "-");
 			},
-			set_route() {},
+			perm: {
+				has_perm() {
+					return true;
+				},
+			},
+			set_route(...args) {
+				state.setRouteCalls.push(args);
+			},
+			route_options: null,
+		},
+		cint(value) {
+			return Number.parseInt(value || 0, 10) || 0;
 		},
 		dinext_project_stage_gate: {},
 		$: (value) => {
@@ -107,6 +124,7 @@ function loadWidgetScript() {
 	return {
 		page,
 		state,
+		context,
 		project: context.dinext_project_stage_gate.project,
 	};
 }
@@ -120,6 +138,10 @@ function __(value) {
 			"Waiting Gate": "Ожидание гейта",
 		}[value] || value
 	);
+}
+
+function toPlainJson(value) {
+	return JSON.parse(JSON.stringify(value));
 }
 
 test("refresh_widget does not mount or fetch when governance model is missing", async () => {
@@ -271,4 +293,42 @@ test("render_chain inserts checkpoint diamonds including after last stage", () =
 	assert.match(state.lastHtml, /data-checkpoint="PGC-100"/);
 	assert.match(state.lastHtml, /data-checkpoint="PGC-101"/);
 	assert.match(state.lastHtml, /data-checkpoint="PGC-200"/);
+});
+
+test("roadmap button opens focused roadmap with project dates and default entity filters", () => {
+	const { context, project, state } = loadWidgetScript();
+	const addedButtons = [];
+	const frm = {
+		doc: {
+			name: "PROJ-001",
+			governance_model: "GM-001",
+			stage_chain_version: 3,
+			expected_start_date: "2026-01-15",
+			expected_end_date: "2026-09-30",
+		},
+		is_new() {
+			return false;
+		},
+		add_custom_button(label, handler, group) {
+			addedButtons.push({ label, handler, group });
+		},
+	};
+
+	project.add_view_menu_items(frm, [{ name: "PSI-001", checkpoints: [] }]);
+
+	const roadmapButton = addedButtons.find((button) => button.label === "Roadmap");
+	assert.ok(roadmapButton, "Expected Roadmap button to be registered");
+
+	roadmapButton.handler();
+
+	assert.deepEqual(toPlainJson(context.frappe.route_options), {
+		project: "PROJ-001",
+		roadmap_project_focus: 1,
+		show_stages_and_checkpoints: 1,
+		show_milestones: 1,
+		task_types: ["Phase", "Stage", "Sprint"],
+		from_date: "2026-01-15",
+		to_date: "2026-09-30",
+	});
+	assert.deepEqual(state.setRouteCalls, [["query-report", "Project Stage Gate Roadmap"]]);
 });

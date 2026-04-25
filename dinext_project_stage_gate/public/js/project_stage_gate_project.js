@@ -127,6 +127,28 @@ dinext_project_stage_gate.project.add_view_menu_items = function (frm, stages) {
 			__("View")
 		);
 	}
+	if (frappe.perm.has_perm("Project Stage Gate Roadmap")) {
+		frm.add_custom_button(
+			__("Roadmap"),
+			() => {
+				frappe.route_options = {
+					project: frm.doc.name,
+					roadmap_project_focus: 1,
+					show_stages_and_checkpoints: 1,
+					show_milestones: 1,
+					task_types: ["Phase", "Stage", "Sprint"],
+				};
+				if (frm.doc.expected_start_date) {
+					frappe.route_options.from_date = frm.doc.expected_start_date;
+				}
+				if (frm.doc.expected_end_date) {
+					frappe.route_options.to_date = frm.doc.expected_end_date;
+				}
+				frappe.set_route("query-report", "Project Stage Gate Roadmap");
+			},
+			__("View")
+		);
+	}
 };
 
 dinext_project_stage_gate.project.ensure_assets = function () {
