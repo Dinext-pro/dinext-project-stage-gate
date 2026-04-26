@@ -219,8 +219,7 @@ def get_project_stage_chain(project_name):
 			"planned_start_date",
 			"planned_end_date",
 			"actual_start_date",
-			"actual_end_date",
-			"gate_due_date",
+			"actual_end_date"
 		],
 		order_by="sequence asc",
 	)
@@ -231,7 +230,7 @@ def get_project_stage_chain(project_name):
 		for row in frappe.get_all(
 			"Project Stage",
 			filters={"name": ["in", stage_names]} if stage_names else {},
-			fields=["name", "color", "icon", "is_gate_required"],
+			fields=["name", "is_gate_required"],
 		)
 	}
 
@@ -257,8 +256,6 @@ def get_project_stage_chain(project_name):
 		{
 			**row,
 			"stage_name": _get(stage_meta.get(_get(row, "stage"), {}), "name", _get(row, "stage")),
-			"color": _get(stage_meta.get(_get(row, "stage"), {}), "color"),
-			"icon": _get(stage_meta.get(_get(row, "stage"), {}), "icon"),
 			"is_gate_required": _get(stage_meta.get(_get(row, "stage"), {}), "is_gate_required", 0),
 			"checkpoints": checkpoints_by_stage.get(_get(row, "name"), []),
 		}
@@ -432,7 +429,6 @@ def get_roadmap_dataset(filters=None):
 			row["project_name"] = _get(project, "project_name") or _get(row, "project")
 			row["portfolio"] = _get(project, "custom_project_portfolio")
 			row["stage_name"] = _get(stage, "name", _get(row, "stage"))
-			row["color"] = _get(stage, "color")
 			filtered_stage_rows.append(row)
 		stage_rows = filtered_stage_rows
 		stage_instance_names = [_get(row, "name") for row in stage_rows]
