@@ -420,7 +420,7 @@ def get_roadmap_dataset(filters=None):
 			for row in frappe.get_all(
 				"Project Stage",
 				filters={"name": ["in", list(stage_names)]} if stage_names else {},
-				fields=["name", "color"],
+				fields=["name"],
 			)
 		}
 		for row in stage_rows:
