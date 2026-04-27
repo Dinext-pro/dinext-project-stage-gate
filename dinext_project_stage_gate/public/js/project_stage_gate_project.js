@@ -61,6 +61,7 @@ dinext_project_stage_gate.project.refresh_widget = async function (frm) {
 	dinext_project_stage_gate.project.remove_widget(page);
 
 	if (!frm.doc.governance_model) {
+		dinext_project_stage_gate.project.add_view_menu_items(frm);
 		return;
 	}
 
@@ -98,34 +99,36 @@ dinext_project_stage_gate.project.remove_widget = function (page) {
 };
 
 dinext_project_stage_gate.project.add_view_menu_items = function (frm, stages) {
-	if (!frm || !frm.doc || frm.is_new() || !frm.doc.governance_model || !frm.doc.name) {
+	if (!frm || !frm.doc || frm.is_new() || !frm.doc.name) {
 		return;
 	}
-	const ver = cint(frm.doc.stage_chain_version) || 1;
-	const filters = {
-		project: frm.doc.name,
-		stage_chain_version: ver,
-	};
-	const has_stages = (stages || []).length > 0;
-	const has_checkpoints = (stages || []).some((s) => (s.checkpoints || []).length > 0);
+	if (frm.doc.governance_model) {
+		const ver = cint(frm.doc.stage_chain_version) || 1;
+		const filters = {
+			project: frm.doc.name,
+			stage_chain_version: ver,
+		};
+		const has_stages = (stages || []).length > 0;
+		const has_checkpoints = (stages || []).some((s) => (s.checkpoints || []).length > 0);
 
-	if (has_stages && frappe.model.can_read("Project Stage Instance")) {
-		frm.add_custom_button(
-			__("Stage List"),
-			() => {
-				frappe.set_route("List", "Project Stage Instance", { ...filters });
-			},
-			__("View")
-		);
-	}
-	if (has_checkpoints && frappe.model.can_read("Project Gate Checkpoint")) {
-		frm.add_custom_button(
-			__("Gate Checkpoint List"),
-			() => {
-				frappe.set_route("List", "Project Gate Checkpoint", { ...filters });
-			},
-			__("View")
-		);
+		if (has_stages && frappe.model.can_read("Project Stage Instance")) {
+			frm.add_custom_button(
+				__("Stage List"),
+				() => {
+					frappe.set_route("List", "Project Stage Instance", { ...filters });
+				},
+				__("View")
+			);
+		}
+		if (has_checkpoints && frappe.model.can_read("Project Gate Checkpoint")) {
+			frm.add_custom_button(
+				__("Gate Checkpoint List"),
+				() => {
+					frappe.set_route("List", "Project Gate Checkpoint", { ...filters });
+				},
+				__("View")
+			);
+		}
 	}
 	if (frappe.perm.has_perm("Project Stage Gate Roadmap")) {
 		frm.add_custom_button(
@@ -136,6 +139,7 @@ dinext_project_stage_gate.project.add_view_menu_items = function (frm, stages) {
 					roadmap_project_focus: 1,
 					show_stages_and_checkpoints: 1,
 					show_milestones: 1,
+					active_only: frm.doc.is_active,
 					task_types: ["Phase", "Stage", "Sprint"],
 				};
 				if (frm.doc.expected_start_date) {
