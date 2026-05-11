@@ -162,6 +162,9 @@ function applyRoadmapStyle() {
 			margin: 0 0 16px 0;
 			position: relative;
 		}
+		.project-stage-gate-roadmap-chart {
+			background: transparent;
+		}
 		.project-stage-gate-roadmap-sort-menu {
 			background: var(--card-bg);
 			border: 1px solid var(--border-color);
@@ -2488,6 +2491,7 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 	});
 
 	return {
+		backgroundColor: "transparent",
 		animation: true,
 		animationDurationUpdate: 0,
 		animationEasing: introAnimationEasing,
