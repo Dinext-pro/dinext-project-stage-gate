@@ -5,7 +5,7 @@ app_description = "Dinext Project Stage Gate"
 app_email = "info@dinext.ru"
 app_license = "mit"
 
-required_apps = ["erpnext", "dinext_projects"]
+required_apps = ["erpnext", "dinext/dinext_projects"]
 
 fixtures = [
 	{
@@ -149,6 +149,7 @@ fixtures = [
 		],
 	},
 ]
+''''''
 
 # Apps
 # ------------------

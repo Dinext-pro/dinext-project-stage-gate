@@ -345,6 +345,52 @@ class TestProjectStageInstance(FrappeTestCase):
 		self.assertEqual(getdate(stage.actual_start_date), getdate("2026-01-10"))
 		self.assertEqual(getdate(stage.actual_end_date), getdate("2026-01-20"))
 
+	def test_actual_start_date_syncs_planned_start_and_recalculates_planned_end(self):
+		suffix = frappe.generate_hash(length=6)
+		holiday_list = frappe.get_doc(
+			{
+				"doctype": "Holiday List",
+				"holiday_list_name": f"TEST-SG-HL-SYNC-{suffix}",
+				"from_date": "2026-01-01",
+				"to_date": "2026-01-31",
+				"holidays": [{"holiday_date": "2026-01-07", "description": "Test holiday"}],
+			}
+		).insert(ignore_permissions=True)
+
+		governance_model = self._make_governance_model(
+			label="SyncActualStart", stage_durations=[3, 2]
+		)
+		project = self._make_project(
+			governance_model=governance_model.name,
+			expected_start_date="2026-01-02",
+			holiday_list=holiday_list.name,
+		)
+		stage = frappe.get_doc("Project Stage Instance", f"{project.name}-STAGE-001")
+
+		stage.planned_end_date = "2026-01-04"
+		stage.actual_start_date = "2026-01-06"
+		stage.save(ignore_permissions=True)
+
+		stage.reload()
+		self.assertEqual(getdate(stage.planned_start_date), getdate("2026-01-06"))
+		self.assertEqual(getdate(stage.planned_end_date), getdate("2026-01-09"))
+
+	def test_actual_end_date_overrides_planned_end_date(self):
+		governance_model = self._make_governance_model(
+			label="SyncActualEnd", stage_durations=[10, 2]
+		)
+		project = self._make_project(governance_model=governance_model.name)
+		stage = frappe.get_doc("Project Stage Instance", f"{project.name}-STAGE-001")
+
+		stage.planned_end_date = "2026-01-01"
+		stage.actual_start_date = "2026-02-10"
+		stage.actual_end_date = "2026-02-12"
+		stage.save(ignore_permissions=True)
+
+		stage.reload()
+		self.assertEqual(getdate(stage.planned_start_date), getdate("2026-02-10"))
+		self.assertEqual(getdate(stage.planned_end_date), getdate("2026-02-12"))
+
 	def test_provision_checkpoints_from_governance_checkpoint_template(self):
 		suffix = frappe.generate_hash(length=6)
 		level = self._make_checkpoint_level(f"CP Level {suffix}")
