@@ -1652,6 +1652,28 @@ test("buildChartOptions adds toolbox sort feature", () => {
 	assert.equal(sortCalls, 1);
 });
 
+test("buildChartOptions uses transparent root background and opaque save-as-image background", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const options = roadmap.buildChartOptions({
+		categories: ["Project A"],
+		bars: [],
+		gates: [],
+		dataZoom: [],
+	});
+
+	assert.equal(options.backgroundColor, "transparent");
+	assert.ok(
+		options.toolbox.feature.saveAsImage.backgroundColor,
+		"saveAsImage should keep an explicit background for PNG export"
+	);
+	assert.notEqual(
+		options.toolbox.feature.saveAsImage.backgroundColor,
+		"transparent",
+		"export background should remain theme-based for readability"
+	);
+});
+
 test("toggleSortMenu opens toolbox dropdown and menu item applies sorting", async () => {
 	const { roadmap, context } = loadRoadmapScript();
 	const createdMenus = [];
