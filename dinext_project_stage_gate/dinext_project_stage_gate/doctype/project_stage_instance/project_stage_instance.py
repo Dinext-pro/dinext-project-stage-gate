@@ -3,7 +3,7 @@
 
 import frappe
 from frappe.model.document import Document
-from frappe.utils import cint, today
+from frappe.utils import cint, getdate, today
 
 from dinext_project_stage_gate.stage_gate.checkpoint_provision import (
 	provision_checkpoint_for_stage_instance,
@@ -55,6 +55,7 @@ class ProjectStageInstance(Document):
 			self.actual_start_date = today()
 		if self.status == "Completed" and not self.actual_end_date:
 			self.actual_end_date = today()
+		self._sync_planned_dates_from_actual_dates()
 
 		row = self._governance_stage_row_for_instance()
 		self.is_skippable = cint(row.is_skippable) if row else 0
@@ -80,4 +81,22 @@ class ProjectStageInstance(Document):
 		if row:
 			return row.expected_duration_days
 		return None
+
+	def _sync_planned_dates_from_actual_dates(self):
+		if not self.actual_start_date and not self.actual_end_date:
+			return
+
+		project = frappe.get_cached_doc("Project", self.project) if self.project else None
+		holiday_list = resolve_holiday_list(project) if project else None
+
+		if self.actual_start_date:
+			self.planned_start_date = self.actual_start_date
+			if self.planned_end_date and getdate(self.planned_end_date) < getdate(self.planned_start_date):
+				duration_days = self._expected_duration_days_from_governance_model()
+				self.planned_end_date = planned_end_from_duration(
+					self.planned_start_date, duration_days, holiday_list
+				)
+
+		if self.actual_end_date:
+			self.planned_end_date = self.actual_end_date
 
