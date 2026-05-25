@@ -3,6 +3,10 @@ from frappe import _
 
 from dinext_project_stage_gate.stage_gate import query
 
+DINEXT_TASK_TYPE_TRANSLATION_CONTEXT = "Dinext.TaskType"
+DINEXT_STAGE_GATE_TRANSLATION_CONTEXT = "Dinext.StageGateModel"
+ROADMAP_STAGE_GATE_TRANSLATION_SOURCES = frozenset({"Stages", "Current Stage"})
+
 ROADMAP_CLIENT_TRANSLATION_SOURCES = (
 	"Stages",
 	"Gate checkpoints",
@@ -73,7 +77,7 @@ def execute(filters=None):
 		},
 		{
 			"value": len(dataset["stageBars"]),
-			"label": _("Stages"),
+			"label": _("Stages", context=DINEXT_STAGE_GATE_TRANSLATION_CONTEXT),
 			"datatype": "Int",
 		},
 		{
@@ -139,7 +143,7 @@ def get_columns():
 		},
 		{
 			"fieldname": "current_stage",
-			"label": _("Current Stage"),
+			"label": _("Current Stage", context=DINEXT_STAGE_GATE_TRANSLATION_CONTEXT),
 			"fieldtype": "Data",
 			"width": 140,
 		}
@@ -165,6 +169,32 @@ def build_rows(dataset):
 	return rows
 
 
+def _roadmap_translation_message_keys(source: str, task_type_sources: set[str]) -> list[tuple[str, str | None]]:
+	"""Return (source_text, context) pairs to expose on the client for __()."""
+	if not source:
+		return []
+	if source in ROADMAP_STAGE_GATE_TRANSLATION_SOURCES:
+		return [(source, DINEXT_STAGE_GATE_TRANSLATION_CONTEXT)]
+	if source in task_type_sources:
+		return [(source, DINEXT_TASK_TYPE_TRANSLATION_CONTEXT)]
+	return [(source, None)]
+
+
+def _collect_roadmap_client_translations(
+	all_translations: dict[str, str], sources: set[str], task_type_sources: set[str]
+) -> dict[str, str]:
+	translations: dict[str, str] = {}
+	for source in sources:
+		for message, context in _roadmap_translation_message_keys(source, task_type_sources):
+			if context:
+				context_key = f"{message}:{context}"
+				if all_translations.get(context_key):
+					translations[context_key] = all_translations[context_key]
+			elif all_translations.get(message):
+				translations[message] = all_translations[message]
+	return translations
+
+
 def send_roadmap_client_translations(dataset):
 	lang = getattr(getattr(frappe, "local", None), "lang", None)
 	translate = getattr(frappe, "translate", None)
@@ -176,13 +206,10 @@ def send_roadmap_client_translations(dataset):
 		return
 
 	sources = set(ROADMAP_CLIENT_TRANSLATION_SOURCES)
-	sources.update(get_task_type_translation_sources(dataset))
+	task_type_sources = set(get_task_type_translation_sources(dataset))
+	sources.update(task_type_sources)
 
-	translations = {
-		source: all_translations[source]
-		for source in sources
-		if source and all_translations.get(source)
-	}
+	translations = _collect_roadmap_client_translations(all_translations, sources, task_type_sources)
 	if translations:
 		translate.send_translations(translations)
 

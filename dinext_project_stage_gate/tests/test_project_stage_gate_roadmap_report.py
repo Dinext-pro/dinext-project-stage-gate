@@ -18,13 +18,17 @@ from dinext_project_stage_gate.dinext_project_stage_gate.report.project_stage_ga
 )
 
 
+def _passthrough_translate(value, *args, **kwargs):
+	return value
+
+
 class TestProjectStageGateRoadmapReport(unittest.TestCase):
 	@patch(
 		"dinext_project_stage_gate.dinext_project_stage_gate.report.project_stage_gate_roadmap.project_stage_gate_roadmap.query.get_roadmap_dataset"
 	)
 	@patch(
 		"dinext_project_stage_gate.dinext_project_stage_gate.report.project_stage_gate_roadmap.project_stage_gate_roadmap._",
-		side_effect=lambda value: value,
+		side_effect=_passthrough_translate,
 	)
 	def test_execute_returns_dataset_in_message_and_summary(self, _translate, get_roadmap_dataset):
 		get_roadmap_dataset.return_value = {
@@ -75,7 +79,11 @@ class TestProjectStageGateRoadmapReport(unittest.TestCase):
 	@patch(
 		"dinext_project_stage_gate.dinext_project_stage_gate.report.project_stage_gate_roadmap.project_stage_gate_roadmap.query.get_roadmap_dataset"
 	)
-	def test_execute_passes_project_type_and_project_status_filters_to_dataset_query(self, get_roadmap_dataset):
+	@patch(
+		"dinext_project_stage_gate.dinext_project_stage_gate.report.project_stage_gate_roadmap.project_stage_gate_roadmap._",
+		side_effect=_passthrough_translate,
+	)
+	def test_execute_passes_project_type_and_project_status_filters_to_dataset_query(self, _translate, get_roadmap_dataset):
 		get_roadmap_dataset.return_value = {
 			"projects": [],
 			"stageBars": [],
@@ -100,7 +108,11 @@ class TestProjectStageGateRoadmapReport(unittest.TestCase):
 	@patch(
 		"dinext_project_stage_gate.dinext_project_stage_gate.report.project_stage_gate_roadmap.project_stage_gate_roadmap.query.get_roadmap_dataset"
 	)
-	def test_execute_exposes_applied_filters_from_dataset_message(self, get_roadmap_dataset):
+	@patch(
+		"dinext_project_stage_gate.dinext_project_stage_gate.report.project_stage_gate_roadmap.project_stage_gate_roadmap._",
+		side_effect=_passthrough_translate,
+	)
+	def test_execute_exposes_applied_filters_from_dataset_message(self, _translate, get_roadmap_dataset):
 		get_roadmap_dataset.return_value = {
 			"projects": [],
 			"stageBars": [],
@@ -120,7 +132,11 @@ class TestProjectStageGateRoadmapReport(unittest.TestCase):
 	@patch(
 		"dinext_project_stage_gate.dinext_project_stage_gate.report.project_stage_gate_roadmap.project_stage_gate_roadmap.query.get_roadmap_dataset"
 	)
-	def test_execute_sends_roadmap_client_translations_through_frappe(self, get_roadmap_dataset):
+	@patch(
+		"dinext_project_stage_gate.dinext_project_stage_gate.report.project_stage_gate_roadmap.project_stage_gate_roadmap._",
+		side_effect=_passthrough_translate,
+	)
+	def test_execute_sends_roadmap_client_translations_through_frappe(self, _translate, get_roadmap_dataset):
 		get_roadmap_dataset.return_value = {
 			"projects": [],
 			"stageBars": [],
@@ -134,9 +150,9 @@ class TestProjectStageGateRoadmapReport(unittest.TestCase):
 				"Milestones": "Вехи",
 				"Sort projects": "Сортировать проекты",
 				"Forecast Start Date": "Прогнозная дата начала",
-				"Sprint": "Спринт",
-				"Phase": "Фаза",
-				"Stage": "Стадия",
+				"Sprint:Dinext.TaskType": "Спринт",
+				"Phase:Dinext.TaskType": "Фаза",
+				"Stage:Dinext.TaskType": "Этап",
 			},
 			send_translations=unittest.mock.Mock(),
 		)
@@ -150,6 +166,6 @@ class TestProjectStageGateRoadmapReport(unittest.TestCase):
 		self.assertEqual(sent_translations["Gate checkpoints"], "Контрольные точки")
 		self.assertEqual(sent_translations["Sort projects"], "Сортировать проекты")
 		self.assertEqual(sent_translations["Forecast Start Date"], "Прогнозная дата начала")
-		self.assertEqual(sent_translations["Sprint"], "Спринт")
-		self.assertEqual(sent_translations["Phase"], "Фаза")
-		self.assertEqual(sent_translations["Stage"], "Стадия")
+		self.assertEqual(sent_translations["Sprint:Dinext.TaskType"], "Спринт")
+		self.assertEqual(sent_translations["Phase:Dinext.TaskType"], "Фаза")
+		self.assertEqual(sent_translations["Stage:Dinext.TaskType"], "Этап")

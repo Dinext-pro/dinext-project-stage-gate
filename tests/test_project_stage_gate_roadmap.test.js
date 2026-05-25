@@ -19,7 +19,13 @@ function loadRoadmapScript(translations = {}) {
 	};
 
 	const context = {
-		__(value) {
+		__(value, _replace, translationContext) {
+			if (translationContext) {
+				const contextualKey = `${value}:${translationContext}`;
+				if (Object.prototype.hasOwnProperty.call(translations, contextualKey)) {
+					return translations[contextualKey];
+				}
+			}
 			return Object.prototype.hasOwnProperty.call(translations, value)
 				? translations[value]
 				: value;
@@ -240,9 +246,9 @@ test("roadmap refreshes filter labels and descriptions after Frappe translations
 test("task type filter translates option labels and descriptions while preserving values", () => {
 	const { context, state } = loadRoadmapScript({
 		Issue: "Задача",
-		Sprint: "Спринт",
-		Phase: "Фаза",
-		Stage: "Стадия",
+		"Sprint:Dinext.TaskType": "Спринт",
+		"Phase:Dinext.TaskType": "Фаза",
+		"Stage:Dinext.TaskType": "Этап",
 	});
 	state.linkOptions = [
 		{ value: "Issue", label: "Issue", description: "Issue" },
@@ -259,7 +265,7 @@ test("task type filter translates option labels and descriptions while preservin
 		{ value: "Issue", label: "Задача", description: "Задача" },
 		{ value: "Sprint", label: "Спринт", description: "Спринт" },
 		{ value: "Phase", label: "Фаза", description: "Фаза" },
-		{ value: "Stage", label: "Стадия", description: "Стадия" },
+		{ value: "Stage", label: "Этап", description: "Этап" },
 	]);
 });
 
@@ -439,13 +445,13 @@ test("project focus can apply missing date filters from selected project payload
 
 test("roadmap static labels translate while status filter keeps stable values", () => {
 	const { context, roadmap } = loadRoadmapScript({
-		Stages: "Стадии",
+		"Stages:Dinext.StageGateModel": "Стадии",
 		Open: "Открыто",
 		Completed: "Завершено",
 		Cancelled: "Отменено",
 		"Gate checkpoints": "Контрольные точки гейтов",
 		Milestones: "Вехи",
-		Sprint: "Спринт",
+		"Sprint:Dinext.TaskType": "Спринт",
 		Task: "Задача",
 		"Project sorting": "Сортировка проектов",
 		"Forecast Start Date": "Прогнозная дата начала",
@@ -503,7 +509,7 @@ test("roadmap static labels translate while status filter keeps stable values", 
 
 test("roadmap legend uses Frappe translations", () => {
 	const { roadmap } = loadRoadmapScript({
-		Stages: "Стадии",
+		"Stages:Dinext.StageGateModel": "Стадии",
 		"Gate checkpoints": "Контрольные точки гейтов",
 		Milestones: "Вехи",
 	});
@@ -1650,6 +1656,28 @@ test("buildChartOptions adds toolbox sort feature", () => {
 	options.toolbox.feature.mySortProjects.onclick();
 
 	assert.equal(sortCalls, 1);
+});
+
+test("buildChartOptions uses transparent root background and opaque save-as-image background", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const options = roadmap.buildChartOptions({
+		categories: ["Project A"],
+		bars: [],
+		gates: [],
+		dataZoom: [],
+	});
+
+	assert.equal(options.backgroundColor, "transparent");
+	assert.ok(
+		options.toolbox.feature.saveAsImage.backgroundColor,
+		"saveAsImage should keep an explicit background for PNG export"
+	);
+	assert.notEqual(
+		options.toolbox.feature.saveAsImage.backgroundColor,
+		"transparent",
+		"export background should remain theme-based for readability"
+	);
 });
 
 test("toggleSortMenu opens toolbox dropdown and menu item applies sorting", async () => {

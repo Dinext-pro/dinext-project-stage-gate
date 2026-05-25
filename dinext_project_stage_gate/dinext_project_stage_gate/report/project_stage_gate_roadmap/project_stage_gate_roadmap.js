@@ -216,12 +216,36 @@ function applyRoadmapStyle() {
 
 frappe.provide("dinext_project_stage_gate.roadmap");
 
+const DINEXT_TASK_TYPE_TRANSLATION_CONTEXT = "Dinext.TaskType";
+const DINEXT_STAGE_GATE_TRANSLATION_CONTEXT = "Dinext.StageGateModel";
+
+dinext_project_stage_gate.roadmap.translateWithContext = function (text, context) {
+	if (!text) {
+		return text;
+	}
+	return context ? __(text, null, context) : __(text);
+};
+
+dinext_project_stage_gate.roadmap.translateTaskTypeLabel = function (text) {
+	return dinext_project_stage_gate.roadmap.translateWithContext(
+		text,
+		DINEXT_TASK_TYPE_TRANSLATION_CONTEXT
+	);
+};
+
+dinext_project_stage_gate.roadmap.translateStageGateLabel = function (text) {
+	return dinext_project_stage_gate.roadmap.translateWithContext(
+		text,
+		DINEXT_STAGE_GATE_TRANSLATION_CONTEXT
+	);
+};
+
 dinext_project_stage_gate.roadmap.translateLinkOption = function (option) {
 	if (typeof option === "string") {
 		return {
 			value: option,
-			label: __(option),
-			description: __(option),
+			label: dinext_project_stage_gate.roadmap.translateTaskTypeLabel(option),
+			description: dinext_project_stage_gate.roadmap.translateTaskTypeLabel(option),
 		};
 	}
 	if (!option) {
@@ -233,8 +257,10 @@ dinext_project_stage_gate.roadmap.translateLinkOption = function (option) {
 	return {
 		...option,
 		value,
-		label: label ? __(label) : label,
-		description: description ? __(description) : description,
+		label: label ? dinext_project_stage_gate.roadmap.translateTaskTypeLabel(label) : label,
+		description: description
+			? dinext_project_stage_gate.roadmap.translateTaskTypeLabel(description)
+			: description,
 	};
 };
 
@@ -1089,7 +1115,7 @@ dinext_project_stage_gate.roadmap.buildLegendData = function ({
 } = {}) {
 	const legendData = [
 		{
-			name: __("Stages"),
+			name: dinext_project_stage_gate.roadmap.translateStageGateLabel("Stages"),
 			icon: dinext_project_stage_gate.roadmap.LEGEND_ICON_CHEVRON,
 		},
 		{
@@ -1112,7 +1138,7 @@ dinext_project_stage_gate.roadmap.buildLegendData = function ({
 		}
 		seenTaskTypes.add(taskType);
 		legendData.push({
-			name: __(taskType),
+			name: dinext_project_stage_gate.roadmap.translateTaskTypeLabel(taskType),
 			icon: dinext_project_stage_gate.roadmap.LEGEND_ICON_LINE,
 		});
 	});
@@ -1136,7 +1162,7 @@ dinext_project_stage_gate.roadmap.groupTaskBarsByType = function (taskBars = [])
 	});
 	return orderedTypes.map((taskType) => ({
 		taskType,
-		taskTypeLabel: __(taskType),
+		taskTypeLabel: dinext_project_stage_gate.roadmap.translateTaskTypeLabel(taskType),
 		data: groupedBars[taskType],
 	}));
 };
@@ -1242,7 +1268,7 @@ dinext_project_stage_gate.roadmap.buildLegendProxySeries = function ({
 	const gateStyle = dinext_project_stage_gate.roadmap.getCheckpointItemStyle("Approved");
 	const legendSeries = [
 		{
-			name: __("Stages"),
+			name: dinext_project_stage_gate.roadmap.translateStageGateLabel("Stages"),
 			type: "line",
 			data: [],
 			silent: true,
@@ -2626,7 +2652,7 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 		dataZoom: dataZoom || [],
 		series: [
 			{
-				name: __("Stages"),
+				name: dinext_project_stage_gate.roadmap.translateStageGateLabel("Stages"),
 				type: "custom",
 				clip: true,
 				animationDuration: introAnimationDuration,
