@@ -132,7 +132,7 @@ dinext_project_stage_gate.project.add_view_menu_items = function (frm, stages) {
 	}
 	if (frappe.perm.has_perm("Project Stage Gate Roadmap")) {
 		frm.add_custom_button(
-			__("Roadmap"),
+			"⇛" + " " + __("Roadmap"),
 			() => {
 				frappe.route_options = {
 					project: frm.doc.name,
