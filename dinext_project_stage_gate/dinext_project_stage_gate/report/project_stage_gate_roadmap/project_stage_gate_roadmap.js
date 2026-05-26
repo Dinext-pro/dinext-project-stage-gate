@@ -145,11 +145,15 @@ frappe.query_reports["Project Stage Gate Roadmap"] = {
 	},
 
 	after_datatable_render(_datatable) {
-		if (frappe.query_report?._dinextRoadmapSkipNextDatatableRender) {
-			frappe.query_report._dinextRoadmapSkipNextDatatableRender = false;
+		const report = frappe.query_report;
+		if (!dinext_project_stage_gate.roadmap.isRoadmapReport(report)) {
 			return;
 		}
-		dinext_project_stage_gate.roadmap.render(frappe.query_report);
+		if (report?._dinextRoadmapSkipNextDatatableRender) {
+			report._dinextRoadmapSkipNextDatatableRender = false;
+			return;
+		}
+		dinext_project_stage_gate.roadmap.render(report);
 	},
 };
 
@@ -215,6 +219,33 @@ function applyRoadmapStyle() {
 }
 
 frappe.provide("dinext_project_stage_gate.roadmap");
+
+const DINEXT_ROADMAP_REPORT_NAME = "Project Stage Gate Roadmap";
+
+dinext_project_stage_gate.roadmap.isRoadmapReport = function (report) {
+	return (report?.report_name || "") === DINEXT_ROADMAP_REPORT_NAME;
+};
+
+dinext_project_stage_gate.roadmap.teardownRoadmapMount = function (report) {
+	if (!report?.page?.main || typeof report.page.main.find !== "function") {
+		return;
+	}
+	const mount = report.page.main.find(".project-stage-gate-roadmap-shell");
+	if (mount?.remove) {
+		mount.remove();
+	}
+};
+
+dinext_project_stage_gate.roadmap.teardownRoadmapSession = function (report) {
+	if (!report) {
+		return;
+	}
+	dinext_project_stage_gate.roadmap.teardownRoadmapMount(report);
+	report._dinextRoadmapProjectFocusPromise = null;
+	report._dinextRoadmapProjectFocusPending = false;
+	report._dinextRoadmapProjectFocusDatesApplied = false;
+	report._dinextRoadmapSkipNextDatatableRender = false;
+};
 
 const DINEXT_TASK_TYPE_TRANSLATION_CONTEXT = "Dinext.TaskType";
 const DINEXT_STAGE_GATE_TRANSLATION_CONTEXT = "Dinext.StageGateModel";
@@ -481,9 +512,18 @@ dinext_project_stage_gate.roadmap.wrapReportRefresh = function (report) {
 
 	const baseRefresh = report.refresh.bind(report);
 	report.refresh = function (...args) {
+		if (!dinext_project_stage_gate.roadmap.isRoadmapReport(report)) {
+			dinext_project_stage_gate.roadmap.teardownRoadmapSession(report);
+			return baseRefresh(...args);
+		}
+
 		report._dinextRoadmapSkipNextDatatableRender = true;
 		const renderAfterRefresh = () => {
 			report._dinextRoadmapSkipNextDatatableRender = false;
+			if (!dinext_project_stage_gate.roadmap.isRoadmapReport(report)) {
+				dinext_project_stage_gate.roadmap.teardownRoadmapSession(report);
+				return Promise.resolve();
+			}
 			dinext_project_stage_gate.roadmap.normalizeReportPayload(report);
 			return Promise.resolve(dinext_project_stage_gate.roadmap.render(report));
 		};
@@ -555,7 +595,11 @@ dinext_project_stage_gate.roadmap.ensureActionsMenuObserver = function (report) 
 	const menuElement = page.menu?.get?.(0) || page.menu?.[0];
 
 	const observer = new window.MutationObserver(() => {
-		dinext_project_stage_gate.roadmap.hideActionsMenu(report);
+		const activeReport = frappe?.query_report || report;
+		if (!dinext_project_stage_gate.roadmap.isRoadmapReport(activeReport)) {
+			return;
+		}
+		dinext_project_stage_gate.roadmap.hideActionsMenu(activeReport);
 	});
 
 	if (toolbarElement) {
@@ -3150,6 +3194,9 @@ dinext_project_stage_gate.roadmap.ensure_theme_observer = function (report) {
 		if (!lastReport || !lastReport.raw_data) {
 			return;
 		}
+		if (!dinext_project_stage_gate.roadmap.isRoadmapReport(lastReport)) {
+			return;
+		}
 
 		dinext_project_stage_gate.roadmap.render(lastReport);
 	});
@@ -3209,7 +3256,10 @@ dinext_project_stage_gate.roadmap.ensure_chart_mount = function (report) {
 
 dinext_project_stage_gate.roadmap.resizeCurrentChart = function () {
 	const lastReport = dinext_project_stage_gate.roadmap._last_report;
-	if (!lastReport?.page?.main) {
+	if (
+		!lastReport?.page?.main ||
+		!dinext_project_stage_gate.roadmap.isRoadmapReport(lastReport)
+	) {
 		return;
 	}
 
@@ -3854,6 +3904,10 @@ dinext_project_stage_gate.roadmap.buildRoundedTaskLineGraphic = function ({
 
 dinext_project_stage_gate.roadmap.render = async function (report) {
 	if (!report?.page?.main) {
+		return;
+	}
+	if (!dinext_project_stage_gate.roadmap.isRoadmapReport(report)) {
+		dinext_project_stage_gate.roadmap.teardownRoadmapSession(report);
 		return;
 	}
 
