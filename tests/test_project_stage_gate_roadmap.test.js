@@ -722,6 +722,7 @@ test("render syncs server-applied stage visibility without triggering a second r
 		},
 	};
 	const report = {
+		report_name: "Project Stage Gate Roadmap",
 		raw_data: {
 			message: {
 				projects: [],
@@ -807,6 +808,7 @@ test("render preserves a user-disabled stage toggle when other entities are sele
 		},
 	};
 	const report = {
+		report_name: "Project Stage Gate Roadmap",
 		raw_data: {
 			message: {
 				projects: [],
@@ -893,6 +895,7 @@ test("render disposes existing chart and shows empty state when no projects matc
 		},
 	};
 	const report = {
+		report_name: "Project Stage Gate Roadmap",
 		raw_data: {
 			message: {
 				projects: [],
@@ -955,6 +958,7 @@ test("onload wraps refresh to clear stale roadmap payload and rerender empty res
 	};
 
 	const report = {
+		report_name: "Project Stage Gate Roadmap",
 		page: { main: {} },
 		data: [{ project: "PRJ-1" }],
 		raw_data: {
@@ -1015,6 +1019,7 @@ test("project focus route filters are applied before the first wrapped refresh",
 	roadmap.render = async function () {};
 
 	const report = {
+		report_name: "Project Stage Gate Roadmap",
 		page: { main: {} },
 		raw_data: { message: {} },
 		get_filter(fieldname) {
@@ -1143,11 +1148,13 @@ test("ensureActionsMenuObserver installs a single observer for toolbar and menu 
 	const toolbarElement = { id: "toolbar" };
 	const menuElement = { id: "menu" };
 	const report = {
+		report_name: "Project Stage Gate Roadmap",
 		page: {
 			inner_toolbar: [toolbarElement],
 			menu: [menuElement],
 		},
 	};
+	context.frappe.query_report = report;
 
 	roadmap.ensureActionsMenuObserver(report);
 	roadmap.ensureActionsMenuObserver(report);
@@ -3475,6 +3482,7 @@ test("ensureResizeHandler recalculates current chart height and resizes the char
 		},
 	};
 	const report = {
+		report_name: "Project Stage Gate Roadmap",
 		page: {
 			main: {
 				find() {
@@ -3601,4 +3609,152 @@ test("attachChartClickNavigation only opens project from base lane click", () =>
 
 	chart.onCalls[0].handler({ componentType: "yAxis", value: "PRJ-1::base" });
 	assert.deepEqual(state.setRouteCalls, [["Form", "Project", "PRJ-1"]]);
+});
+
+test("render skips and teardowns mount for non-roadmap report", async () => {
+	const { roadmap } = loadRoadmapScript();
+	let shellRemoved = false;
+	const report = {
+		report_name: "Task Epic Burndown",
+		page: {
+			main: {
+				find(selector) {
+					if (selector === ".project-stage-gate-roadmap-shell") {
+						return {
+							length: 1,
+							remove() {
+								shellRemoved = true;
+							},
+						};
+					}
+					return { length: 0, remove() {} };
+				},
+			},
+		},
+		raw_data: { message: { projects: [{ name: "P1" }] } },
+		_dinextRoadmapSkipNextDatatableRender: true,
+		_dinextRoadmapProjectFocusPending: true,
+	};
+	await roadmap.render(report);
+	assert.equal(shellRemoved, true);
+	assert.equal(report._dinextRoadmapSkipNextDatatableRender, false);
+	assert.equal(report._dinextRoadmapProjectFocusPending, false);
+});
+
+test("ensureActionsMenuObserver ignores mutations when burndown is active", () => {
+	const { roadmap, context } = loadRoadmapScript();
+	let hideCalls = 0;
+
+	class MutationObserverMock {
+		constructor(callback) {
+			this.callback = callback;
+		}
+
+		observe() {}
+	}
+
+	context.window.MutationObserver = MutationObserverMock;
+	context.frappe.query_report = {
+		report_name: "Task Epic Burndown",
+	};
+	roadmap.hideActionsMenu = function () {
+		hideCalls += 1;
+	};
+
+	const report = {
+		report_name: "Project Stage Gate Roadmap",
+		page: {
+			inner_toolbar: [{}],
+			menu: [{}],
+		},
+	};
+
+	roadmap.ensureActionsMenuObserver(report);
+	report.page._dinextRoadmapActionsMenuObserver.callback();
+	assert.equal(hideCalls, 0);
+});
+
+test("wrapReportRefresh does not render roadmap after burndown refresh", async () => {
+	const { roadmap } = loadRoadmapScript();
+	let renderCalls = 0;
+	const originalRender = roadmap.render;
+	roadmap.render = async () => {
+		renderCalls += 1;
+	};
+	const baseRefresh = async () => ({ message: { result: [], columns: [] } });
+	const report = {
+		report_name: "Task Epic Burndown",
+		refresh: baseRefresh,
+		page: { main: { find: () => ({ remove: () => {} }) } },
+		data: [{ period: "2026-01" }],
+		raw_data: {},
+		_dinextRoadmapSkipNextDatatableRender: true,
+		_dinextRoadmapProjectFocusPending: true,
+	};
+	roadmap.wrapReportRefresh(report);
+	await report.refresh();
+	assert.equal(renderCalls, 0);
+	assert.equal(report._dinextRoadmapSkipNextDatatableRender, false);
+	assert.equal(report._dinextRoadmapProjectFocusPending, false);
+	roadmap.render = originalRender;
+});
+
+test("wrapReportRefresh bypasses roadmap logic for burndown without setting skip flag", async () => {
+	const { roadmap } = loadRoadmapScript();
+	let renderCalls = 0;
+	let baseRefreshCalls = 0;
+	const originalRender = roadmap.render;
+	roadmap.render = async () => {
+		renderCalls += 1;
+	};
+	const report = {
+		report_name: "Task Epic Burndown",
+		refresh: async () => {
+			baseRefreshCalls += 1;
+		},
+		page: { main: { find: () => ({ remove: () => {} }) } },
+		raw_data: {},
+	};
+	roadmap.wrapReportRefresh(report);
+	await report.refresh();
+	assert.equal(baseRefreshCalls, 1);
+	assert.equal(renderCalls, 0);
+	assert.equal(report._dinextRoadmapSkipNextDatatableRender, false);
+	roadmap.render = originalRender;
+});
+
+test("wrapReportRefresh clears stale project focus promise on burndown refresh", async () => {
+	const { roadmap } = loadRoadmapScript();
+	const report = {
+		report_name: "Task Epic Burndown",
+		refresh: async () => {},
+		page: { main: { find: () => ({ remove: () => {} }) } },
+		_dinextRoadmapProjectFocusPromise: Promise.resolve(true),
+		_dinextRoadmapProjectFocusPending: true,
+	};
+	roadmap.wrapReportRefresh(report);
+	await report.refresh();
+	assert.equal(report._dinextRoadmapProjectFocusPromise, null);
+	assert.equal(report._dinextRoadmapProjectFocusPending, false);
+});
+
+test("wrapReportRefresh still renders roadmap for roadmap report", async () => {
+	const { roadmap } = loadRoadmapScript();
+	let renderCalls = 0;
+	const originalRender = roadmap.render;
+	roadmap.render = async () => {
+		renderCalls += 1;
+	};
+	const baseRefresh = async () => ({ message: { result: [], columns: [] } });
+	const report = {
+		report_name: "Project Stage Gate Roadmap",
+		refresh: baseRefresh,
+		page: { main: { find: () => ({ length: 0, remove: () => {} }) } },
+		data: [],
+		raw_data: {},
+	};
+	roadmap.wrapReportRefresh(report);
+	await report.refresh();
+	assert.equal(renderCalls, 1);
+	roadmap.render = originalRender;
 });
