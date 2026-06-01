@@ -301,23 +301,11 @@ doc_events = {
 # Scheduled Tasks
 # ---------------
 
-# scheduler_events = {
-# 	"all": [
-# 		"dinext_project_stage_gate.tasks.all"
-# 	],
-# 	"daily": [
-# 		"dinext_project_stage_gate.tasks.daily"
-# 	],
-# 	"hourly": [
-# 		"dinext_project_stage_gate.tasks.hourly"
-# 	],
-# 	"weekly": [
-# 		"dinext_project_stage_gate.tasks.weekly"
-# 	],
-# 	"monthly": [
-# 		"dinext_project_stage_gate.tasks.monthly"
-# 	],
-# }
+scheduler_events = {
+	"daily": [
+		"dinext_project_stage_gate.tasks.daily",
+	],
+}
 
 # Testing
 # -------

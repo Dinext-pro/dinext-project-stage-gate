@@ -139,6 +139,8 @@
    "default": "0",
    "fieldname": "is_overdue",
    "fieldtype": "Check",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
    "label": "Is Overdue",
    "read_only": 1
   }
@@ -147,7 +149,7 @@
  "in_create": 1,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-06-01 23:55:23.536476",
+ "modified": "2026-06-02 00:24:11.125661",
  "modified_by": "Administrator",
  "module": "Dinext Project Stage Gate",
  "name": "Project Gate Checkpoint",
