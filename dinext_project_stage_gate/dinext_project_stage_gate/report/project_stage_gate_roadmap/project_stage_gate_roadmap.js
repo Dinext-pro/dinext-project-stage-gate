@@ -1031,10 +1031,25 @@ dinext_project_stage_gate.roadmap.isDimmedStageStatus = function (status) {
 	return status === "Skipped" || status === "Canceled";
 };
 
+dinext_project_stage_gate.roadmap.isOverdueEntity = function (entity) {
+	if (!entity) {
+		return false;
+	}
+	return Boolean(Number(entity.is_overdue ?? entity.isOverdue ?? 0));
+};
+
+dinext_project_stage_gate.roadmap.getOverdueOutlineColors = function () {
+	const isDark = dinext_project_stage_gate.roadmap.getEChartsThemeName() === "dark";
+	return {
+		stroke: isDark ? "#ef4444" : "#dc2626",
+		lineWidth: 1.5,
+	};
+};
+
 dinext_project_stage_gate.roadmap.getStageItemStyle = function (stage) {
 	const fallback = dinext_project_stage_gate.roadmap.getStageColors(stage.status);
 	const isDimmed = dinext_project_stage_gate.roadmap.isDimmedStageStatus(stage.status);
-	return {
+	const style = {
 		fill: fallback.fill,
 		stroke: fallback.stroke,
 		lineWidth: 1,
@@ -1043,6 +1058,12 @@ dinext_project_stage_gate.roadmap.getStageItemStyle = function (stage) {
 			: dinext_project_stage_gate.roadmap.getContrastTextColor(fallback.fill),
 		textOpacity: isDimmed ? 0.6 : 1,
 	};
+	if (dinext_project_stage_gate.roadmap.isOverdueEntity(stage)) {
+		const overdueOutline = dinext_project_stage_gate.roadmap.getOverdueOutlineColors();
+		style.stroke = overdueOutline.stroke;
+		style.lineWidth = overdueOutline.lineWidth;
+	}
+	return style;
 };
 
 dinext_project_stage_gate.roadmap.getCheckpointColor = function (status) {
@@ -1050,10 +1071,10 @@ dinext_project_stage_gate.roadmap.getCheckpointColor = function (status) {
 	return palette.checkpoint[status] || palette.fallbackCheckpoint;
 };
 
-dinext_project_stage_gate.roadmap.getCheckpointItemStyle = function (status) {
+dinext_project_stage_gate.roadmap.getCheckpointItemStyle = function (status, context = {}) {
 	const fill = dinext_project_stage_gate.roadmap.getCheckpointColor(status);
 	const isDark = dinext_project_stage_gate.roadmap.getEChartsThemeName() === "dark";
-	return {
+	const style = {
 		color: fill,
 		borderColor: dinext_project_stage_gate.roadmap.getThemeVariableColor(
 			"--card-bg",
@@ -1063,6 +1084,12 @@ dinext_project_stage_gate.roadmap.getCheckpointItemStyle = function (status) {
 		shadowBlur: 8,
 		shadowColor: dinext_project_stage_gate.roadmap.hexToRgba(fill, isDark ? 0.45 : 0.28),
 	};
+	if (dinext_project_stage_gate.roadmap.isOverdueEntity(context)) {
+		const overdueOutline = dinext_project_stage_gate.roadmap.getOverdueOutlineColors();
+		style.borderColor = overdueOutline.stroke;
+		style.borderWidth = overdueOutline.lineWidth;
+	}
+	return style;
 };
 
 dinext_project_stage_gate.roadmap.getTaskTypeColorIndex = function (taskType) {
@@ -3495,7 +3522,7 @@ dinext_project_stage_gate.roadmap.prepareSeriesData = function (payload, options
 				dinext_project_stage_gate.roadmap.translateStatus(gate.status),
 			],
 			itemStyle: {
-				...dinext_project_stage_gate.roadmap.getCheckpointItemStyle(gate.status),
+				...dinext_project_stage_gate.roadmap.getCheckpointItemStyle(gate.status, gate),
 			},
 		}));
 

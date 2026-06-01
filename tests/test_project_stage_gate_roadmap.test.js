@@ -3551,6 +3551,81 @@ test("prepareSeriesData adds outlined checkpoint styling for contrast", () => {
 	assert.ok(gates[0].itemStyle.borderColor);
 });
 
+test("getStageItemStyle and getCheckpointItemStyle apply red outline when is_overdue is set", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const activeStage = roadmap.getStageItemStyle({ status: "Active" });
+	const overdueStage = roadmap.getStageItemStyle({ status: "Active", is_overdue: 1 });
+	assert.equal(activeStage.lineWidth, 1);
+	assert.notEqual(activeStage.stroke, overdueStage.stroke);
+	assert.equal(overdueStage.lineWidth, 3);
+	assert.equal(overdueStage.stroke, "#dc2626");
+
+	const approvedGate = roadmap.getCheckpointItemStyle("Approved");
+	const overdueGate = roadmap.getCheckpointItemStyle("Approved", { is_overdue: 1 });
+	assert.equal(approvedGate.borderWidth, 2);
+	assert.notEqual(approvedGate.borderColor, overdueGate.borderColor);
+	assert.equal(overdueGate.borderWidth, 3);
+	assert.equal(overdueGate.borderColor, "#dc2626");
+});
+
+test("prepareSeriesData applies overdue outline only to flagged stage bars and gate checkpoints", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const { bars, gates } = roadmap.prepareSeriesData({
+		projects: [{ name: "PRJ-1", project_name: "Alpha" }],
+		stageBars: [
+			{
+				name: "PSI-1",
+				project: "PRJ-1",
+				stage: "Discovery",
+				status: "Active",
+				sequence: 1,
+				planned_start_date: "2026-01-01",
+				planned_end_date: "2026-01-31",
+				is_overdue: 0,
+			},
+			{
+				name: "PSI-2",
+				project: "PRJ-1",
+				stage: "Build",
+				status: "Active",
+				sequence: 2,
+				planned_start_date: "2026-02-01",
+				planned_end_date: "2026-02-28",
+				is_overdue: 1,
+			},
+		],
+		gates: [
+			{
+				name: "PGC-1",
+				project: "PRJ-1",
+				approval_date: "2026-02-15",
+				status: "Draft",
+				checkpoint_level: "Gate 1",
+				is_overdue: 0,
+			},
+			{
+				name: "PGC-2",
+				project: "PRJ-1",
+				approval_date: "2026-03-15",
+				status: "Draft",
+				checkpoint_level: "Gate 2",
+				is_overdue: 1,
+			},
+		],
+	});
+
+	assert.equal(bars[0].itemStyle.borderWidth, 1);
+	assert.notEqual(bars[0].itemStyle.borderColor, "#dc2626");
+	assert.equal(bars[1].itemStyle.borderWidth, 3);
+	assert.equal(bars[1].itemStyle.borderColor, "#dc2626");
+	assert.equal(gates[0].itemStyle.borderWidth, 2);
+	assert.notEqual(gates[0].itemStyle.borderColor, "#dc2626");
+	assert.equal(gates[1].itemStyle.borderWidth, 3);
+	assert.equal(gates[1].itemStyle.borderColor, "#dc2626");
+});
+
 test("calculateChartHeight keeps at least 65vh and does not cap tall datasets", () => {
 	const { roadmap, context } = loadRoadmapScript();
 

@@ -188,6 +188,7 @@ class TestStageGateQuery(unittest.TestCase):
 					"actual_end_date": None,
 					"gate_due_date": None,
 					"gate_result": None,
+					"is_overdue": 1,
 				}
 			],
 		]
@@ -223,6 +224,7 @@ class TestStageGateQuery(unittest.TestCase):
 					"status": "Approved",
 					"approval_date": "2026-04-11",
 					"checkpoint_level": "Stage Exit",
+					"is_overdue": 0,
 				}
 			],
 		]
@@ -232,10 +234,12 @@ class TestStageGateQuery(unittest.TestCase):
 		self.assertEqual(result["gates"][0]["checkpoint_level"], "Stage Exit")
 		self.assertEqual(result["projects"][0]["project_manager"], "Project Manager")
 		self.assertEqual(result["stageBars"][0]["stage_name"], "Discovery")
-		self.assertEqual(result["stageBars"][0]["color"], "#abcdef")
+		self.assertEqual(result["stageBars"][0]["is_overdue"], 1)
+		self.assertEqual(result["gates"][0]["is_overdue"], 0)
 
 		stage_call = get_list.call_args_list[1]
 		self.assertEqual(stage_call.args[0], "Project Stage Instance")
+		self.assertIn("is_overdue", stage_call.kwargs["fields"])
 		stage_filters = stage_call.kwargs["filters"]
 		t0 = date(2026, 4, 19)
 		self.assertEqual(stage_filters["planned_end_date"], [">=", add_months(t0, -6)])
@@ -243,6 +247,10 @@ class TestStageGateQuery(unittest.TestCase):
 
 		stage_meta_call = get_all.call_args_list[2]
 		self.assertEqual(stage_meta_call.args[0], "Project Stage")
+
+		gate_call = get_all.call_args_list[3]
+		self.assertEqual(gate_call.args[0], "Project Gate Checkpoint")
+		self.assertIn("is_overdue", gate_call.kwargs["fields"])
 
 	@patch.object(query, "_today", return_value=date(2026, 4, 19))
 	@patch("dinext_project_stage_gate.stage_gate.query.frappe.get_all")
