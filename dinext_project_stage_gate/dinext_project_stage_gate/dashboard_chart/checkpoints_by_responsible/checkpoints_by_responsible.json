@@ -1,0 +1,42 @@
+{
+ "based_on": "",
+ "chart_name": "Checkpoints by Responsible",
+ "chart_type": "Group By",
+ "creation": "2026-06-01 03:12:30.012254",
+ "currency": "",
+ "docstatus": 0,
+ "doctype": "Dashboard Chart",
+ "document_type": "Project Gate Checkpoint",
+ "dynamic_filters_json": "[]",
+ "filters_json": "[[\"Project Gate Checkpoint\",\"status\",\"not in\",[\"Canceled\",\"Approved\"],false]]",
+ "group_by_based_on": "responsible_user",
+ "group_by_type": "Count",
+ "idx": 0,
+ "is_public": 1,
+ "is_standard": 1,
+ "last_synced_on": "2026-06-01 23:47:43.356325",
+ "modified": "2026-06-01 23:49:12.702126",
+ "modified_by": "Administrator",
+ "module": "Dinext Project Stage Gate",
+ "name": "Checkpoints by Responsible",
+ "number_of_groups": 0,
+ "owner": "Administrator",
+ "parent_document_type": "",
+ "roles": [
+  {
+   "role": "Dinext_Project_Manager"
+  },
+  {
+   "role": "Stage Gate Owner"
+  }
+ ],
+ "show_values_over_chart": 0,
+ "source": "",
+ "time_interval": "Yearly",
+ "timeseries": 0,
+ "timespan": "Last Year",
+ "type": "Bar",
+ "use_report_chart": 0,
+ "value_based_on": "",
+ "y_axis": []
+}

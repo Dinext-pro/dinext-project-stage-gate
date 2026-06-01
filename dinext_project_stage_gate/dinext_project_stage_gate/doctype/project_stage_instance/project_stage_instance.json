@@ -20,6 +20,7 @@
   "column_break_zzpr",
   "planned_start_date",
   "planned_end_date",
+  "is_overdue",
   "column_break_ffmj",
   "actual_start_date",
   "actual_end_date",
@@ -165,13 +166,20 @@
    "fieldname": "exit_criteria_text",
    "fieldtype": "Small Text",
    "label": "Exit Criteria"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_overdue",
+   "fieldtype": "Check",
+   "label": "Is Overdue",
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,
  "in_create": 1,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-04-20 00:07:35.160871",
+ "modified": "2026-06-01 23:53:28.721180",
  "modified_by": "Administrator",
  "module": "Dinext Project Stage Gate",
  "name": "Project Stage Instance",
