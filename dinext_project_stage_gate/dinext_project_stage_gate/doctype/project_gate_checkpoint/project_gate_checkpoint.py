@@ -6,6 +6,7 @@ from frappe.model.document import Document
 from frappe.utils import nowdate
 
 from dinext_project_stage_gate.stage_gate import validators
+from dinext_project_stage_gate.stage_gate.overdue_sync import apply_checkpoint_overdue
 
 _TERMINAL_CHECKLIST_STATUSES = frozenset({"Done", "Canceled"})
 
@@ -22,6 +23,7 @@ class ProjectGateCheckpoint(Document):
 		)
 		if self.is_new():
 			self._set_gate_due_date_from_stage_instance()
+		apply_checkpoint_overdue(self)
 
 	def on_update(self):
 		self._sync_stage_instance_gate_result_on_approval()

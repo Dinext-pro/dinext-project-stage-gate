@@ -43,6 +43,20 @@ def compute_checkpoint_is_overdue(status, gate_due_date, reference_date=None):
 	return getdate(gate_due_date) < reference_date
 
 
+def apply_stage_instance_overdue(doc):
+	doc.is_overdue = int(
+		compute_stage_is_overdue(
+			doc.status,
+			doc.planned_start_date,
+			doc.planned_end_date,
+		)
+	)
+
+
+def apply_checkpoint_overdue(doc):
+	doc.is_overdue = int(compute_checkpoint_is_overdue(doc.status, doc.gate_due_date))
+
+
 def _sync_stage_overdue_flags(reference_date):
 	updated = 0
 	rows = frappe.get_all(
