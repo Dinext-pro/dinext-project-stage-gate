@@ -252,6 +252,107 @@ class TestStageGateOverdueSync(FrappeTestCase):
 			0,
 		)
 
+	def test_save_clears_stage_overdue_on_completed(self):
+		stage = self._provisioned_stage_instance(sequence=1)
+		frappe.db.set_value(
+			"Project Stage Instance",
+			stage.name,
+			{
+				"status": "Active",
+				"planned_end_date": "2026-06-01",
+				"is_overdue": 1,
+			},
+			update_modified=False,
+		)
+		stage = frappe.get_doc("Project Stage Instance", stage.name)
+		stage.status = "Completed"
+		with patch("frappe.model.document.validate_workflow"):
+			stage.save(ignore_permissions=True)
+		stage.reload()
+		self.assertEqual(int(stage.is_overdue or 0), 0)
+
+	def test_save_clears_stage_overdue_on_canceled_and_skipped(self):
+		for status in ("Canceled", "Skipped"):
+			stage = self._provisioned_stage_instance(sequence=2)
+			frappe.db.set_value(
+				"Project Stage Instance",
+				stage.name,
+				{
+					"status": "Active",
+					"planned_end_date": "2026-06-01",
+					"is_overdue": 1,
+				},
+				update_modified=False,
+			)
+			stage = frappe.get_doc("Project Stage Instance", stage.name)
+			stage.status = status
+			with patch("frappe.model.document.validate_workflow"):
+				stage.save(ignore_permissions=True)
+			stage.reload()
+			self.assertEqual(int(stage.is_overdue or 0), 0, msg=f"status={status}")
+
+	def test_save_sets_stage_overdue_when_active_and_end_date_past(self):
+		stage = self._provisioned_stage_instance(sequence=1)
+		frappe.db.set_value(
+			"Project Stage Instance",
+			stage.name,
+			{
+				"status": "Active",
+				"planned_start_date": "2026-01-01",
+				"planned_end_date": "2026-06-01",
+				"is_overdue": 0,
+			},
+			update_modified=False,
+		)
+		stage = frappe.get_doc("Project Stage Instance", stage.name)
+		with patch(
+			"dinext_project_stage_gate.stage_gate.overdue_sync.today",
+			return_value=REFERENCE_DATE,
+		):
+			with patch("frappe.model.document.validate_workflow"):
+				stage.save(ignore_permissions=True)
+		stage.reload()
+		self.assertEqual(int(stage.is_overdue or 0), 1)
+
+	def test_save_clears_checkpoint_overdue_on_approved(self):
+		frappe.set_user("Administrator")
+		checkpoint = self._load_provisioned_checkpoint()
+		frappe.db.set_value(
+			"Project Gate Checkpoint",
+			checkpoint.name,
+			{
+				"status": "In Review",
+				"gate_due_date": "2026-06-01",
+				"is_overdue": 1,
+			},
+			update_modified=False,
+		)
+		checkpoint = frappe.get_doc("Project Gate Checkpoint", checkpoint.name)
+		checkpoint.status = "Approved"
+		with patch("frappe.model.document.validate_workflow"):
+			checkpoint.save(ignore_permissions=True)
+		checkpoint.reload()
+		self.assertEqual(int(checkpoint.is_overdue or 0), 0)
+
+	def test_save_clears_checkpoint_overdue_on_canceled(self):
+		checkpoint = self._load_provisioned_checkpoint()
+		frappe.db.set_value(
+			"Project Gate Checkpoint",
+			checkpoint.name,
+			{
+				"status": "Draft",
+				"gate_due_date": "2026-06-01",
+				"is_overdue": 1,
+			},
+			update_modified=False,
+		)
+		checkpoint = frappe.get_doc("Project Gate Checkpoint", checkpoint.name)
+		checkpoint.status = "Canceled"
+		with patch("frappe.model.document.validate_workflow"):
+			checkpoint.save(ignore_permissions=True)
+		checkpoint.reload()
+		self.assertEqual(int(checkpoint.is_overdue or 0), 0)
+
 	def test_daily_task_invokes_sync(self):
 		stage = self._make_planned_stage_instance(
 			planned_start_date="2026-06-01",
