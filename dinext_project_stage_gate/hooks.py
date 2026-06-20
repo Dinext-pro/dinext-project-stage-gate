@@ -191,6 +191,7 @@ fixtures = [
 # include js in doctype views
 doctype_js = {
 	"Project": "public/js/project_stage_gate_project.js",
+	"Project Portfolio": "public/js/project_portfolio_stage_gate.js",
 }
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
