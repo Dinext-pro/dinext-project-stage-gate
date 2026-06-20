@@ -1,7 +1,7 @@
 import frappe
 from frappe import _
 
-from dinext_project_stage_gate.stage_gate import query
+from dinext_project_stage_gate.stage_gate import portfolio_grid, query
 
 @frappe.whitelist()
 def ping():
@@ -23,12 +23,50 @@ def get_roadmap_dataset(filters=None):
 	return query.get_roadmap_dataset(_coerce_filters(filters))
 
 
+@frappe.whitelist()
+def get_portfolio_project_grid(portfolio):
+	return {
+		"rows": portfolio_grid.get_portfolio_project_rows(portfolio),
+	}
+
+
+@frappe.whitelist()
+def get_unassigned_projects():
+	_ensure_permission("Project")
+	return {
+		"projects": portfolio_grid.get_unassigned_projects(),
+	}
+
+
+@frappe.whitelist()
+def add_projects_to_portfolio(portfolio, projects):
+	return portfolio_grid.add_projects_to_portfolio(portfolio, _coerce_list(projects))
+
+
+@frappe.whitelist()
+def remove_projects_from_portfolio(portfolio, projects):
+	return portfolio_grid.remove_projects_from_portfolio(portfolio, _coerce_list(projects))
+
+
 def _coerce_filters(filters):
 	if not filters:
 		return {}
 	if isinstance(filters, str):
 		return frappe.parse_json(filters) or {}
 	return filters
+
+
+def _coerce_list(values):
+	if not values:
+		return []
+	if isinstance(values, str):
+		parsed = frappe.parse_json(values)
+		if isinstance(parsed, list):
+			return parsed
+		return [values]
+	if isinstance(values, (list, tuple, set)):
+		return [value for value in values if value]
+	return [values]
 
 
 def _ensure_permission(doctype, doc=None):
