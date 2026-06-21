@@ -15,6 +15,86 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 	const portfolio = (dinext_project_stage_gate.portfolio =
 		dinext_project_stage_gate.portfolio || {});
 
+	portfolio.width_tier = {
+		project: { minWidth: 180, maxWidth: 320 },
+		text: { minWidth: 100, maxWidth: 200 },
+		textWide: { minWidth: 120, maxWidth: 260 },
+		status: { minWidth: 88, maxWidth: 115 },
+		stage: { minWidth: 120, maxWidth: 220 },
+		date: { minWidth: 96, maxWidth: 118 },
+		percent: { minWidth: 88, maxWidth: 108 },
+		number: { minWidth: 96, maxWidth: 132 },
+		currency: { minWidth: 100, maxWidth: 152 },
+		milestone: { minWidth: 160, maxWidth: 280 },
+	};
+
+	portfolio.with_width = function (colDef, tier) {
+		const bounds = portfolio.width_tier[tier] || portfolio.width_tier.text;
+		return { ...colDef, ...bounds };
+	};
+
+	portfolio.collect_leaf_column_defs = function (columnDefs, leaves = []) {
+		(columnDefs || []).forEach((colDef) => {
+			if (Array.isArray(colDef.children) && colDef.children.length) {
+				portfolio.collect_leaf_column_defs(colDef.children, leaves);
+				return;
+			}
+			leaves.push(colDef);
+		});
+		return leaves;
+	};
+
+	portfolio.autosize_grid_columns = function (api) {
+		if (!api) {
+			return;
+		}
+
+		const columns =
+			(typeof api.getColumns === "function" && api.getColumns()) ||
+			(typeof api.getAllGridColumns === "function" && api.getAllGridColumns()) ||
+			[];
+
+		if (!columns.length) {
+			return;
+		}
+
+		const colIds = columns.map((column) => column.getColId());
+
+		if (typeof api.autoSizeColumns === "function") {
+			api.autoSizeColumns({ columns: colIds, skipHeader: false });
+		} else if (typeof api.autoSizeAllColumns === "function") {
+			api.autoSizeAllColumns(false);
+		}
+
+		const widthUpdates = [];
+		columns.forEach((column) => {
+			const colDef = column.getColDef?.() || {};
+			const minWidth = Number(colDef.minWidth) || 90;
+			const maxWidth = Number(colDef.maxWidth);
+			const actualWidth = column.getActualWidth?.() ?? minWidth;
+			let newWidth = Math.max(minWidth, actualWidth);
+			if (Number.isFinite(maxWidth) && maxWidth > 0) {
+				newWidth = Math.min(newWidth, maxWidth);
+			}
+			if (newWidth !== actualWidth) {
+				widthUpdates.push({ key: column.getColId(), newWidth });
+			}
+		});
+
+		if (widthUpdates.length && typeof api.setColumnWidths === "function") {
+			api.setColumnWidths(widthUpdates);
+		}
+	};
+
+	portfolio.schedule_autosize_grid_columns = function (api) {
+		if (!api) {
+			return;
+		}
+		requestAnimationFrame(() => {
+			portfolio.autosize_grid_columns(api);
+		});
+	};
+
 	frappe.ui.form.on("Project Portfolio", {
 		refresh(frm) {
 			return portfolio.refresh(frm);
@@ -236,192 +316,271 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 			onSelectionChanged() {
 				portfolio.update_remove_button_state(frm);
 			},
+			onRowDoubleClicked(params) {
+				portfolio.open_project_form(params?.data);
+			},
+			onFirstDataRendered() {
+				portfolio.schedule_autosize_grid_columns(frm._portfolioGridApi);
+			},
+			onGridReady(params) {
+				frm._portfolioGridApi = params.api;
+				portfolio.schedule_autosize_grid_columns(params.api);
+			},
 		};
 
 		frm._portfolioGridApi = window.agGrid.createGrid(container, gridOptions);
 		portfolio.apply_theme(frm);
+		portfolio.schedule_autosize_grid_columns(frm._portfolioGridApi);
 	};
 
 	portfolio.get_column_defs = function () {
 		return [
-			{
-				headerName: __("Project"),
-				field: "project_name",
-				pinned: "left",
-				minWidth: 220,
-				headerCheckboxSelection: true,
-				checkboxSelection: true,
-				cellRenderer(params) {
-					return portfolio.render_project_cell(params.data);
+			portfolio.with_width(
+				{
+					headerName: __("Project"),
+					field: "project_name",
+					pinned: "left",
+					headerCheckboxSelection: true,
+					checkboxSelection: true,
+					cellRenderer(params) {
+						return portfolio.render_project_cell(params.data);
+					},
 				},
-			},
-			{
-				headerName: __("Type"),
-				field: "project_type",
-				minWidth: 140,
-			},
-			{
-				headerName: __("Priority"),
-				field: "priority",
-				minWidth: 120,
-			},
+				"project"
+			),
+			portfolio.with_width(
+				{
+					headerName: __("Type"),
+					field: "project_type",
+				},
+				"text"
+			),
+			portfolio.with_width(
+				{
+					headerName: __("Priority"),
+					field: "priority",
+				},
+				"text"
+			),
 			{
 				headerName: __("Status"),
 				children: [
-					{ headerName: __("Overall"), field: "status_overall", minWidth: 130 },
-					{ headerName: __("Schedule"), field: "status_schedule", minWidth: 130 },
-					{ headerName: __("Budget"), field: "status_budget", minWidth: 130 },
-					{ headerName: __("Resources"), field: "status_resources", minWidth: 130 },
-					{ headerName: __("Risks"), field: "status_risks", minWidth: 130 },
+					portfolio.with_width(
+						{ headerName: __("Overall"), field: "status_overall" },
+						"status"
+					),
+					portfolio.with_width(
+						{ headerName: __("Schedule"), field: "status_schedule" },
+						"status"
+					),
+					portfolio.with_width(
+						{ headerName: __("Budget"), field: "status_budget" },
+						"status"
+					),
+					portfolio.with_width(
+						{ headerName: __("Resources"), field: "status_resources" },
+						"status"
+					),
+					portfolio.with_width({ headerName: __("Risks"), field: "status_risks" }, "status"),
 				],
 			},
-			{
-				headerName: __("Active Stage"),
-				field: "active_stage",
-				minWidth: 160,
-			},
-			{
-				headerName: __("Customer"),
-				field: "customer",
-				minWidth: 180,
-			},
-			{
-				headerName: __("Department"),
-				field: "department",
-				minWidth: 180,
-			},
-			{
-				headerName: __("Project Manager"),
-				field: "project_manager",
-				minWidth: 190,
-			},
+			portfolio.with_width(
+				{
+					headerName: __("Active Stage"),
+					field: "active_stage",
+				},
+				"stage"
+			),
+			portfolio.with_width(
+				{
+					headerName: __("Customer"),
+					field: "customer",
+				},
+				"textWide"
+			),
+			portfolio.with_width(
+				{
+					headerName: __("Department"),
+					field: "department",
+				},
+				"textWide"
+			),
+			portfolio.with_width(
+				{
+					headerName: __("Project Manager"),
+					field: "project_manager",
+				},
+				"textWide"
+			),
 			{
 				headerName: __("Dates"),
 				children: [
-					{
-						headerName: __("Start"),
-						field: "expected_start_date",
-						minWidth: 120,
-						valueFormatter: portfolio.format_date_value,
-					},
-					{
-						headerName: __("End"),
-						field: "expected_end_date",
-						minWidth: 120,
-						valueFormatter: portfolio.format_date_value,
-					},
-					{
-						headerName: __("Current %"),
-						field: "progress_current_percent",
-						minWidth: 110,
-						valueFormatter: portfolio.format_percent_value,
-					},
+					portfolio.with_width(
+						{
+							headerName: __("Start"),
+							field: "expected_start_date",
+							valueFormatter: portfolio.format_date_value,
+						},
+						"date"
+					),
+					portfolio.with_width(
+						{
+							headerName: __("End"),
+							field: "expected_end_date",
+							valueFormatter: portfolio.format_date_value,
+						},
+						"date"
+					),
+					portfolio.with_width(
+						{
+							headerName: __("Current %"),
+							field: "progress_current_percent",
+							valueFormatter: portfolio.format_percent_value,
+						},
+						"percent"
+					),
 				],
 			},
 			{
 				headerName: __("Work"),
 				children: [
-					{
-						headerName: __("Plan %"),
-						field: "work_plan_percent",
-						minWidth: 110,
-						valueFormatter: portfolio.format_percent_value,
-					},
-					{
-						headerName: __("Actual %"),
-						field: "work_actual_percent",
-						minWidth: 110,
-						valueFormatter: portfolio.format_percent_value,
-					},
+					portfolio.with_width(
+						{
+							headerName: __("Plan %"),
+							field: "work_plan_percent",
+							valueFormatter: portfolio.format_percent_value,
+						},
+						"percent"
+					),
+					portfolio.with_width(
+						{
+							headerName: __("Actual %"),
+							field: "work_actual_percent",
+							valueFormatter: portfolio.format_percent_value,
+						},
+						"percent"
+					),
 				],
 			},
 			{
 				headerName: __("Labor"),
 				children: [
-					{
-						headerName: __("Plan Total"),
-						field: "labor_plan_total",
-						minWidth: 130,
-						valueFormatter: portfolio.format_number_value,
-					},
-					{
-						headerName: __("Actual Total"),
-						field: "labor_actual_total",
-						minWidth: 130,
-						valueFormatter: portfolio.format_number_value,
-					},
-					{
-						headerName: __("Forecast Total"),
-						field: "labor_forecast_total",
-						minWidth: 140,
-						valueFormatter: portfolio.format_number_value,
-					},
-					{
-						headerName: __("Plan Today"),
-						field: "labor_plan_today",
-						minWidth: 130,
-						valueFormatter: portfolio.format_number_value,
-					},
-					{
-						headerName: __("Actual Today"),
-						field: "labor_actual_today",
-						minWidth: 130,
-						valueFormatter: portfolio.format_number_value,
-					},
+					portfolio.with_width(
+						{
+							headerName: __("Plan Total"),
+							field: "labor_plan_total",
+							valueFormatter: portfolio.format_number_value,
+						},
+						"number"
+					),
+					portfolio.with_width(
+						{
+							headerName: __("Actual Total"),
+							field: "labor_actual_total",
+							valueFormatter: portfolio.format_number_value,
+						},
+						"number"
+					),
+					portfolio.with_width(
+						{
+							headerName: __("Forecast Total"),
+							field: "labor_forecast_total",
+							valueFormatter: portfolio.format_number_value,
+						},
+						"number"
+					),
+					portfolio.with_width(
+						{
+							headerName: __("Plan Today"),
+							field: "labor_plan_today",
+							valueFormatter: portfolio.format_number_value,
+						},
+						"number"
+					),
+					portfolio.with_width(
+						{
+							headerName: __("Actual Today"),
+							field: "labor_actual_today",
+							valueFormatter: portfolio.format_number_value,
+						},
+						"number"
+					),
 				],
 			},
 			{
 				headerName: __("P&L"),
 				children: [
-					{
-						headerName: __("Plan Total"),
-						field: "pl_plan_total",
-						minWidth: 140,
-						valueFormatter: portfolio.format_currency_value,
-					},
-					{
-						headerName: __("Actual Total"),
-						field: "pl_actual_total",
-						minWidth: 140,
-						valueFormatter: portfolio.format_currency_value,
-					},
-					{
-						headerName: __("Forecast Total"),
-						field: "pl_forecast_total",
-						minWidth: 150,
-						valueFormatter: portfolio.format_currency_value,
-					},
-					{
-						headerName: __("Plan Today"),
-						field: "pl_plan_today",
-						minWidth: 140,
-						valueFormatter: portfolio.format_currency_value,
-					},
-					{
-						headerName: __("Actual Today"),
-						field: "pl_actual_today",
-						minWidth: 140,
-						valueFormatter: portfolio.format_currency_value,
-					},
+					portfolio.with_width(
+						{
+							headerName: __("Plan Total"),
+							field: "pl_plan_total",
+							valueFormatter: portfolio.format_currency_value,
+						},
+						"currency"
+					),
+					portfolio.with_width(
+						{
+							headerName: __("Actual Total"),
+							field: "pl_actual_total",
+							valueFormatter: portfolio.format_currency_value,
+						},
+						"currency"
+					),
+					portfolio.with_width(
+						{
+							headerName: __("Forecast Total"),
+							field: "pl_forecast_total",
+							valueFormatter: portfolio.format_currency_value,
+						},
+						"currency"
+					),
+					portfolio.with_width(
+						{
+							headerName: __("Plan Today"),
+							field: "pl_plan_today",
+							valueFormatter: portfolio.format_currency_value,
+						},
+						"currency"
+					),
+					portfolio.with_width(
+						{
+							headerName: __("Actual Today"),
+							field: "pl_actual_today",
+							valueFormatter: portfolio.format_currency_value,
+						},
+						"currency"
+					),
 				],
 			},
 			{
 				headerName: __("Nearest Milestone"),
 				children: [
-					{
-						headerName: __("Milestone"),
-						field: "nearest_milestone_subject",
-						minWidth: 220,
-					},
-					{
-						headerName: __("Forecast Date"),
-						field: "nearest_milestone_date",
-						minWidth: 140,
-						valueFormatter: portfolio.format_date_value,
-					},
+					portfolio.with_width(
+						{
+							headerName: __("Milestone"),
+							field: "nearest_milestone_subject",
+						},
+						"milestone"
+					),
+					portfolio.with_width(
+						{
+							headerName: __("Forecast Date"),
+							field: "nearest_milestone_date",
+							valueFormatter: portfolio.format_date_value,
+						},
+						"date"
+					),
 				],
 			},
 		];
+	};
+
+	portfolio.open_project_form = function (row) {
+		const projectId = row?.project || row?.name;
+		if (!projectId) {
+			return;
+		}
+		frappe.set_route("Form", "Project", projectId);
 	};
 
 	portfolio.render_project_cell = function (row) {
