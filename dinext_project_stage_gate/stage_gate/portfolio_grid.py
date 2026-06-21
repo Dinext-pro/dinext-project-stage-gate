@@ -54,7 +54,6 @@ class ProjectPlSummary:
 	actual_total: float = 0.0
 	forecast_total: float = 0.0
 	plan_today: float = 0.0
-	actual_today: float = 0.0
 	has_data: bool = False
 
 
@@ -119,7 +118,6 @@ def get_portfolio_project_rows(portfolio: str | Any) -> list[dict[str, Any]]:
 				"pl_actual_total": pl_summary.actual_total,
 				"pl_forecast_total": pl_summary.forecast_total,
 				"pl_plan_today": pl_summary.plan_today,
-				"pl_actual_today": pl_summary.actual_today,
 				"pl_has_data": pl_summary.has_data,
 				"nearest_milestone_name": milestone.get("name") if milestone else None,
 				"nearest_milestone_subject": milestone.get("subject") if milestone else None,
@@ -639,7 +637,6 @@ def _get_pl_summaries(project_rows: list[dict[str, Any]]) -> dict[str, ProjectPl
 			project_name = row["name"]
 			out[project_name] = ProjectPlSummary(
 				actual_total=flt(row.get("gross_margin")),
-				actual_today=flt(row.get("gross_margin")),
 				has_data=bool(row.get("gross_margin")),
 			)
 		return out
@@ -647,7 +644,6 @@ def _get_pl_summaries(project_rows: list[dict[str, Any]]) -> dict[str, ProjectPl
 	budget = DocType("Project Budget")
 	budget_amount = DocType("Project Budget Amount")
 	account = DocType("Account")
-	gl_entry = DocType("GL Entry")
 	current_day = getdate(today())
 
 	budget_rows = (
@@ -671,18 +667,7 @@ def _get_pl_summaries(project_rows: list[dict[str, Any]]) -> dict[str, ProjectPl
 		.groupby(budget_amount.pba_month)
 		.run(as_dict=True)
 	)
-	actual_rows = (
-		frappe.qb.from_(gl_entry)
-		.select(
-			gl_entry.project.as_("project"),
-			Sum(IfNull(gl_entry.credit, 0) - IfNull(gl_entry.debit, 0)).as_("actual_net"),
-		)
-		.where(gl_entry.project.isin(project_names))
-		.where(gl_entry.is_cancelled == 0)
-		.where(gl_entry.posting_date <= current_day)
-		.groupby(gl_entry.project)
-		.run(as_dict=True)
-	)
+	actual_rows = _load_pl_actual_rows(project_names)
 
 	for row in budget_rows:
 		project_name = row.get("project")
@@ -705,7 +690,6 @@ def _get_pl_summaries(project_rows: list[dict[str, Any]]) -> dict[str, ProjectPl
 			continue
 		summary = out.setdefault(project_name, ProjectPlSummary())
 		summary.actual_total = flt(row.get("actual_net"))
-		summary.actual_today = summary.actual_total
 		summary.has_data = True
 
 	for row in project_rows:
@@ -713,14 +697,49 @@ def _get_pl_summaries(project_rows: list[dict[str, Any]]) -> dict[str, ProjectPl
 		summary = out.setdefault(project_name, ProjectPlSummary())
 		if not summary.has_data and row.get("gross_margin") is not None:
 			summary.actual_total = flt(row.get("gross_margin"))
-			summary.actual_today = summary.actual_total
 			summary.has_data = bool(summary.actual_total)
 		summary.plan_total = round(summary.plan_total, 2)
 		summary.actual_total = round(summary.actual_total, 2)
 		summary.forecast_total = round(summary.forecast_total, 2)
 		summary.plan_today = round(summary.plan_today, 2)
-		summary.actual_today = round(summary.actual_today, 2)
 	return out
+
+
+def _load_pl_actual_rows(project_names: list[str]) -> list[dict[str, Any]]:
+	if not project_names:
+		return []
+
+	return frappe.db.sql(
+		"""
+		SELECT
+			gle.project AS project,
+			SUM(
+				CASE
+					WHEN a.root_type = 'Income' THEN IFNULL(gle.credit, 0) - IFNULL(gle.debit, 0)
+					WHEN a.root_type = 'Expense' THEN - (IFNULL(gle.debit, 0) - IFNULL(gle.credit, 0))
+					ELSE 0
+				END
+			) AS actual_net
+		FROM `tabGL Entry` gle
+		INNER JOIN `tabAccount` a ON a.name = gle.account
+		WHERE gle.project IN %(projects)s
+			AND gle.is_cancelled = 0
+		GROUP BY gle.project
+		""",
+		{"projects": project_names},
+		as_dict=True,
+	)
+
+
+def _signed_gl_pl_line_amount(root_type: str | None, debit: Any, credit: Any) -> float:
+	sign = _root_type_sign(root_type)
+	if sign == 0:
+		return 0.0
+	debit_amount = flt(debit)
+	credit_amount = flt(credit)
+	if root_type == "Income":
+		return sign * (credit_amount - debit_amount)
+	return sign * (debit_amount - credit_amount)
 
 
 def _root_type_sign(root_type: str | None) -> int:

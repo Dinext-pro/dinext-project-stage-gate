@@ -14,7 +14,7 @@
 - Виджет на форме `Project`, подключаемый через `doctype_js`, без отдельного HTML custom field
 - AG Grid-таблица проектов на форме `Project Portfolio`: статусы RAG, трудозатраты, P&L, вехи, добавление и удаление проектов из портфеля; сводные трудозатраты совпадают с footer «Итого» на карточке «Трудозатраты» проекта (помесячная агрегация)
 - Поле `is_overdue` на `Project Stage Instance` и `Project Gate Checkpoint` с ежедневным пересчётом и подсветкой просрочки на roadmap
-- Кнопка `Project Stage Gate Roadmap` на форме `Project Portfolio`, открывающая отчет сразу с фильтром по текущему портфелю
+- Кнопки перехода к отчётам в меню **View** формы `Project Portfolio` и в toolbar AG Grid-таблицы (с иконками Espresso): **Projects Stage Roadmap** (фильтр `portfolio`), **Сводный P&L по проектам** (отчёт `Project Budget Plan vs Forecast` при установленном `dinext_projects_pl`), иначе стандартный **Profit and Loss Statement** (фильтр `project` по проектам портфеля)
 - Автоматическое создание `Project Stage Instance` при назначении `Project Governance Model` проекту
 - Автоматическое создание `Project Gate Checkpoint` из `Checkpoint Template`, указанного в строке модели управления
 - Автоматическое обновление полей `current_stage_instance`, `current_stage`, `stage_gate_status` и `current_gate_result` на `Project`
@@ -83,7 +83,15 @@ bench --site <site> export-fixtures --app dinext_project_stage_gate
 
 Дальше форма `Project` использует whitelisted API для отрисовки уже сохраненной Stage-gate цепочки. Если модель управления не назначена, виджет не показывается.
 
-На форме `Project Portfolio` появляется кнопка в меню `View`, которая открывает Script Report `Project Stage Gate Roadmap` с уже заполненным фильтром `portfolio` для текущего портфеля.
+На форме `Project Portfolio` для сохранённого портфеля доступны пункты меню **View** и дублирующие их кнопки в toolbar таблицы (единый реестр `get_view_actions` в [`project_portfolio_stage_gate.js`](dinext_project_stage_gate/public/js/project_portfolio_stage_gate.js)):
+
+| Действие | Условие | Отчёт / переход | Фильтр |
+|----------|---------|-----------------|--------|
+| Projects Stage Roadmap | право на отчёт | `Project Stage Gate Roadmap` | `portfolio` = текущий портфель |
+| P&L (dinext) | установлен `dinext_projects_pl` и право на отчёт | **Сводный P&L по проектам** → `Project Budget Plan vs Forecast` | `project_portfolio` = текущий портфель |
+| P&L (fallback) | **не** установлен `dinext_projects_pl` и право на отчёт | `Profit and Loss Statement` | `project` = список проектов портфеля (`custom_project_portfolio`) |
+
+Установка `dinext_projects_pl` определяется на клиенте через `frappe.boot.versions.dinext_projects_pl` (на сервере в [`portfolio_grid.py`](dinext_project_stage_gate/stage_gate/portfolio_grid.py) используется тот же идентификатор app для P&L-сводки в таблице). Доступ к отчётам проверяется через `frappe.boot.user.all_reports`.
 
 ### Таблица проектов на форме Project Portfolio
 
@@ -91,11 +99,12 @@ bench --site <site> export-fixtures --app dinext_project_stage_gate
 
 Возможности таблицы:
 
-1. Просмотр сводных данных по каждому проекту: тип, приоритет, RAG-статусы, активная стадия, заказчик, подразделение, трудозатраты, P&L, ближайшие вехи.
+1. Просмотр сводных данных по каждому проекту: тип, приоритет, RAG-статусы, активная стадия, заказчик, подразделение, трудозатраты, P&L, ближайшие открытые вехи.
 2. Закреплённая слева колонка `Project` с названием и кодом проекта; статус stage-gate доступен во всплывающей подсказке при наведении.
-3. Кнопки **Add** / **Remove** для привязки и отвязки проектов через поле `custom_project_portfolio` на `Project`.
-4. Автоматическая синхронизация светлой/тёмной темы AG Grid с темой Frappe Desk (`data-theme` / `data-theme-mode`).
-5. Компактная вёрстка: плотные строки и заголовки, минимальные отступы в ячейках.
+3. Toolbar над таблицей: **Add** / **Remove** (иконки `es-line-add` / `es-line-delete`, классы как у footer child table Frappe) и, через разделитель, кнопки из меню **View** (roadmap и P&L-отчёт).
+4. Привязка и отвязка проектов через поле `custom_project_portfolio` на `Project` (диалог добавления, подтверждение удаления выбранных строк).
+5. Автоматическая синхронизация светлой/тёмной темы AG Grid с темой Frappe Desk (`data-theme` / `data-theme-mode`).
+6. Компактная вёрстка: плотные строки и заголовки, минимальные отступы в ячейках.
 
 Read-model и мутации реализованы в [`stage_gate/portfolio_grid.py`](dinext_project_stage_gate/stage_gate/portfolio_grid.py) и экспонируются через whitelisted API (см. раздел «Вызов API»).
 
@@ -140,7 +149,7 @@ Forecast и Actual в Plan Today не участвуют. Округление l
 
 #### P&L
 
-Если установлено приложение `dinext_projects_pl`, сводка строится из `Project Budget` / `Project Budget Amount` (план, прогноз, Plan Today с тем же `_month_progress_ratio`) и фактических проводок `GL Entry` до текущей даты. Без `dinext_projects_pl` в колонках Actual используется `Project.gross_margin` как fallback.
+Если установлено приложение `dinext_projects_pl`, сводка строится из `Project Budget` / `Project Budget Amount` (план, прогноз, Plan Today с тем же `_month_progress_ratio`) и фактических проводок `GL Entry` с учётом `Account.root_type` (Income/Expense), совместимо с карточкой P&L `dinext_projects_pl`; балансовые счета (Liability и др.) не включаются. Без `dinext_projects_pl` в колонке Actual используется `Project.gross_margin` как fallback. Колонки P&L: Plan Total, Plan Today, Actual, Forecast Total.
 
 #### Просрочка стадий и checkpoint
 
@@ -290,13 +299,13 @@ node --test tests/*.js
 - [`dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_gate_checkpoint/project_gate_checkpoint.js`](dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_gate_checkpoint/project_gate_checkpoint.js) — клиентская логика чеклиста (удаление обязательных строк, скрытие «Удалить все строки»)
 - [`dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_gate_checkpoint/project_gate_checkpoint.py`](dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_gate_checkpoint/project_gate_checkpoint.py) — валидация и синхронизация `checklist_completed` с чеклистом
 - [`dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_stage_instance/project_stage_instance.py`](dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_stage_instance/project_stage_instance.py) — вычисление плановых/фактических дат и `after_insert` provisioning gate checkpoint
-- [`dinext_project_stage_gate/public/js/project_portfolio_stage_gate.js`](dinext_project_stage_gate/public/js/project_portfolio_stage_gate.js) — AG Grid на форме `Project Portfolio`, shortcut в roadmap-отчет
+- [`dinext_project_stage_gate/public/js/project_portfolio_stage_gate.js`](dinext_project_stage_gate/public/js/project_portfolio_stage_gate.js) — AG Grid на форме `Project Portfolio`, toolbar, реестр View-действий (roadmap, P&L-отчёты)
 - [`dinext_project_stage_gate/public/css/project_portfolio_grid.css`](dinext_project_stage_gate/public/css/project_portfolio_grid.css) — стили портфельной таблицы (тема Frappe + compact layout)
 - [`dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_gate_checkpoint/test_project_gate_checkpoint.py`](dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_gate_checkpoint/test_project_gate_checkpoint.py) — тесты пересчёта `checklist_completed`
 - [`dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_stage_instance/test_project_stage_instance.py`](dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_stage_instance/test_project_stage_instance.py) — integration-тесты автосоздания и guard-логики
 - [`dinext_project_stage_gate/tests/test_portfolio_grid.py`](dinext_project_stage_gate/tests/test_portfolio_grid.py) — Python-тесты read-model портфеля (трудозатраты, дерево задач, link/unlink)
 - [`dinext_project_stage_gate/tests/test_stage_gate_overdue_sync.py`](dinext_project_stage_gate/tests/test_stage_gate_overdue_sync.py) — тесты пересчёта `is_overdue` и daily sync
-- [`tests/test_project_portfolio_stage_gate.test.js`](tests/test_project_portfolio_stage_gate.test.js) — JS regression-тест AG Grid, темы и интеграции `Project Portfolio`
+- [`tests/test_project_portfolio_stage_gate.test.js`](tests/test_project_portfolio_stage_gate.test.js) — JS regression-тест AG Grid, toolbar/View-действий, P&L-навигации, темы и интеграции `Project Portfolio`
 - [`tests/test_project_gate_checkpoint_form.test.js`](tests/test_project_gate_checkpoint_form.test.js) — JS regression-тест клиентских ограничений чеклиста
 - [`tests/test_project_stage_gate_widget.test.js`](tests/test_project_stage_gate_widget.test.js) — JS regression-тест виджета `Project`
 - [`tests/test_project_stage_gate_roadmap.test.js`](tests/test_project_stage_gate_roadmap.test.js) — JS regression-тест roadmap-отчета
@@ -429,7 +438,7 @@ flowchart LR
 3. После вставки `Project Stage Instance` модуль provisioning создает `Project Gate Checkpoint`, если для стадии задан template.
 4. Изменения самих `Project Stage Instance` также пересчитывают summary проекта через `doc_events`.
 5. `stage_gate.query` собирает read-optimized datasets для виджета проекта и roadmap-отчета.
-6. Клиентский код отрисовывает Stage-gate цепочку на форме `Project`, AG Grid проектов и shortcut в roadmap на форме `Project Portfolio`, строит roadmap chart в Script Report.
+6. Клиентский код отрисовывает Stage-gate цепочку на форме `Project`, AG Grid проектов на форме `Project Portfolio` (toolbar + переходы к отчётам из меню View), строит roadmap chart в Script Report.
 7. При сохранении `Project Gate Checkpoint` пересчитывается `checklist_completed` по статусам строк чеклиста; workflow checkpoint опирается на это поле для разрешения отправки на согласование.
 8. Контроллеры стадий и checkpoint при сохранении и ежедневный scheduler поддерживают актуальность `is_overdue` для roadmap и отчётности.
 9. Портфельная AG Grid-таблица запрашивает сводные трудозатраты и P&L через `portfolio_grid.get_portfolio_project_rows`, используя помесячную агрегацию PWE, совместимую с карточкой «Трудозатраты» проекта.

@@ -717,7 +717,15 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 					),
 					portfolio.with_centered(
 						{
-							headerName: portfolio.t("Actual Total"),
+							headerName: portfolio.t("Plan Today"),
+							field: "pl_plan_today",
+							valueFormatter: portfolio.format_currency_value,
+						},
+						"currency"
+					),
+					portfolio.with_centered(
+						{
+							headerName: portfolio.t("Actual"),
 							field: "pl_actual_total",
 							valueFormatter: portfolio.format_currency_value,
 						},
@@ -727,22 +735,6 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 						{
 							headerName: portfolio.t("Forecast Total"),
 							field: "pl_forecast_total",
-							valueFormatter: portfolio.format_currency_value,
-						},
-						"currency"
-					),
-					portfolio.with_centered(
-						{
-							headerName: portfolio.t("Plan Today"),
-							field: "pl_plan_today",
-							valueFormatter: portfolio.format_currency_value,
-						},
-						"currency"
-					),
-					portfolio.with_centered(
-						{
-							headerName: portfolio.t("Actual Today"),
-							field: "pl_actual_today",
 							valueFormatter: portfolio.format_currency_value,
 						},
 						"currency"
@@ -936,17 +928,78 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 		frappe.set_route("query-report", "Project Stage Gate Roadmap");
 	};
 
+	portfolio.is_projects_pl_installed = function () {
+		return Boolean(frappe.boot?.versions?.dinext_projects_pl);
+	};
+
+	portfolio.can_access_report = function (reportName) {
+		return Boolean(frappe.boot?.user?.all_reports?.[reportName]);
+	};
+
+	portfolio.open_project_budget_plan_vs_forecast = function (frm) {
+		const currentYear = new Date().getFullYear();
+		frappe.route_options = {
+			project_portfolio: frm.doc.name,
+			company: frappe.defaults.get_user_default("Company"),
+			from_year: currentYear,
+			to_year: currentYear,
+			from_month: "1",
+			to_month: "12",
+		};
+		frappe.set_route("query-report", "Project Budget Plan vs Forecast");
+	};
+
+	portfolio.open_profit_and_loss_statement = async function (frm) {
+		const projects = await frappe.db.get_list("Project", {
+			filters: { custom_project_portfolio: frm.doc.name },
+			fields: ["name"],
+			limit: 0,
+		});
+		frappe.route_options = {
+			company: frappe.defaults.get_user_default("Company"),
+			filter_based_on: "Date Range",
+			period_start_date: frappe.datetime.year_start(),
+			period_end_date: frappe.datetime.year_end(),
+			project: projects.map((row) => row.name),
+			selected_view: "Report",
+			accumulated_values: 0,
+			include_default_book_entries: 1,
+		};
+		frappe.set_route("query-report", "Profit and Loss Statement");
+	};
+
 	portfolio.get_view_actions = function (frm) {
-		if (!frm || frm.is_new() || !frm.doc?.name || !frappe.perm.has_perm("Project Stage Gate Roadmap")) {
+		if (!frm || frm.is_new() || !frm.doc?.name) {
 			return [];
 		}
-		return [
-			{
+
+		const actions = [];
+
+		if (portfolio.can_access_report("Project Stage Gate Roadmap")) {
+			actions.push({
 				label: __("Projects Stage Roadmap"),
 				icon: "es-line-reports",
 				handler: () => portfolio.open_projects_stage_roadmap(frm),
-			},
-		];
+			});
+		}
+
+		if (portfolio.is_projects_pl_installed()) {
+			if (portfolio.can_access_report("Project Budget Plan vs Forecast")) {
+				actions.push({
+					label: portfolio.t("Consolidated P&L by Projects"),
+					icon: "es-line-chart",
+					handler: () => portfolio.open_project_budget_plan_vs_forecast(frm),
+				});
+			}
+		} else if (portfolio.can_access_report("Profit and Loss Statement")) {
+			actions.push({
+				label: __("Profit and Loss Statement"),
+				icon: "es-line-chart",
+				handler: () => portfolio.open_profit_and_loss_statement(frm),
+			});
+		}
+
+		return actions;
 	};
 
 	portfolio.add_view_menu_items = function (frm) {

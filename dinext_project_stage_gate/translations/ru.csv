@@ -321,8 +321,6 @@ Plan Today,План на сегодня,Dinext.PortfolioGrid
 Actual,Факт,Dinext.PortfolioGrid
 Forecast Total,Прогноз всего,Dinext.PortfolioGrid
 P&L,P&L,Dinext.PortfolioGrid
-Actual Total,Факт всего,Dinext.PortfolioGrid
-Actual Today,Факт на сегодня,Dinext.PortfolioGrid
 Nearest Open Milestone,Ближайшая открытая веха,Dinext.PortfolioGrid
 Milestone,Веха,Dinext.PortfolioGrid
 Forecast Date,Прогнозная дата,Dinext.PortfolioGrid
@@ -346,3 +344,4 @@ No write permission,Нет прав на изменение,Dinext.PortfolioGrid
 Already assigned to another portfolio,Уже привязан к другому портфелю,Dinext.PortfolioGrid
 Already in this portfolio,Уже включен в этот портфель,Dinext.PortfolioGrid
 Project is not linked to this portfolio,Проект не связан с этим портфелем,Dinext.PortfolioGrid
+Consolidated P&L by Projects,Сводный P&L по проектам,Dinext.PortfolioGrid
