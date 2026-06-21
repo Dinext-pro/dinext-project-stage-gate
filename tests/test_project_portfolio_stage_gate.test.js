@@ -145,6 +145,9 @@ function loadPortfolioScript() {
 						High: "red",
 						Medium: "orange",
 						Low: "green",
+						Green: "green",
+						Amber: "orange",
+						Red: "red",
 						Open: "orange",
 						Completed: "green",
 						Cancelled: "red",
@@ -420,11 +423,12 @@ function makeActionsContainer(children, state) {
 	};
 }
 
-function makeFormDoc({ name = "PORT-001", isNew = false } = {}) {
+function makeFormDoc({ name = "PORT-001", isNew = false, canWrite = true } = {}) {
 	const addedButtons = [];
 	return {
 		doc: { name },
 		fields_dict: {},
+		perm: [{ write: canWrite ? 1 : 0 }],
 		is_new() {
 			return isNew;
 		},
@@ -1028,6 +1032,57 @@ test("centered columns expose portfolio-project-grid-cell-center class", () => {
 
 	assert.notEqual(byField.customer.cellClass, "portfolio-project-grid-cell-center");
 	assert.notEqual(byField.status_schedule.cellClass, "portfolio-project-grid-cell-center");
+});
+
+test("ensure_shell hides Add and Remove when portfolio is read-only", () => {
+	const { portfolio, state } = loadPortfolioScript();
+	const frm = makeFormDoc({ canWrite: false });
+	attachProjectsField(frm, state);
+
+	const shell = portfolio.ensure_shell(frm);
+
+	assert.ok(shell);
+	const actionButtons = state.createdButtons || [];
+	assert.equal(
+		actionButtons.filter((button) =>
+			["add-projects", "remove-projects"].includes(button.attrs?.["data-action"])
+		).length,
+		0
+	);
+});
+
+test("render_grid omits row selection when portfolio is read-only", () => {
+	const { portfolio, state } = loadPortfolioScript();
+	const frm = makeFormDoc({ canWrite: false });
+	const container = { innerHTML: "" };
+	attachProjectsField(frm, state, { gridElement: container });
+
+	portfolio.render_grid(frm, container, [{ project: "PROJ-001", can_write: false }]);
+
+	assert.equal(state.gridOptions.rowSelection, undefined);
+	assert.equal(state.gridOptions.selectionColumnDef, undefined);
+});
+
+test("render_grid enables row selection only for writable rows", () => {
+	const { portfolio, state } = loadPortfolioScript();
+	const frm = makeFormDoc({ canWrite: true });
+	const container = { innerHTML: "" };
+	attachProjectsField(frm, state, { gridElement: container });
+
+	portfolio.render_grid(frm, container, [
+		{ project: "PROJ-001", can_write: true },
+		{ project: "PROJ-002", can_write: false },
+	]);
+
+	assert.equal(typeof state.gridOptions.rowSelection?.isRowSelectable, "function");
+	assert.equal(
+		state.gridOptions.rowSelection.isRowSelectable({ data: { can_write: true } }),
+		true
+	);
+	assert.equal(
+		state.gridOptions.rowSelection.isRowSelectable({ data: { can_write: false } }),
+		false
+	);
 });
 
 test("resolve_stage_status_pill switches palette when theme changes", () => {

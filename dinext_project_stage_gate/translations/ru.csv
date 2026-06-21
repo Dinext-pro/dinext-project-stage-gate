@@ -345,3 +345,12 @@ Already assigned to another portfolio,Уже привязан к другому 
 Already in this portfolio,Уже включен в этот портфель,Dinext.PortfolioGrid
 Project is not linked to this portfolio,Проект не связан с этим портфелем,Dinext.PortfolioGrid
 Consolidated P&L by Projects,Сводный P&L по проектам,Dinext.PortfolioGrid
+Not permitted to {0} {1},Нет прав на {0} для {1},Dinext.StageGate
+Projects Stage Roadmap,Дорожная карта этапов проектов,Dinext.PortfolioGrid
+Profit and Loss Statement,Отчет о прибылях и убытках,Dinext.PortfolioGrid
+High,Высокий,Dinext.ProjectPriority
+Medium,Средний,Dinext.ProjectPriority
+Low,Низкий,Dinext.ProjectPriority
+Open,Открыто,Dinext.ProjectStatus
+Completed,Завершено,Dinext.ProjectStatus
+Cancelled,Отменено,Dinext.ProjectStatus

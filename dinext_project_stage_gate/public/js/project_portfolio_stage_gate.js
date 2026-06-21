@@ -4,6 +4,8 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 	const GRID_CUSTOM_DARK_CLASS = "portfolio-project-grid-dark";
 	const DINEXT_PORTFOLIO_GRID_TRANSLATION_CONTEXT = "Dinext.PortfolioGrid";
 	const DINEXT_STAGE_GATE_TRANSLATION_CONTEXT = "Dinext.StageGateModel";
+	const DINEXT_PROJECT_STATUS_TRANSLATION_CONTEXT = "Dinext.ProjectStatus";
+	const DINEXT_PROJECT_PRIORITY_TRANSLATION_CONTEXT = "Dinext.ProjectPriority";
 	const BOOTSTRAP_JS = "/assets/dinext_common/js/ag-grid/bootstrap.js";
 	const PALETTE_JS = "/assets/dinext_project_stage_gate/js/stage_gate_status_palette.js";
 
@@ -62,11 +64,23 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 		);
 	};
 
-	portfolio.render_indicator_pill = function (label, colorClass, styleOptions = {}, translateLabel = true) {
+	portfolio.render_indicator_pill = function (
+		label,
+		colorClass,
+		styleOptions = {},
+		translateOptions = DINEXT_PORTFOLIO_GRID_TRANSLATION_CONTEXT
+	) {
 		if (label === null || label === undefined || label === "") {
 			return "";
 		}
-		const text = frappe.utils.escape_html(translateLabel ? __(String(label)) : String(label));
+		let text;
+		if (translateOptions === false) {
+			text = frappe.utils.escape_html(String(label));
+		} else if (typeof translateOptions === "string") {
+			text = frappe.utils.escape_html(__(String(label), null, translateOptions));
+		} else {
+			text = frappe.utils.escape_html(portfolio.t(String(label)));
+		}
 		const background = styleOptions.background;
 		const textColor = styleOptions.color;
 		if (background) {
@@ -75,7 +89,7 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 			const fg = frappe.utils.escape_html(
 				textColor || (palette?.getContrastTextColor ? palette.getContrastTextColor(background) : "#ffffff")
 			);
-			return `<span class="portfolio-project-grid-pill indicator-pill no-indicator-dot ellipsis" style="background:${bg};color:${fg};">${text}</span>`;
+			return `<span class="portfolio-project-grid-pill indicator-pill no-indicator-dot ellipsis" style="--pill-bg:${bg};--pill-fg:${fg};background:var(--pill-bg);color:var(--pill-fg);">${text}</span>`;
 		}
 		const cls = frappe.utils.escape_html(colorClass || "gray");
 		return `<span class="portfolio-project-grid-pill indicator-pill ${cls} no-indicator-dot ellipsis">${text}</span>`;
@@ -164,7 +178,12 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 		if (!resolved) {
 			return "";
 		}
-		return portfolio.render_indicator_pill(resolved.label, resolved.colorClass);
+		return portfolio.render_indicator_pill(
+			resolved.label,
+			resolved.colorClass,
+			{},
+			DINEXT_PROJECT_PRIORITY_TRANSLATION_CONTEXT
+		);
 	};
 
 	portfolio.render_project_status_cell = function (params) {
@@ -172,7 +191,12 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 		if (!resolved) {
 			return "";
 		}
-		return portfolio.render_indicator_pill(resolved.label, resolved.colorClass);
+		return portfolio.render_indicator_pill(
+			resolved.label,
+			resolved.colorClass,
+			{},
+			DINEXT_PROJECT_STATUS_TRANSLATION_CONTEXT
+		);
 	};
 
 	portfolio.render_active_stage_cell = function (params) {
@@ -183,9 +207,17 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 		}
 		const resolved = portfolio.resolve_stage_status_pill(row?.stage_gate_status);
 		if (resolved.background) {
-			return portfolio.render_indicator_pill(label, null, resolved);
+			return portfolio.render_indicator_pill(label, null, resolved, false);
 		}
-		return portfolio.render_indicator_pill(label, resolved.colorClass);
+		return portfolio.render_indicator_pill(label, resolved.colorClass, {}, false);
+	};
+
+	portfolio.can_edit_portfolio = function (frm) {
+		return Boolean(frm?.perm?.[0]?.write);
+	};
+
+	portfolio.can_select_row = function (row) {
+		return row?.can_write !== false;
 	};
 
 	portfolio.collect_leaf_column_defs = function (columnDefs, leaves = []) {
@@ -405,25 +437,27 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 		root.appendTo(fieldWrapper);
 
 		const $actions = root.find(".portfolio-project-grid-actions");
-		$actions.append(
-			portfolio.make_toolbar_button({
-				label: portfolio.t("Add"),
-				icon: "es-line-add",
-				btn_type: "secondary",
-				data_action: "add-projects",
-				click: () => portfolio.open_add_dialog(frm),
-			})
-		);
-		$actions.append(
-			portfolio.make_toolbar_button({
-				label: portfolio.t("Remove"),
-				icon: "es-line-delete",
-				btn_type: "danger",
-				disabled: true,
-				data_action: "remove-projects",
-				click: () => portfolio.remove_selected_projects(frm),
-			})
-		);
+		if (portfolio.can_edit_portfolio(frm)) {
+			$actions.append(
+				portfolio.make_toolbar_button({
+					label: portfolio.t("Add"),
+					icon: "es-line-add",
+					btn_type: "secondary",
+					data_action: "add-projects",
+					click: () => portfolio.open_add_dialog(frm),
+				})
+			);
+			$actions.append(
+				portfolio.make_toolbar_button({
+					label: portfolio.t("Remove"),
+					icon: "es-line-delete",
+					btn_type: "danger",
+					disabled: true,
+					data_action: "remove-projects",
+					click: () => portfolio.remove_selected_projects(frm),
+				})
+			);
+		}
 		portfolio.mount_toolbar_view_buttons(frm, $actions);
 
 		return {
@@ -461,25 +495,13 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 		container.innerHTML = "";
 		portfolio.apply_theme(frm);
 
+		const canEdit = portfolio.can_edit_portfolio(frm);
+		frm._portfolioCanEdit = canEdit;
+
 		const gridOptions = {
 			theme: "legacy",
 			rowData: rows,
 			columnDefs: portfolio.get_column_defs(),
-			rowSelection: {
-				mode: "multiRow",
-				enableClickSelection: false,
-				checkboxes: true,
-				headerCheckbox: true,
-			},
-			selectionColumnDef: {
-				pinned: "left",
-				lockPosition: "left",
-				width: 48,
-				maxWidth: 48,
-				minWidth: 48,
-				resizable: false,
-				sortable: false,
-			},
 			defaultColDef: {
 				sortable: true,
 				resizable: true,
@@ -495,9 +517,6 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 			overlayNoRowsTemplate: `<span class="portfolio-project-grid-empty">${frappe.utils.escape_html(
 				portfolio.t("No projects in this portfolio yet.")
 			)}</span>`,
-			onSelectionChanged() {
-				portfolio.update_remove_button_state(frm);
-			},
 			onRowDoubleClicked(params) {
 				portfolio.open_project_form(params?.data);
 			},
@@ -509,6 +528,28 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 				portfolio.schedule_autosize_grid_columns(params.api);
 			},
 		};
+
+		if (canEdit) {
+			gridOptions.rowSelection = {
+				mode: "multiRow",
+				enableClickSelection: false,
+				checkboxes: true,
+				headerCheckbox: true,
+				isRowSelectable: (node) => portfolio.can_select_row(node.data),
+			};
+			gridOptions.selectionColumnDef = {
+				pinned: "left",
+				lockPosition: "left",
+				width: 48,
+				maxWidth: 48,
+				minWidth: 48,
+				resizable: false,
+				sortable: false,
+			};
+			gridOptions.onSelectionChanged = function () {
+				portfolio.update_remove_button_state(frm);
+			};
+		}
 
 		frm._portfolioGridApi = window.agGrid.createGrid(container, gridOptions);
 		portfolio.apply_theme(frm);
@@ -893,7 +934,12 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 	};
 
 	portfolio.update_remove_button_state = function (frm) {
-		const selected = frm?._portfolioGridApi?.getSelectedRows?.() || [];
+		if (!portfolio.can_edit_portfolio(frm)) {
+			return;
+		}
+		const selected = (frm?._portfolioGridApi?.getSelectedRows?.() || []).filter((row) =>
+			portfolio.can_select_row(row)
+		);
 		const removeButton = portfolio.get_projects_field_wrapper(frm)?.find?.(
 			'[data-action="remove-projects"]'
 		);
@@ -977,7 +1023,7 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 
 		if (portfolio.can_access_report("Project Stage Gate Roadmap")) {
 			actions.push({
-				label: __("Projects Stage Roadmap"),
+				label: portfolio.t("Projects Stage Roadmap"),
 				icon: "es-line-reports",
 				handler: () => portfolio.open_projects_stage_roadmap(frm),
 			});
@@ -993,7 +1039,7 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 			}
 		} else if (portfolio.can_access_report("Profit and Loss Statement")) {
 			actions.push({
-				label: __("Profit and Loss Statement"),
+				label: portfolio.t("Profit and Loss Statement"),
 				icon: "es-line-chart",
 				handler: () => portfolio.open_profit_and_loss_statement(frm),
 			});
@@ -1086,7 +1132,9 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 	};
 
 	portfolio.remove_selected_projects = function (frm) {
-		const selectedRows = frm?._portfolioGridApi?.getSelectedRows?.() || [];
+		const selectedRows = (frm?._portfolioGridApi?.getSelectedRows?.() || []).filter((row) =>
+			portfolio.can_select_row(row)
+		);
 		if (!selectedRows.length) {
 			frappe.msgprint(portfolio.t("Select at least one row to remove."));
 			return;

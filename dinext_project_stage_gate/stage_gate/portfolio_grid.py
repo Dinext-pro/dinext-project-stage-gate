@@ -2,16 +2,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
-from importlib import import_module
 from typing import Any
 
 import frappe
-from frappe.query_builder import DocType
+from frappe.query_builder import Case, DocType
 from frappe.query_builder.functions import IfNull, Sum
 from frappe.utils import add_months, flt, get_last_day, getdate, today
 
 from dinext_project_stage_gate.stage_gate import portfolio_pl_rollup, query
 
+DINEXT_PERMISSION_CONTEXT = "Dinext.StageGate"
 DINEXT_UTP_STATUS_CONTEXT = "Dinext.UserTimesheetStatus"
 CANONICAL_UTP_APPROVED_STATUS = "Approved"
 _FALLBACK_UTP_APPROVED_STATUSES = frozenset({"Approved", "Согласовано"})
@@ -202,7 +202,9 @@ def _get_portfolio_doc(portfolio: str | Any):
 def _ensure_portfolio_permission(portfolio_doc, ptype: str) -> None:
 	if not portfolio_doc.has_permission(ptype):
 		frappe.throw(
-			frappe._("Not permitted to {0} {1}").format(ptype, portfolio_doc.doctype),
+			frappe._("Not permitted to {0} {1}", context=DINEXT_PERMISSION_CONTEXT).format(
+				ptype, portfolio_doc.doctype
+			),
 			frappe.PermissionError,
 		)
 
@@ -686,25 +688,26 @@ def _load_pl_actual_rows(project_names: list[str]) -> list[dict[str, Any]]:
 	if not project_names:
 		return []
 
-	return frappe.db.sql(
-		"""
-		SELECT
-			gle.project AS project,
-			SUM(
-				CASE
-					WHEN a.root_type = 'Income' THEN IFNULL(gle.credit, 0) - IFNULL(gle.debit, 0)
-					WHEN a.root_type = 'Expense' THEN - (IFNULL(gle.debit, 0) - IFNULL(gle.credit, 0))
-					ELSE 0
-				END
-			) AS actual_net
-		FROM `tabGL Entry` gle
-		INNER JOIN `tabAccount` a ON a.name = gle.account
-		WHERE gle.project IN %(projects)s
-			AND gle.is_cancelled = 0
-		GROUP BY gle.project
-		""",
-		{"projects": project_names},
-		as_dict=True,
+	gle = DocType("GL Entry")
+	account = DocType("Account")
+	signed_amount = (
+		Case()
+		.when(account.root_type == "Income", IfNull(gle.credit, 0) - IfNull(gle.debit, 0))
+		.when(
+			account.root_type == "Expense",
+			- (IfNull(gle.debit, 0) - IfNull(gle.credit, 0)),
+		)
+		.else_(0)
+	)
+	return (
+		frappe.qb.from_(gle)
+		.inner_join(account)
+		.on(account.name == gle.account)
+		.select(gle.project.as_("project"), Sum(signed_amount).as_("actual_net"))
+		.where(gle.project.isin(project_names))
+		.where(gle.is_cancelled == 0)
+		.groupby(gle.project)
+		.run(as_dict=True)
 	)
 
 
@@ -735,10 +738,3 @@ def _is_app_installed(app_name: str) -> bool:
 		return app_name in get_installed_apps()
 	except Exception:
 		return False
-
-
-def load_optional_module(module_path: str):
-	try:
-		return import_module(module_path)
-	except Exception:
-		return None
