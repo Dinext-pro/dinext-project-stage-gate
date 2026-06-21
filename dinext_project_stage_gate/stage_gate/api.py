@@ -25,6 +25,8 @@ def get_roadmap_dataset(filters=None):
 
 @frappe.whitelist()
 def get_portfolio_project_grid(portfolio):
+	_ensure_permission("Project Portfolio", "read", doc=portfolio)
+	_ensure_permission("Project")
 	return {
 		"rows": portfolio_grid.get_portfolio_project_rows(portfolio),
 	}
@@ -40,11 +42,13 @@ def get_unassigned_projects():
 
 @frappe.whitelist()
 def add_projects_to_portfolio(portfolio, projects):
+	_ensure_permission("Project Portfolio", "write", doc=portfolio)
 	return portfolio_grid.add_projects_to_portfolio(portfolio, _coerce_list(projects))
 
 
 @frappe.whitelist()
 def remove_projects_from_portfolio(portfolio, projects):
+	_ensure_permission("Project Portfolio", "write", doc=portfolio)
 	return portfolio_grid.remove_projects_from_portfolio(portfolio, _coerce_list(projects))
 
 
@@ -69,10 +73,10 @@ def _coerce_list(values):
 	return [values]
 
 
-def _ensure_permission(doctype, doc=None):
-	if not frappe.has_permission(doctype, "read", doc=doc):
+def _ensure_permission(doctype, ptype="read", doc=None):
+	if not frappe.has_permission(doctype, ptype, doc=doc):
 		frappe.throw(
-			_("Not permitted to read {0}").format(doctype),
+			_("Not permitted to {0} {1}").format(ptype, doctype),
 			frappe.PermissionError,
 		)
 

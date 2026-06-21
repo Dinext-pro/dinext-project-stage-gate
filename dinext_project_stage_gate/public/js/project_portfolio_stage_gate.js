@@ -1,19 +1,36 @@
 frappe.provide("dinext_project_stage_gate.portfolio");
 
 (function () {
+	const GRID_CUSTOM_DARK_CLASS = "portfolio-project-grid-dark";
+	const DINEXT_PORTFOLIO_GRID_TRANSLATION_CONTEXT = "Dinext.PortfolioGrid";
+	const DINEXT_STAGE_GATE_TRANSLATION_CONTEXT = "Dinext.StageGateModel";
 	const BOOTSTRAP_JS = "/assets/dinext_common/js/ag-grid/bootstrap.js";
+	const PALETTE_JS = "/assets/dinext_project_stage_gate/js/stage_gate_status_palette.js";
+
+	let bootstrapPromise = null;
+	let cssPromise = null;
+	let palettePromise = null;
+
+	const portfolio = (dinext_project_stage_gate.portfolio =
+		dinext_project_stage_gate.portfolio || {});
+
+	portfolio.t = function (text, args) {
+		return args ? __(text, args, DINEXT_PORTFOLIO_GRID_TRANSLATION_CONTEXT) : __(text, null, DINEXT_PORTFOLIO_GRID_TRANSLATION_CONTEXT);
+	};
+
+	portfolio.translate_stage_status = function (value) {
+		return value ? __(value, null, DINEXT_STAGE_GATE_TRANSLATION_CONTEXT) : value;
+	};
+
+	portfolio.get_status_palette = function () {
+		return dinext_project_stage_gate.status_palette || null;
+	};
+
 	const GRID_CSS = "/assets/dinext_project_stage_gate/css/project_portfolio_grid.css";
 	const PROJECTS_HTML_FIELD = "custom_portfolio_projects";
 	const GRID_SELECTOR = ".portfolio-project-grid";
 	const GRID_DARK_CLASS = "ag-theme-quartz-dark";
 	const GRID_LIGHT_CLASS = "ag-theme-quartz";
-	const GRID_CUSTOM_DARK_CLASS = "portfolio-project-grid-dark";
-
-	let bootstrapPromise = null;
-	let cssPromise = null;
-
-	const portfolio = (dinext_project_stage_gate.portfolio =
-		dinext_project_stage_gate.portfolio || {});
 
 	portfolio.width_tier = {
 		project: { minWidth: 180, maxWidth: 320 },
@@ -45,46 +62,31 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 		);
 	};
 
-	portfolio.render_indicator_pill = function (label, colorClass, styleOptions = {}) {
+	portfolio.render_indicator_pill = function (label, colorClass, styleOptions = {}, translateLabel = true) {
 		if (label === null || label === undefined || label === "") {
 			return "";
 		}
-		const text = frappe.utils.escape_html(__(String(label)));
+		const text = frappe.utils.escape_html(translateLabel ? __(String(label)) : String(label));
 		const background = styleOptions.background;
 		const textColor = styleOptions.color;
 		if (background) {
 			const bg = frappe.utils.escape_html(background);
-			const fg = frappe.utils.escape_html(textColor || portfolio.get_contrast_text_color(background));
+			const palette = portfolio.get_status_palette();
+			const fg = frappe.utils.escape_html(
+				textColor || (palette?.getContrastTextColor ? palette.getContrastTextColor(background) : "#ffffff")
+			);
 			return `<span class="portfolio-project-grid-pill indicator-pill no-indicator-dot ellipsis" style="background:${bg};color:${fg};">${text}</span>`;
 		}
 		const cls = frappe.utils.escape_html(colorClass || "gray");
 		return `<span class="portfolio-project-grid-pill indicator-pill ${cls} no-indicator-dot ellipsis">${text}</span>`;
 	};
 
-	// Stage-gate status hex fallback — keep aligned with project_stage_gate.css / roadmap statusPalette.
-	portfolio.stage_status_palette = {
-		light: {
-			Planned: "#8f9aa8",
-			"Waiting Gate": "#8f9aa8",
-			Active: "#7f95c1",
-			Skipped: "#b6b9bd",
-			Completed: "#739b7f",
-			Approved: "#739b7f",
-			Rejected: "#c08b8b",
-			Blocked: "#c08b8b",
-			Canceled: "#9787b0",
-		},
-		dark: {
-			Planned: "#636f7c",
-			"Waiting Gate": "#636f7c",
-			Active: "#4f6fa8",
-			Skipped: "#5c708a",
-			Completed: "#4e7d5c",
-			Approved: "#4e7d5c",
-			Rejected: "#a85c5c",
-			Blocked: "#a85c5c",
-			Canceled: "#6b5b8f",
-		},
+	portfolio.get_contrast_text_color = function (fill) {
+		const palette = portfolio.get_status_palette();
+		if (palette?.getContrastTextColor) {
+			return palette.getContrastTextColor(fill);
+		}
+		return "#ffffff";
 	};
 
 	portfolio.meta_color_to_indicator_class = function (color) {
@@ -97,25 +99,32 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 		return String(color).trim().toLowerCase().replace(/\s+/g, "-");
 	};
 
-	portfolio.get_contrast_text_color = function (fill) {
-		if (!fill || typeof fill !== "string" || !fill.startsWith("#")) {
-			return "#ffffff";
+	portfolio.resolve_stage_status_pill = function (stageStatus) {
+		if (!stageStatus) {
+			return { colorClass: "gray" };
 		}
-		let hex = fill.slice(1);
-		if (hex.length === 3) {
-			hex = hex
-				.split("")
-				.map((part) => part + part)
-				.join("");
+		const meta = typeof frappe.get_meta === "function" ? frappe.get_meta("Project Stage Instance") : null;
+		const state = meta?.states?.find((entry) => entry.title === stageStatus);
+		if (state?.color) {
+			return { colorClass: portfolio.meta_color_to_indicator_class(state.color) };
 		}
-		if (hex.length !== 6) {
-			return "#ffffff";
+		const isDark = portfolio.is_dark_theme();
+		const palette = portfolio.get_status_palette();
+		const background = palette?.getStageHex
+			? palette.getStageHex(stageStatus, isDark)
+			: "#8f9aa8";
+		return {
+			background,
+			color: portfolio.get_contrast_text_color(background),
+		};
+	};
+
+	portfolio.format_rag_status_value = function (params) {
+		const value = params?.value;
+		if (value === null || value === undefined || value === "") {
+			return "";
 		}
-		const r = Number.parseInt(hex.slice(0, 2), 16);
-		const g = Number.parseInt(hex.slice(2, 4), 16);
-		const b = Number.parseInt(hex.slice(4, 6), 16);
-		const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-		return luminance > 0.6 ? "#1f2937" : "#ffffff";
+		return String(value);
 	};
 
 	portfolio.resolve_project_status_pill = function (status) {
@@ -147,24 +156,6 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 				typeof frappe.utils.guess_colour === "function"
 					? frappe.utils.guess_colour(priority)
 					: "gray",
-		};
-	};
-
-	portfolio.resolve_stage_status_pill = function (stageStatus) {
-		if (!stageStatus) {
-			return { colorClass: "gray" };
-		}
-		const meta = typeof frappe.get_meta === "function" ? frappe.get_meta("Project Stage Instance") : null;
-		const state = meta?.states?.find((entry) => entry.title === stageStatus);
-		if (state?.color) {
-			return { colorClass: portfolio.meta_color_to_indicator_class(state.color) };
-		}
-		const themeKey = portfolio.is_dark_theme() ? "dark" : "light";
-		const palette = portfolio.stage_status_palette[themeKey] || portfolio.stage_status_palette.light;
-		const background = palette[stageStatus] || palette.Planned || "#8f9aa8";
-		return {
-			background,
-			color: portfolio.get_contrast_text_color(background),
 		};
 	};
 
@@ -288,7 +279,7 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 			return;
 		}
 		portfolio.apply_theme(frm);
-		portfolio.set_status_text(shell, __("Loading projects..."));
+		portfolio.set_status_text(shell, portfolio.t("Loading projects..."));
 
 		try {
 			await portfolio.ensure_assets();
@@ -304,12 +295,12 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 			portfolio.set_status_text(
 				shell,
 				rows.length
-					? __("Loaded {0} projects", [rows.length])
-					: __("No projects in this portfolio yet.")
+					? portfolio.t("Loaded {0} projects", [rows.length])
+					: portfolio.t("No projects in this portfolio yet.")
 			);
 		} catch (error) {
 			console.error("Failed to load Project Portfolio grid", error);
-			portfolio.render_error(shell, __("Failed to load portfolio projects."));
+			portfolio.render_error(shell, portfolio.t("Failed to load portfolio projects."));
 		}
 	};
 
@@ -339,12 +330,27 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 	};
 
 	portfolio.ensure_assets = async function () {
+		await portfolio.load_palette();
 		await portfolio.load_bootstrap();
 		await portfolio.load_grid_css();
 		if (!window.DinextAgGrid || typeof window.DinextAgGrid.ensure !== "function") {
-			throw new Error(__("DinextAgGrid bootstrap is unavailable"));
+			throw new Error(portfolio.t("DinextAgGrid bootstrap is unavailable"));
 		}
 		await window.DinextAgGrid.ensure();
+	};
+
+	portfolio.load_palette = function () {
+		if (dinext_project_stage_gate.status_palette?.getStageHex) {
+			return Promise.resolve();
+		}
+		if (!palettePromise) {
+			palettePromise = new Promise((resolve) => {
+				frappe.require([PALETTE_JS], function () {
+					resolve();
+				});
+			});
+		}
+		return palettePromise;
 	};
 
 	portfolio.load_bootstrap = function () {
@@ -354,21 +360,13 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 
 		if (!bootstrapPromise) {
 			bootstrapPromise = new Promise((resolve, reject) => {
-				const existing = document.querySelector(`script[src="${BOOTSTRAP_JS}"]`);
-				if (existing) {
-					existing.addEventListener("load", resolve, { once: true });
-					existing.addEventListener("error", reject, { once: true });
-					if (window.DinextAgGrid) {
+				frappe.require([BOOTSTRAP_JS], function () {
+					if (window.DinextAgGrid && typeof window.DinextAgGrid.ensure === "function") {
 						resolve();
+						return;
 					}
-					return;
-				}
-
-				const script = document.createElement("script");
-				script.src = BOOTSTRAP_JS;
-				script.onload = resolve;
-				script.onerror = reject;
-				document.head.appendChild(script);
+					reject(new Error(portfolio.t("DinextAgGrid bootstrap is unavailable")));
+				});
 			});
 		}
 
@@ -397,8 +395,8 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 			`<section class="portfolio-project-grid-root">
 				<div class="portfolio-project-grid-toolbar">
 					<div class="portfolio-project-grid-actions">
-						<button type="button" class="btn btn-primary btn-sm" data-action="add-projects">${__("Add")}</button>
-						<button type="button" class="btn btn-default btn-sm" data-action="remove-projects" disabled>${__("Remove")}</button>
+						<button type="button" class="btn btn-primary btn-sm" data-action="add-projects">${portfolio.t("Add")}</button>
+						<button type="button" class="btn btn-default btn-sm" data-action="remove-projects" disabled>${portfolio.t("Remove")}</button>
 					</div>
 					<div class="portfolio-project-grid-status text-muted small"></div>
 				</div>
@@ -455,8 +453,21 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 			theme: "legacy",
 			rowData: rows,
 			columnDefs: portfolio.get_column_defs(),
-			rowSelection: "multiple",
-			suppressRowClickSelection: true,
+			rowSelection: {
+				mode: "multiRow",
+				enableClickSelection: false,
+				checkboxes: true,
+				headerCheckbox: true,
+			},
+			selectionColumnDef: {
+				pinned: "left",
+				lockPosition: "left",
+				width: 48,
+				maxWidth: 48,
+				minWidth: 48,
+				resizable: false,
+				sortable: false,
+			},
 			defaultColDef: {
 				sortable: true,
 				resizable: true,
@@ -470,7 +481,7 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 			rowHeight: 32,
 			suppressCellFocus: true,
 			overlayNoRowsTemplate: `<span class="portfolio-project-grid-empty">${frappe.utils.escape_html(
-				__("No projects in this portfolio yet.")
+				portfolio.t("No projects in this portfolio yet.")
 			)}</span>`,
 			onSelectionChanged() {
 				portfolio.update_remove_button_state(frm);
@@ -496,11 +507,9 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 		return [
 			portfolio.with_width(
 				{
-					headerName: __("Project"),
+					headerName: portfolio.t("Project"),
 					field: "project_name",
 					pinned: "left",
-					headerCheckboxSelection: true,
-					checkboxSelection: true,
 					cellRenderer(params) {
 						return portfolio.render_project_cell(params.data);
 					},
@@ -509,39 +518,67 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 			),
 			portfolio.with_centered(
 				{
-					headerName: __("Type"),
+					headerName: portfolio.t("Type"),
 					field: "project_type",
 				},
 				"text"
 			),
 			portfolio.with_centered(
 				{
-					headerName: __("Priority"),
+					headerName: portfolio.t("Priority"),
 					field: "priority",
 					cellRenderer: portfolio.render_priority_cell,
 				},
 				"text"
 			),
 			{
-				headerName: __("Status"),
+				headerName: portfolio.t("Status"),
 				children: [
 					portfolio.with_centered(
 						{
-							headerName: __("Overall"),
+							headerName: portfolio.t("Overall"),
 							field: "status_overall",
 							cellRenderer: portfolio.render_project_status_cell,
 						},
 						"status"
 					),
-					portfolio.with_width({ headerName: __("Schedule"), field: "status_schedule" }, "status"),
-					portfolio.with_width({ headerName: __("Budget"), field: "status_budget" }, "status"),
-					portfolio.with_width({ headerName: __("Resources"), field: "status_resources" }, "status"),
-					portfolio.with_width({ headerName: __("Risks"), field: "status_risks" }, "status"),
+					portfolio.with_width(
+						{
+							headerName: portfolio.t("Schedule"),
+							field: "status_schedule",
+							valueFormatter: portfolio.format_rag_status_value,
+						},
+						"status"
+					),
+					portfolio.with_width(
+						{
+							headerName: portfolio.t("Budget"),
+							field: "status_budget",
+							valueFormatter: portfolio.format_rag_status_value,
+						},
+						"status"
+					),
+					portfolio.with_width(
+						{
+							headerName: portfolio.t("Resources"),
+							field: "status_resources",
+							valueFormatter: portfolio.format_rag_status_value,
+						},
+						"status"
+					),
+					portfolio.with_width(
+						{
+							headerName: portfolio.t("Risks"),
+							field: "status_risks",
+							valueFormatter: portfolio.format_rag_status_value,
+						},
+						"status"
+					),
 				],
 			},
 			portfolio.with_centered(
 				{
-					headerName: __("Active Stage"),
+					headerName: portfolio.t("Active Stage"),
 					field: "active_stage",
 					cellRenderer: portfolio.render_active_stage_cell,
 				},
@@ -549,31 +586,31 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 			),
 			portfolio.with_width(
 				{
-					headerName: __("Customer"),
+					headerName: portfolio.t("Customer"),
 					field: "customer",
 				},
 				"textWide"
 			),
 			portfolio.with_width(
 				{
-					headerName: __("Department"),
+					headerName: portfolio.t("Department"),
 					field: "department",
 				},
 				"textWide"
 			),
 			portfolio.with_width(
 				{
-					headerName: __("Project Manager"),
+					headerName: portfolio.t("Project Manager"),
 					field: "project_manager",
 				},
 				"textWide"
 			),
 			{
-				headerName: __("Dates"),
+				headerName: portfolio.t("Dates"),
 				children: [
 					portfolio.with_centered(
 						{
-							headerName: __("Start"),
+							headerName: portfolio.t("Start"),
 							field: "expected_start_date",
 							valueFormatter: portfolio.format_date_value,
 						},
@@ -581,7 +618,7 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 					),
 					portfolio.with_centered(
 						{
-							headerName: __("End"),
+							headerName: portfolio.t("End"),
 							field: "expected_end_date",
 							valueFormatter: portfolio.format_date_value,
 						},
@@ -589,7 +626,7 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 					),
 					portfolio.with_centered(
 						{
-							headerName: __("Current %"),
+							headerName: portfolio.t("Current %"),
 							field: "progress_current_percent",
 							valueFormatter: portfolio.format_percent_value,
 						},
@@ -598,11 +635,11 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 				],
 			},
 			{
-				headerName: __("Work"),
+				headerName: portfolio.t("Work"),
 				children: [
 					portfolio.with_centered(
 						{
-							headerName: __("Plan %"),
+							headerName: portfolio.t("Plan %"),
 							field: "work_plan_percent",
 							valueFormatter: portfolio.format_percent_value,
 						},
@@ -610,7 +647,7 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 					),
 					portfolio.with_centered(
 						{
-							headerName: __("Actual %"),
+							headerName: portfolio.t("Actual %"),
 							field: "work_actual_percent",
 							valueFormatter: portfolio.format_percent_value,
 						},
@@ -619,11 +656,11 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 				],
 			},
 			{
-				headerName: __("Labor"),
+				headerName: portfolio.t("Labor"),
 				children: [
 					portfolio.with_centered(
 						{
-							headerName: __("Plan Total"),
+							headerName: portfolio.t("Plan Total"),
 							field: "labor_plan_total",
 							valueFormatter: portfolio.format_number_value,
 						},
@@ -631,7 +668,7 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 					),
 					portfolio.with_centered(
 						{
-							headerName: __("Plan Today"),
+							headerName: portfolio.t("Plan Today"),
 							field: "labor_plan_today",
 							valueFormatter: portfolio.format_number_value,
 						},
@@ -639,7 +676,7 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 					),
 					portfolio.with_centered(
 						{
-							headerName: __("Actual"),
+							headerName: portfolio.t("Actual"),
 							field: "labor_actual_total",
 							valueFormatter: portfolio.format_number_value,
 						},
@@ -647,7 +684,7 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 					),
 					portfolio.with_centered(
 						{
-							headerName: __("Forecast Total"),
+							headerName: portfolio.t("Forecast Total"),
 							field: "labor_forecast_total",
 							valueFormatter: portfolio.format_number_value,
 						},
@@ -656,11 +693,11 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 				],
 			},
 			{
-				headerName: __("P&L"),
+				headerName: portfolio.t("P&L"),
 				children: [
 					portfolio.with_centered(
 						{
-							headerName: __("Plan Total"),
+							headerName: portfolio.t("Plan Total"),
 							field: "pl_plan_total",
 							valueFormatter: portfolio.format_currency_value,
 						},
@@ -668,7 +705,7 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 					),
 					portfolio.with_centered(
 						{
-							headerName: __("Actual Total"),
+							headerName: portfolio.t("Actual Total"),
 							field: "pl_actual_total",
 							valueFormatter: portfolio.format_currency_value,
 						},
@@ -676,7 +713,7 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 					),
 					portfolio.with_centered(
 						{
-							headerName: __("Forecast Total"),
+							headerName: portfolio.t("Forecast Total"),
 							field: "pl_forecast_total",
 							valueFormatter: portfolio.format_currency_value,
 						},
@@ -684,7 +721,7 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 					),
 					portfolio.with_centered(
 						{
-							headerName: __("Plan Today"),
+							headerName: portfolio.t("Plan Today"),
 							field: "pl_plan_today",
 							valueFormatter: portfolio.format_currency_value,
 						},
@@ -692,7 +729,7 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 					),
 					portfolio.with_centered(
 						{
-							headerName: __("Actual Today"),
+							headerName: portfolio.t("Actual Today"),
 							field: "pl_actual_today",
 							valueFormatter: portfolio.format_currency_value,
 						},
@@ -701,18 +738,18 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 				],
 			},
 			{
-				headerName: __("Nearest Milestone"),
+				headerName: portfolio.t("Nearest Milestone"),
 				children: [
 					portfolio.with_width(
 						{
-							headerName: __("Milestone"),
+							headerName: portfolio.t("Milestone"),
 							field: "nearest_milestone_subject",
 						},
 						"milestone"
 					),
 					portfolio.with_width(
 						{
-							headerName: __("Forecast Date"),
+							headerName: portfolio.t("Forecast Date"),
 							field: "nearest_milestone_date",
 							valueFormatter: portfolio.format_date_value,
 						},
@@ -738,7 +775,7 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 		const projectName = frappe.utils.escape_html(row.project || "");
 		const projectTitle = frappe.utils.escape_html(row.project_name || row.project || "");
 		const stageStatusAttr = row.stage_gate_status
-			? ` title="${frappe.utils.escape_html(row.stage_gate_status)}"`
+			? ` title="${frappe.utils.escape_html(portfolio.translate_stage_status(row.stage_gate_status))}"`
 			: "";
 		return `<div class="portfolio-project-grid-project-cell"${stageStatusAttr}>
 			<div class="portfolio-project-grid-project-title">${projectTitle}</div>
@@ -882,17 +919,17 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 		);
 		const projects = response.projects || [];
 		if (!projects.length) {
-			frappe.msgprint(__("No projects are available for adding."));
+			frappe.msgprint(portfolio.t("No projects are available for adding."));
 			return;
 		}
 
 		const dialog = new frappe.ui.Dialog({
-			title: __("Add Projects"),
+			title: portfolio.t("Add Projects"),
 			fields: [
 				{
 					fieldname: "projects",
 					fieldtype: "MultiCheck",
-					label: __("Projects"),
+					label: portfolio.t("Projects"),
 					columns: 1,
 					options: projects.map((project) => ({
 						label: portfolio.format_project_option(project),
@@ -900,11 +937,11 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 					})),
 				},
 			],
-			primary_action_label: __("Add"),
+			primary_action_label: portfolio.t("Add"),
 			primary_action: async (values) => {
 				const selectedProjects = values.projects || [];
 				if (!selectedProjects.length) {
-					frappe.msgprint(__("Select at least one project."));
+					frappe.msgprint(portfolio.t("Select at least one project."));
 					return;
 				}
 
@@ -916,7 +953,7 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 					}
 				);
 				dialog.hide();
-				portfolio.show_action_result(result, __("Added"), __("added"));
+				portfolio.show_action_result(result, portfolio.t("Added"), portfolio.t("added"));
 				await portfolio.refresh(frm);
 			},
 		});
@@ -937,12 +974,12 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 	portfolio.remove_selected_projects = function (frm) {
 		const selectedRows = frm?._portfolioGridApi?.getSelectedRows?.() || [];
 		if (!selectedRows.length) {
-			frappe.msgprint(__("Select at least one row to remove."));
+			frappe.msgprint(portfolio.t("Select at least one row to remove."));
 			return;
 		}
 
 		frappe.confirm(
-			__("Remove the selected projects from this portfolio?"),
+			portfolio.t("Remove the selected projects from this portfolio?"),
 			async () => {
 				const result = await portfolio.call(
 					"dinext_project_stage_gate.stage_gate.api.remove_projects_from_portfolio",
@@ -951,7 +988,7 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 						projects: selectedRows.map((row) => row.project),
 					}
 				);
-				portfolio.show_action_result(result, __("Removed"), __("removed"));
+				portfolio.show_action_result(result, portfolio.t("Removed"), portfolio.t("removed"));
 				await portfolio.refresh(frm);
 			}
 		);
@@ -962,17 +999,17 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 		const skipped = result?.skipped || [];
 		if (updated.length) {
 			frappe.show_alert({
-				message: __("{0} {1} projects", [successVerb, updated.length]),
+				message: portfolio.t("{0} {1} projects", [successVerb, updated.length]),
 				indicator: "green",
 			});
 		}
 		if (skipped.length) {
 			const lines = skipped.map((item) => `${item.project}: ${portfolio.describe_skip_reason(item.reason)}`);
 			frappe.msgprint({
-				title: __("Some projects were skipped"),
+				title: portfolio.t("Some projects were skipped"),
 				indicator: "orange",
 				message: `<div>${frappe.utils.escape_html(
-					__("Successfully {0}: {1}", [successVerbLower, updated.length])
+					portfolio.t("Successfully {0}: {1}", [successVerbLower, updated.length])
 				)}</div><ul>${lines
 					.map((line) => `<li>${frappe.utils.escape_html(line)}</li>`)
 					.join("")}</ul>`,
@@ -982,10 +1019,10 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 
 	portfolio.describe_skip_reason = function (reason) {
 		const labels = {
-			no_project_write_permission: __("No write permission"),
-			already_assigned: __("Already assigned to another portfolio"),
-			already_in_portfolio: __("Already in this portfolio"),
-			not_in_portfolio: __("Project is not linked to this portfolio"),
+			no_project_write_permission: portfolio.t("No write permission"),
+			already_assigned: portfolio.t("Already assigned to another portfolio"),
+			already_in_portfolio: portfolio.t("Already in this portfolio"),
+			not_in_portfolio: portfolio.t("Project is not linked to this portfolio"),
 		};
 		return labels[reason] || reason || "";
 	};
