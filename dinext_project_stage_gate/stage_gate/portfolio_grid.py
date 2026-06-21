@@ -10,7 +10,7 @@ from frappe.query_builder import DocType
 from frappe.query_builder.functions import IfNull, Sum
 from frappe.utils import add_months, flt, get_last_day, getdate, today
 
-from dinext_project_stage_gate.stage_gate import query
+from dinext_project_stage_gate.stage_gate import portfolio_pl_rollup, query
 
 DINEXT_UTP_STATUS_CONTEXT = "Dinext.UserTimesheetStatus"
 CANONICAL_UTP_APPROVED_STATUS = "Approved"
@@ -641,48 +641,25 @@ def _get_pl_summaries(project_rows: list[dict[str, Any]]) -> dict[str, ProjectPl
 			)
 		return out
 
-	budget = DocType("Project Budget")
-	budget_amount = DocType("Project Budget Amount")
-	account = DocType("Account")
 	current_day = getdate(today())
-
-	budget_rows = (
-		frappe.qb.from_(budget)
-		.inner_join(budget_amount)
-		.on(budget_amount.parent == budget.name)
-		.inner_join(account)
-		.on(account.name == budget.pb_account)
-		.select(
-			budget.pb_project.as_("project"),
-			account.root_type.as_("root_type"),
-			budget_amount.pba_year.as_("year"),
-			budget_amount.pba_month.as_("month"),
-			Sum(IfNull(budget_amount.pba_plan, 0)).as_("plan_amount"),
-			Sum(IfNull(budget_amount.pba_expected, 0)).as_("forecast_amount"),
-		)
-		.where(budget.pb_project.isin(project_names))
-		.groupby(budget.pb_project)
-		.groupby(account.root_type)
-		.groupby(budget_amount.pba_year)
-		.groupby(budget_amount.pba_month)
-		.run(as_dict=True)
-	)
+	budget_docs_by_project = portfolio_pl_rollup.load_pl_budget_documents(project_names)
 	actual_rows = _load_pl_actual_rows(project_names)
 
-	for row in budget_rows:
-		project_name = row.get("project")
-		if not project_name:
-			continue
-		sign = _root_type_sign(row.get("root_type"))
-		summary = out.setdefault(project_name, ProjectPlSummary())
-		plan_amount = sign * flt(row.get("plan_amount"))
-		forecast_amount = sign * flt(row.get("forecast_amount"))
-		summary.plan_total += plan_amount
-		summary.forecast_total += forecast_amount
-		summary.plan_today += plan_amount * _month_progress_ratio(
-			int(row.get("year") or 0), int(row.get("month") or 0), current_day
+	for project_row in project_rows:
+		project_name = project_row["name"]
+		periods = _get_labor_display_periods(project_row, current_day)
+		plan_total, forecast_total, plan_today, has_budget_data = portfolio_pl_rollup.summarize_project_pl_plan_forecast(
+			project_row,
+			periods,
+			budget_docs=budget_docs_by_project.get(project_name, []),
+			current_day=current_day,
 		)
-		summary.has_data = True
+		summary = out.setdefault(project_name, ProjectPlSummary())
+		summary.plan_total = plan_total
+		summary.forecast_total = forecast_total
+		summary.plan_today = plan_today
+		if has_budget_data:
+			summary.has_data = True
 
 	for row in actual_rows:
 		project_name = row.get("project")

@@ -149,7 +149,7 @@ Forecast и Actual в Plan Today не участвуют. Округление l
 
 #### P&L
 
-Если установлено приложение `dinext_projects_pl`, сводка строится из `Project Budget` / `Project Budget Amount` (план, прогноз, Plan Today с тем же `_month_progress_ratio`) и фактических проводок `GL Entry` с учётом `Account.root_type` (Income/Expense), совместимо с карточкой P&L `dinext_projects_pl`; балансовые счета (Liability и др.) не включаются. Без `dinext_projects_pl` в колонке Actual используется `Project.gross_margin` как fallback. Колонки P&L: Plan Total, Plan Today, Actual, Forecast Total.
+Если установлено приложение `dinext_projects_pl`, сводка строится из `Project Budget` / `Project Budget Amount` / `Project Budget Dimension`: Plan Total, Plan Today и Forecast Total считаются по месяцам с учётом иерархии статей `Account`, task/dimension buckets и правил rollup карточки проекта `dinext_projects_pl` (parent own data wins, иначе sum children). Actual берётся из `GL Entry` с учётом `Account.root_type` (Income/Expense); балансовые счета (Liability и др.) не включаются. Без `dinext_projects_pl` в колонке Actual используется `Project.gross_margin` как fallback. Колонки P&L: Plan Total, Plan Today, Actual, Forecast Total.
 
 #### Просрочка стадий и checkpoint
 
