@@ -657,29 +657,32 @@ class TestPortfolioGrid(unittest.TestCase):
 		self.assertEqual(result["PROJ-001"].actual_total, 4200)
 		self.assertTrue(result["PROJ-001"].has_data)
 
+	@patch.object(portfolio_grid.portfolio_pl_rollup, "load_pl_budget_documents", return_value={})
 	@patch.object(portfolio_grid, "today", return_value="2026-03-16")
+	@patch.object(portfolio_grid.portfolio_pl_rollup, "summarize_project_pl_plan_forecast", return_value=(0.0, 0.0, 0.0, False))
 	@patch.object(portfolio_grid, "_load_pl_actual_rows")
 	@patch.object(portfolio_grid, "_is_app_installed", return_value=True)
 	def test_get_pl_summaries_uses_signed_gl_actual(
 		self,
 		_mock_app_installed,
 		load_pl_actual_rows,
+		_mock_plan_forecast,
 		_mock_today,
+		_mock_load_budget_docs,
 	):
 		load_pl_actual_rows.return_value = [{"project": "PROJ-001", "actual_net": -80000}]
-		mock_frappe = Mock()
-		mock_chain = Mock()
-		mock_chain.inner_join.return_value = mock_chain
-		mock_chain.on.return_value = mock_chain
-		mock_chain.select.return_value = mock_chain
-		mock_chain.where.return_value = mock_chain
-		mock_chain.groupby.return_value = mock_chain
-		mock_chain.run.return_value = []
-		mock_frappe.qb.from_.return_value = mock_chain
 
-		with patch.object(portfolio_grid, "DocType", side_effect=lambda name: FakeQBTable(name)):
-			with patch.object(portfolio_grid, "frappe", mock_frappe):
-				result = portfolio_grid._get_pl_summaries([{"name": "PROJ-001", "gross_margin": 3000}])
+		result = portfolio_grid._get_pl_summaries(
+			[
+				{
+					"name": "PROJ-001",
+					"gross_margin": 3000,
+					"company": "Dinext",
+					"expected_start_date": "2026-01-01",
+					"expected_end_date": "2026-12-31",
+				}
+			]
+		)
 
 		self.assertEqual(result["PROJ-001"].actual_total, -80000)
 		self.assertTrue(result["PROJ-001"].has_data)
