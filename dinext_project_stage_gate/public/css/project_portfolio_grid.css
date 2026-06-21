@@ -1,5 +1,9 @@
+.frappe-control[data-fieldname="custom_portfolio_projects"] .control-input-wrapper {
+	width: 100%;
+}
+
 .portfolio-project-grid-root {
-	margin: 8px 0 0 0;
+	margin: 0;
 }
 
 .portfolio-project-grid-toolbar {
@@ -110,8 +114,15 @@
 	padding: 0 6px !important;
 }
 
-.portfolio-project-grid .ag-header-cell-label {
+.portfolio-project-grid .ag-header-cell-label,
+.portfolio-project-grid .ag-header-group-cell-label {
 	line-height: 1.2;
+	justify-content: center;
+	text-align: center;
+}
+
+.portfolio-project-grid .ag-header-cell-comp-wrapper {
+	justify-content: center;
 }
 
 .portfolio-project-grid .ag-cell {
