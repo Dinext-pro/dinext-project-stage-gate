@@ -63,7 +63,7 @@
 [data-theme="dark"] .portfolio-project-grid,
 .portfolio-project-grid.portfolio-project-grid-dark {
 	--ag-background-color: var(--card-bg);
-	--ag-header-background-color: var(--subtle-fg, #1f2226);
+	--ag-header-background-color: var(--subtle-fg);
 	--ag-foreground-color: var(--text-color);
 	--ag-header-foreground-color: var(--text-color);
 	--ag-row-hover-color: color-mix(in srgb, var(--gray-800) 80%, transparent);
