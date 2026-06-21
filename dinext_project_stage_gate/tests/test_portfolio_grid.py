@@ -50,6 +50,25 @@ else:
 from dinext_project_stage_gate.stage_gate import portfolio_grid
 
 
+class FakeQBField:
+	def __init__(self, name):
+		self._name = name
+
+	def as_(self, alias):
+		return self
+
+	def isin(self, values):
+		return self
+
+
+class FakeQBTable:
+	def __init__(self, name):
+		self._table_name = name
+
+	def __getattr__(self, item):
+		return FakeQBField(f"{self._table_name}.{item}")
+
+
 class FakePortfolioDoc:
 	doctype = "Project Portfolio"
 
@@ -140,7 +159,6 @@ class TestPortfolioGrid(unittest.TestCase):
 				actual_total=3200,
 				forecast_total=11800,
 				plan_today=5100,
-				actual_today=3200,
 				has_data=True,
 			)
 		}
@@ -159,7 +177,6 @@ class TestPortfolioGrid(unittest.TestCase):
 		self.assertEqual(row["labor_forecast_total"], 140)
 		self.assertEqual(row["labor_plan_today"], 62)
 		self.assertNotIn("labor_actual_today", row)
-		self.assertEqual(row["pl_actual_today"], 3200)
 		self.assertEqual(row["can_write"], True)
 		self.assertGreater(row["work_plan_percent"], 40)
 
@@ -638,7 +655,33 @@ class TestPortfolioGrid(unittest.TestCase):
 		result = portfolio_grid._get_pl_summaries(project_rows)
 
 		self.assertEqual(result["PROJ-001"].actual_total, 4200)
-		self.assertEqual(result["PROJ-001"].actual_today, 4200)
+		self.assertTrue(result["PROJ-001"].has_data)
+
+	@patch.object(portfolio_grid, "today", return_value="2026-03-16")
+	@patch.object(portfolio_grid, "_load_pl_actual_rows")
+	@patch.object(portfolio_grid, "_is_app_installed", return_value=True)
+	def test_get_pl_summaries_uses_signed_gl_actual(
+		self,
+		_mock_app_installed,
+		load_pl_actual_rows,
+		_mock_today,
+	):
+		load_pl_actual_rows.return_value = [{"project": "PROJ-001", "actual_net": -80000}]
+		mock_frappe = Mock()
+		mock_chain = Mock()
+		mock_chain.inner_join.return_value = mock_chain
+		mock_chain.on.return_value = mock_chain
+		mock_chain.select.return_value = mock_chain
+		mock_chain.where.return_value = mock_chain
+		mock_chain.groupby.return_value = mock_chain
+		mock_chain.run.return_value = []
+		mock_frappe.qb.from_.return_value = mock_chain
+
+		with patch.object(portfolio_grid, "DocType", side_effect=lambda name: FakeQBTable(name)):
+			with patch.object(portfolio_grid, "frappe", mock_frappe):
+				result = portfolio_grid._get_pl_summaries([{"name": "PROJ-001", "gross_margin": 3000}])
+
+		self.assertEqual(result["PROJ-001"].actual_total, -80000)
 		self.assertTrue(result["PROJ-001"].has_data)
 
 	@patch.object(portfolio_grid, "_has_project_write_permission")
@@ -692,6 +735,17 @@ class TestPortfolioGrid(unittest.TestCase):
 		self.assertEqual(result["skipped"], [{"project": "PROJ-002", "reason": "not_in_portfolio"}])
 		self.assertIsNone(project_docs["PROJ-001"].custom_project_portfolio)
 		self.assertTrue(project_docs["PROJ-001"].saved)
+
+
+class TestSignedGlPlAmount(unittest.TestCase):
+	def test_expense_counts_negative_in_pl_net(self):
+		self.assertEqual(portfolio_grid._signed_gl_pl_line_amount("Expense", 8000, 0), -8000)
+
+	def test_income_counts_positive(self):
+		self.assertEqual(portfolio_grid._signed_gl_pl_line_amount("Income", 0, 10000), 10000)
+
+	def test_liability_excluded(self):
+		self.assertEqual(portfolio_grid._signed_gl_pl_line_amount("Liability", 0, 80000), 0)
 
 
 class TestApprovedUtpStatuses(unittest.TestCase):

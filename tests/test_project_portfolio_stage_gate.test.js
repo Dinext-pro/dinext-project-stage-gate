@@ -17,6 +17,13 @@ function loadPortfolioScript() {
 		setRouteCalls: [],
 		alerts: [],
 		msgprints: [],
+		dbGetListCalls: [],
+		bootVersions: {},
+		allowedReports: {
+			"Project Stage Gate Roadmap": {},
+			"Project Budget Plan vs Forecast": {},
+			"Profit and Loss Statement": {},
+		},
 	};
 	const fakeDocument = {
 		head: { appendChild() {} },
@@ -99,8 +106,30 @@ function loadPortfolioScript() {
 				},
 			},
 			perm: {
-				has_perm() {
-					return true;
+				has_perm(doctype) {
+					return Boolean(state.allowedReports[doctype]);
+				},
+			},
+			defaults: {
+				get_user_default(key) {
+					if (key === "Company") {
+						return "Test Company";
+					}
+					return null;
+				},
+			},
+			datetime: {
+				year_start() {
+					return "2026-01-01";
+				},
+				year_end() {
+					return "2026-12-31";
+				},
+			},
+			db: {
+				async get_list(doctype, options) {
+					state.dbGetListCalls.push({ doctype, options });
+					return state.dbGetListResult || [];
 				},
 			},
 			utils: {
@@ -165,7 +194,12 @@ function loadPortfolioScript() {
 				}
 			},
 			call: async () => ({ message: { rows: [] } }),
-			boot: {},
+			boot: {
+				versions: state.bootVersions,
+				user: {
+					all_reports: state.allowedReports,
+				},
+			},
 			set_route(...args) {
 				state.setRouteCalls.push(args);
 			},
@@ -579,15 +613,19 @@ test("get_projects_field_wrapper returns custom_portfolio_projects wrapper", () 
 	);
 });
 
-test("saved Project Portfolio form adds roadmap button to View menu", () => {
+test("saved Project Portfolio form adds roadmap and P&L buttons to View menu", () => {
 	const { portfolio } = loadPortfolioScript();
 	const frm = makeFormDoc();
 
 	portfolio.add_view_menu_items(frm);
 
-	assert.deepEqual(frm.getAddedButtons().map(({ label, group }) => ({ label, group })), [
-		{ label: "Projects Stage Roadmap", group: "View" },
-	]);
+	assert.deepEqual(
+		frm.getAddedButtons().map(({ label, group }) => ({ label, group })),
+		[
+			{ label: "Projects Stage Roadmap", group: "View" },
+			{ label: "Profit and Loss Statement", group: "View" },
+		]
+	);
 });
 
 test("unsaved Project Portfolio form does not add View menu items", () => {
@@ -599,23 +637,49 @@ test("unsaved Project Portfolio form does not add View menu items", () => {
 	assert.equal(frm.getAddedButtons().length, 0);
 });
 
-test("get_view_actions returns roadmap action for saved portfolio with permission", () => {
+test("get_view_actions returns roadmap and P&L actions for saved portfolio", () => {
 	const { portfolio } = loadPortfolioScript();
 	const frm = makeFormDoc({ name: "PORT-001" });
 
 	const actions = portfolio.get_view_actions(frm);
 
-	assert.equal(actions.length, 1);
+	assert.equal(actions.length, 2);
 	assert.equal(actions[0].label, "Projects Stage Roadmap");
 	assert.equal(actions[0].icon, "es-line-reports");
+	assert.equal(actions[1].label, "Profit and Loss Statement");
+	assert.equal(actions[1].icon, "es-line-chart");
 });
 
-test("get_view_actions returns empty list without roadmap permission", () => {
-	const { portfolio, context } = loadPortfolioScript();
-	const frm = makeFormDoc({ name: "PORT-001" });
-	context.frappe.perm.has_perm = () => false;
+test("is_projects_pl_installed detects dinext_projects_pl from boot.versions", () => {
+	const { portfolio, state } = loadPortfolioScript();
 
-	assert.equal(portfolio.get_view_actions(frm).length, 0);
+	assert.equal(portfolio.is_projects_pl_installed(), false);
+
+	state.bootVersions.dinext_projects_pl = "0.0.1";
+	assert.equal(portfolio.is_projects_pl_installed(), true);
+});
+
+test("get_view_actions returns budget report when dinext_projects_pl is installed", () => {
+	const { portfolio, state } = loadPortfolioScript();
+	state.bootVersions.dinext_projects_pl = "0.0.1";
+	const frm = makeFormDoc({ name: "PORT-001" });
+
+	const actions = portfolio.get_view_actions(frm);
+
+	assert.equal(actions.length, 2);
+	assert.equal(actions[1].label, "Consolidated P&L by Projects");
+	assert.equal(actions[1].icon, "es-line-chart");
+});
+
+test("get_view_actions omits roadmap without report access but keeps P&L action", () => {
+	const { portfolio, state } = loadPortfolioScript();
+	const frm = makeFormDoc({ name: "PORT-001" });
+	delete state.allowedReports["Project Stage Gate Roadmap"];
+
+	const actions = portfolio.get_view_actions(frm);
+
+	assert.equal(actions.length, 1);
+	assert.equal(actions[0].label, "Profit and Loss Statement");
 });
 
 test("make_toolbar_button renders icon and standard grid footer classes", () => {
@@ -650,7 +714,45 @@ test("roadmap button routes to query report with portfolio filter", () => {
 	assert.deepEqual(state.setRouteCalls, [["query-report", "Project Stage Gate Roadmap"]]);
 });
 
-test("mount_toolbar_view_buttons adds divider and roadmap button", () => {
+test("open_project_budget_plan_vs_forecast routes with portfolio filter", () => {
+	const { portfolio, state, context } = loadPortfolioScript();
+	const frm = makeFormDoc({ name: "PORT-001" });
+
+	portfolio.open_project_budget_plan_vs_forecast(frm);
+
+	assert.equal(context.frappe.route_options.project_portfolio, "PORT-001");
+	assert.equal(context.frappe.route_options.company, "Test Company");
+	assert.equal(context.frappe.route_options.from_month, "1");
+	assert.equal(context.frappe.route_options.to_month, "12");
+	assert.deepEqual(state.setRouteCalls, [["query-report", "Project Budget Plan vs Forecast"]]);
+});
+
+test("open_profit_and_loss_statement loads portfolio projects and routes to P&L", async () => {
+	const { portfolio, state, context } = loadPortfolioScript();
+	state.dbGetListResult = [{ name: "PROJ-001" }, { name: "PROJ-002" }];
+	const frm = makeFormDoc({ name: "PORT-001" });
+
+	await portfolio.open_profit_and_loss_statement(frm);
+
+	assert.equal(state.dbGetListCalls.length, 1);
+	assert.equal(state.dbGetListCalls[0].doctype, "Project");
+	assert.equal(
+		state.dbGetListCalls[0].options.filters.custom_project_portfolio,
+		"PORT-001"
+	);
+	assert.equal(state.dbGetListCalls[0].options.fields[0], "name");
+	assert.equal(state.dbGetListCalls[0].options.limit, 0);
+	assert.equal(context.frappe.route_options.project.length, 2);
+	assert.equal(context.frappe.route_options.project[0], "PROJ-001");
+	assert.equal(context.frappe.route_options.project[1], "PROJ-002");
+	assert.equal(context.frappe.route_options.company, "Test Company");
+	assert.equal(context.frappe.route_options.filter_based_on, "Date Range");
+	assert.equal(context.frappe.route_options.period_start_date, "2026-01-01");
+	assert.equal(context.frappe.route_options.period_end_date, "2026-12-31");
+	assert.deepEqual(state.setRouteCalls, [["query-report", "Profit and Loss Statement"]]);
+});
+
+test("mount_toolbar_view_buttons adds divider and view action buttons", () => {
 	const { portfolio, state } = loadPortfolioScript();
 	const frm = makeFormDoc({ name: "PORT-001" });
 	const container = makeActionsContainer([], state);
@@ -658,9 +760,11 @@ test("mount_toolbar_view_buttons adds divider and roadmap button", () => {
 	portfolio.mount_toolbar_view_buttons(frm, container);
 
 	assert.equal(state.toolbarDividerAppended, true);
-	assert.equal(state.createdButtons.length, 1);
+	assert.equal(state.createdButtons.length, 2);
 	assert.match(state.createdButtons[0].html(), /data-icon="es-line-reports"/);
 	assert.match(state.createdButtons[0].html(), /Projects Stage Roadmap/);
+	assert.match(state.createdButtons[1].html(), /data-icon="es-line-chart"/);
+	assert.match(state.createdButtons[1].html(), /Profit and Loss Statement/);
 });
 
 test("mount_toolbar_view_buttons roadmap click routes to report", () => {
@@ -683,11 +787,13 @@ test("ensure_shell mounts toolbar buttons with icons via make_toolbar_button", (
 
 	portfolio.ensure_shell(frm);
 
-	assert.equal(state.createdButtons.length, 3);
+	assert.equal(state.createdButtons.length, 4);
 	assert.match(state.createdButtons[0].html(), /data-icon="es-line-add"/);
 	assert.match(state.createdButtons[1].html(), /data-icon="es-line-delete"/);
 	assert.equal(state.toolbarDividerAppended, true);
 	assert.match(state.createdButtons[2].html(), /data-icon="es-line-reports"/);
+	assert.match(state.createdButtons[3].html(), /data-icon="es-line-chart"/);
+	assert.match(state.createdButtons[3].html(), /Profit and Loss Statement/);
 });
 
 test("render_grid uses legacy AG Grid theme mode for CSS class theming", () => {
@@ -909,7 +1015,6 @@ test("centered columns expose portfolio-project-grid-cell-center class", () => {
 		"pl_actual_total",
 		"pl_forecast_total",
 		"pl_plan_today",
-		"pl_actual_today",
 		"nearest_milestone_date",
 	];
 
