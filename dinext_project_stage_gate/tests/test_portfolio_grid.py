@@ -597,8 +597,39 @@ class TestPortfolioGrid(unittest.TestCase):
 
 		result = portfolio_grid._get_nearest_milestones(["PROJ-001"])
 
+		get_permission_aware_list.assert_called_once()
+		call_kwargs = get_permission_aware_list.call_args.kwargs
+		self.assertEqual(
+			call_kwargs["filters"]["status"],
+			["not in", ["Completed", "Cancelled"]],
+		)
 		self.assertEqual(result["PROJ-001"]["name"], "TASK-NEW")
 		self.assertEqual(result["PROJ-001"]["milestone_date"], "2026-03-15")
+
+	@patch.object(portfolio_grid, "today", return_value="2026-03-10")
+	@patch("dinext_project_stage_gate.stage_gate.portfolio_grid.query._get_permission_aware_list")
+	def test_get_nearest_milestones_excludes_closed_statuses_from_query(
+		self, get_permission_aware_list, _mock_today
+	):
+		get_permission_aware_list.return_value = [
+			{
+				"name": "TASK-OPEN",
+				"project": "PROJ-001",
+				"subject": "Open milestone",
+				"exp_end_date": "2026-03-20",
+				"exp_start_date": None,
+			},
+		]
+
+		result = portfolio_grid._get_nearest_milestones(["PROJ-001"])
+
+		call_kwargs = get_permission_aware_list.call_args.kwargs
+		self.assertEqual(call_kwargs["filters"]["is_milestone"], 1)
+		self.assertEqual(
+			call_kwargs["filters"]["status"],
+			["not in", ["Completed", "Cancelled"]],
+		)
+		self.assertEqual(result["PROJ-001"]["name"], "TASK-OPEN")
 
 	@patch.object(portfolio_grid, "_is_app_installed", return_value=False)
 	def test_get_pl_summaries_falls_back_to_project_gross_margin(self, _mock_app_installed):

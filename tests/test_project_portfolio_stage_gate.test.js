@@ -685,6 +685,28 @@ test("format_rag_status_value returns plain text", () => {
 	assert.equal(portfolio.format_rag_status_value({ value: "" }), "");
 });
 
+test("format_currency_value returns plain currency text without html wrapper", () => {
+	const { portfolio, context } = loadPortfolioScript();
+	const captured = [];
+	context.frappe.format = (value, df, options) => {
+		captured.push({ df, options });
+		if (options?.only_value) {
+			return `RUB ${value}`;
+		}
+
+		return `<div style='text-align: right'>RUB ${value}</div>`;
+	};
+
+	const formatted = portfolio.format_currency_value({ value: 1234.5 });
+
+	assert.equal(formatted, "RUB 1234.5");
+	assert.equal(captured[0]?.options?.only_value, true);
+	assert.equal(captured[0]?.df?.fieldtype, "Currency");
+	assert.equal(formatted.includes("<div"), false);
+	assert.equal(portfolio.format_currency_value({ value: null }), "");
+	assert.equal(portfolio.format_currency_value({ value: "" }), "");
+});
+
 test("render_project_status_cell renders colored pill for overall status", () => {
 	const { portfolio } = loadPortfolioScript();
 
@@ -692,6 +714,19 @@ test("render_project_status_cell renders colored pill for overall status", () =>
 
 	assert.match(html, /indicator-pill orange/);
 	assert.match(html, /Open/);
+});
+
+test("nearest open milestone group exposes expected children", () => {
+	const { portfolio } = loadPortfolioScript();
+	const milestoneGroup = portfolio
+		.get_column_defs()
+		.find((colDef) => colDef.headerName === "Nearest Open Milestone");
+
+	assert.ok(milestoneGroup);
+	assert.equal(
+		milestoneGroup.children.map((colDef) => `${colDef.headerName}:${colDef.field}`).join("|"),
+		"Milestone:nearest_milestone_subject|Forecast Date:nearest_milestone_date"
+	);
 });
 
 test("centered columns expose portfolio-project-grid-cell-center class", () => {
@@ -717,6 +752,7 @@ test("centered columns expose portfolio-project-grid-cell-center class", () => {
 		"pl_forecast_total",
 		"pl_plan_today",
 		"pl_actual_today",
+		"nearest_milestone_date",
 	];
 
 	for (const field of centeredFields) {
