@@ -631,7 +631,15 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 					),
 					portfolio.with_centered(
 						{
-							headerName: __("Actual Total"),
+							headerName: __("Plan Today"),
+							field: "labor_plan_today",
+							valueFormatter: portfolio.format_number_value,
+						},
+						"number"
+					),
+					portfolio.with_centered(
+						{
+							headerName: __("Actual"),
 							field: "labor_actual_total",
 							valueFormatter: portfolio.format_number_value,
 						},
@@ -641,22 +649,6 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 						{
 							headerName: __("Forecast Total"),
 							field: "labor_forecast_total",
-							valueFormatter: portfolio.format_number_value,
-						},
-						"number"
-					),
-					portfolio.with_centered(
-						{
-							headerName: __("Plan Today"),
-							field: "labor_plan_today",
-							valueFormatter: portfolio.format_number_value,
-						},
-						"number"
-					),
-					portfolio.with_centered(
-						{
-							headerName: __("Actual Today"),
-							field: "labor_actual_today",
 							valueFormatter: portfolio.format_number_value,
 						},
 						"number"
