@@ -51,6 +51,9 @@ function loadPortfolioScript() {
 		},
 		console,
 		document: fakeDocument,
+		requestAnimationFrame(callback) {
+			callback();
+		},
 		window: {
 			DinextAgGrid: {
 				async ensure() {},
@@ -58,13 +61,17 @@ function loadPortfolioScript() {
 			agGrid: {
 				createGrid(_container, options) {
 					state.gridOptions = options;
-					return {
+					const api = {
 						destroy() {},
 						refreshCells() {},
 						getSelectedRows() {
 							return [];
 						},
 					};
+					if (typeof options.onGridReady === "function") {
+						options.onGridReady({ api });
+					}
+					return api;
 				},
 			},
 			MutationObserver: class {
@@ -244,8 +251,70 @@ test("column definition pins project column on the left", () => {
 	assert.equal(columns[0].pinned, "left");
 	assert.equal(columns[0].checkboxSelection, true);
 	assert.equal(columns[0].headerCheckboxSelection, true);
+	assert.equal(columns[0].minWidth, 180);
+	assert.equal(columns[0].maxWidth, 320);
 	assert.equal(columns[3].headerName, "Status");
 	assert.ok(Array.isArray(columns[3].children));
+});
+
+test("leaf columns expose bounded width tiers", () => {
+	const { portfolio } = loadPortfolioScript();
+	const leaves = portfolio.collect_leaf_column_defs(portfolio.get_column_defs());
+	const byField = Object.fromEntries(leaves.map((colDef) => [colDef.field, colDef]));
+
+	assert.equal(byField.project_name.maxWidth, 320);
+	assert.equal(byField.status_overall.maxWidth, 115);
+	assert.equal(byField.expected_start_date.maxWidth, 118);
+	assert.equal(byField.work_plan_percent.maxWidth, 108);
+	assert.equal(byField.pl_plan_total.maxWidth, 152);
+	assert.equal(byField.nearest_milestone_subject.maxWidth, 280);
+});
+
+test("autosize_grid_columns clamps measured widths to column bounds", () => {
+	const { portfolio } = loadPortfolioScript();
+	const updates = [];
+	const api = {
+		getColumns() {
+			return [
+				{
+					getColId() {
+						return "project_name";
+					},
+					getColDef() {
+						return { minWidth: 180, maxWidth: 320 };
+					},
+					getActualWidth() {
+						return 400;
+					},
+				},
+				{
+					getColId() {
+						return "status_overall";
+					},
+					getColDef() {
+						return { minWidth: 88, maxWidth: 115 };
+					},
+					getActualWidth() {
+						return 70;
+					},
+				},
+			];
+		},
+		autoSizeColumns({ columns }) {
+			assert.deepEqual(columns, ["project_name", "status_overall"]);
+		},
+		setColumnWidths(nextWidths) {
+			updates.push(...nextWidths);
+		},
+	};
+
+	portfolio.autosize_grid_columns(api);
+
+	assert.equal(updates.length, 2);
+	assert.equal(updates[0].key, "project_name");
+	assert.equal(updates[0].newWidth, 320);
+	assert.equal(updates[1].key, "status_overall");
+	assert.equal(updates[1].newWidth, 88);
 });
 
 test("dark theme detection supports data-theme-mode fallback", () => {
@@ -391,8 +460,62 @@ test("render_grid uses legacy AG Grid theme mode for CSS class theming", () => {
 	portfolio.render_grid(frm, gridElement, [{ project_name: "Alpha" }]);
 
 	assert.equal(state.gridOptions?.theme, "legacy");
+	assert.equal(typeof state.gridOptions?.onFirstDataRendered, "function");
+	assert.equal(typeof state.gridOptions?.onGridReady, "function");
+	assert.equal(state.gridOptions?.defaultColDef?.resizable, true);
 	assert.equal(classList.contains("ag-theme-quartz-dark"), true);
 	assert.equal(classList.contains("ag-theme-quartz"), false);
+});
+
+test("open_project_form routes to Project form when row has project id", () => {
+	const { portfolio, state } = loadPortfolioScript();
+
+	portfolio.open_project_form({ project: "PROJ-001", project_name: "Alpha" });
+
+	assert.deepEqual(state.setRouteCalls, [["Form", "Project", "PROJ-001"]]);
+});
+
+test("open_project_form ignores rows without project id", () => {
+	const { portfolio, state } = loadPortfolioScript();
+
+	portfolio.open_project_form({ project_name: "Alpha" });
+
+	assert.equal(state.setRouteCalls.length, 0);
+});
+
+test("render_grid onRowDoubleClicked opens Project form", () => {
+	const { portfolio, context, state } = loadPortfolioScript();
+	const classList = makeClassList();
+	const gridElement = { classList, innerHTML: "" };
+	const frm = makeFormDoc();
+	frm.page = {
+		wrapper: {
+			find(selector) {
+				if (selector === ".portfolio-project-grid") {
+					return {
+						length: 1,
+						get(index) {
+							return index === 0 ? gridElement : null;
+						},
+					};
+				}
+				return {
+					length: 0,
+					get() {
+						return null;
+					},
+				};
+			},
+		},
+	};
+
+	portfolio.render_grid(frm, gridElement, [{ project: "PROJ-001", project_name: "Alpha" }]);
+
+	assert.equal(typeof state.gridOptions?.onRowDoubleClicked, "function");
+
+	state.gridOptions.onRowDoubleClicked({ data: { project: "PROJ-001" } });
+
+	assert.deepEqual(state.setRouteCalls, [["Form", "Project", "PROJ-001"]]);
 });
 
 test("project option formatter includes project type and customer", () => {
