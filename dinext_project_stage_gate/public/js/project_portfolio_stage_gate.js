@@ -33,6 +33,18 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 		return { ...colDef, ...bounds };
 	};
 
+	portfolio.CENTERED_CELL_CLASS = "portfolio-project-grid-cell-center";
+
+	portfolio.with_centered = function (colDef, tier) {
+		return portfolio.with_width(
+			{
+				...colDef,
+				cellClass: portfolio.CENTERED_CELL_CLASS,
+			},
+			tier
+		);
+	};
+
 	portfolio.render_indicator_pill = function (label, colorClass, styleOptions = {}) {
 		if (label === null || label === undefined || label === "") {
 			return "";
@@ -495,14 +507,14 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 				},
 				"project"
 			),
-			portfolio.with_width(
+			portfolio.with_centered(
 				{
 					headerName: __("Type"),
 					field: "project_type",
 				},
 				"text"
 			),
-			portfolio.with_width(
+			portfolio.with_centered(
 				{
 					headerName: __("Priority"),
 					field: "priority",
@@ -513,7 +525,7 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 			{
 				headerName: __("Status"),
 				children: [
-					portfolio.with_width(
+					portfolio.with_centered(
 						{
 							headerName: __("Overall"),
 							field: "status_overall",
@@ -527,7 +539,7 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 					portfolio.with_width({ headerName: __("Risks"), field: "status_risks" }, "status"),
 				],
 			},
-			portfolio.with_width(
+			portfolio.with_centered(
 				{
 					headerName: __("Active Stage"),
 					field: "active_stage",
@@ -559,7 +571,7 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 			{
 				headerName: __("Dates"),
 				children: [
-					portfolio.with_width(
+					portfolio.with_centered(
 						{
 							headerName: __("Start"),
 							field: "expected_start_date",
@@ -567,7 +579,7 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 						},
 						"date"
 					),
-					portfolio.with_width(
+					portfolio.with_centered(
 						{
 							headerName: __("End"),
 							field: "expected_end_date",
@@ -575,7 +587,7 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 						},
 						"date"
 					),
-					portfolio.with_width(
+					portfolio.with_centered(
 						{
 							headerName: __("Current %"),
 							field: "progress_current_percent",
@@ -588,7 +600,7 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 			{
 				headerName: __("Work"),
 				children: [
-					portfolio.with_width(
+					portfolio.with_centered(
 						{
 							headerName: __("Plan %"),
 							field: "work_plan_percent",
@@ -596,7 +608,7 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 						},
 						"percent"
 					),
-					portfolio.with_width(
+					portfolio.with_centered(
 						{
 							headerName: __("Actual %"),
 							field: "work_actual_percent",
@@ -609,7 +621,7 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 			{
 				headerName: __("Labor"),
 				children: [
-					portfolio.with_width(
+					portfolio.with_centered(
 						{
 							headerName: __("Plan Total"),
 							field: "labor_plan_total",
@@ -617,7 +629,7 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 						},
 						"number"
 					),
-					portfolio.with_width(
+					portfolio.with_centered(
 						{
 							headerName: __("Actual Total"),
 							field: "labor_actual_total",
@@ -625,7 +637,7 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 						},
 						"number"
 					),
-					portfolio.with_width(
+					portfolio.with_centered(
 						{
 							headerName: __("Forecast Total"),
 							field: "labor_forecast_total",
@@ -633,7 +645,7 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 						},
 						"number"
 					),
-					portfolio.with_width(
+					portfolio.with_centered(
 						{
 							headerName: __("Plan Today"),
 							field: "labor_plan_today",
@@ -641,7 +653,7 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 						},
 						"number"
 					),
-					portfolio.with_width(
+					portfolio.with_centered(
 						{
 							headerName: __("Actual Today"),
 							field: "labor_actual_today",
@@ -654,7 +666,7 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 			{
 				headerName: __("P&L"),
 				children: [
-					portfolio.with_width(
+					portfolio.with_centered(
 						{
 							headerName: __("Plan Total"),
 							field: "pl_plan_total",
@@ -662,7 +674,7 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 						},
 						"currency"
 					),
-					portfolio.with_width(
+					portfolio.with_centered(
 						{
 							headerName: __("Actual Total"),
 							field: "pl_actual_total",
@@ -670,7 +682,7 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 						},
 						"currency"
 					),
-					portfolio.with_width(
+					portfolio.with_centered(
 						{
 							headerName: __("Forecast Total"),
 							field: "pl_forecast_total",
@@ -678,7 +690,7 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 						},
 						"currency"
 					),
-					portfolio.with_width(
+					portfolio.with_centered(
 						{
 							headerName: __("Plan Today"),
 							field: "pl_plan_today",
@@ -686,7 +698,7 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 						},
 						"currency"
 					),
-					portfolio.with_width(
+					portfolio.with_centered(
 						{
 							headerName: __("Actual Today"),
 							field: "pl_actual_today",

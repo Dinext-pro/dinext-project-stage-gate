@@ -133,6 +133,13 @@
 	line-height: normal;
 }
 
+.portfolio-project-grid .ag-cell.portfolio-project-grid-cell-center,
+.portfolio-project-grid .ag-cell.portfolio-project-grid-cell-center .ag-cell-wrapper,
+.portfolio-project-grid .ag-cell.portfolio-project-grid-cell-center .ag-cell-value {
+	justify-content: center;
+	text-align: center;
+}
+
 .portfolio-project-grid-pill {
 	display: inline-flex;
 	align-items: center;
@@ -158,6 +165,7 @@
 .portfolio-project-grid .ag-pinned-left-cols-container .ag-row {
 	background-color: var(--card-bg);
 	border: none !important;
+	cursor: pointer;
 }
 
 .portfolio-project-grid .ag-pinned-left-cols-container {
