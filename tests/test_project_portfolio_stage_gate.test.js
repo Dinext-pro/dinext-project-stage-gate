@@ -122,6 +122,9 @@ function loadPortfolioScript() {
 					};
 					return map[value] || "gray";
 				},
+				icon(icon_name, size = "sm") {
+					return `<svg data-icon="${icon_name}" data-size="${size}"></svg>`;
+				},
 			},
 			get_indicator(doc, doctype) {
 				if (doctype === "Project" && doc.status) {
@@ -178,6 +181,9 @@ function loadPortfolioScript() {
 		$: (value) => {
 			if (value === fakeDocument) {
 				return { on() {} };
+			}
+			if (typeof value === "string" && value.trim().startsWith("<button")) {
+				return makeButtonElement(state);
 			}
 			if (typeof value === "string" && value.includes("portfolio-project-grid-root")) {
 				return makeGridRootElement(state);
@@ -267,7 +273,48 @@ function attachProjectsField(frm, state, options = {}) {
 	};
 }
 
+function makeButtonElement(state) {
+	const attrs = {};
+	let html = "";
+	let disabled = false;
+	const element = {
+		length: 1,
+		attrs,
+		attr(name, value) {
+			if (value === undefined) {
+				return attrs[name];
+			}
+			attrs[name] = value;
+			return element;
+		},
+		html(value) {
+			if (value === undefined) {
+				return html;
+			}
+			html = value;
+			return element;
+		},
+		on(_event, handler) {
+			element.clickHandler = handler;
+			return element;
+		},
+		prop(name, value) {
+			if (name === "disabled") {
+				if (value === undefined) {
+					return disabled;
+				}
+				disabled = value;
+			}
+			return element;
+		},
+	};
+	state.createdButtons = state.createdButtons || [];
+	state.createdButtons.push(element);
+	return element;
+}
+
 function makeGridRootElement(state) {
+	const actionsChildren = [];
 	const element = {
 		appendTo(wrapper) {
 			state.appendedToWrapper = wrapper;
@@ -275,6 +322,15 @@ function makeGridRootElement(state) {
 			return element;
 		},
 		find(selector) {
+			if (selector === ".portfolio-project-grid-actions") {
+				return makeActionsContainer(actionsChildren, state);
+			}
+			if (selector === '[data-action="remove-projects"]') {
+				const removeButton = actionsChildren.find(
+					(child) => child.attrs?.["data-action"] === "remove-projects"
+				);
+				return removeButton || { length: 0, prop() { return this; } };
+			}
 			return {
 				length: 1,
 				off() {
@@ -302,6 +358,32 @@ function makeGridRootElement(state) {
 		},
 	};
 	return element;
+}
+
+function makeActionsContainer(children, state) {
+	return {
+		length: 1,
+		append(child) {
+			if (typeof child === "string") {
+				children.push({ type: "html", value: child });
+				if (child.includes("portfolio-project-grid-toolbar-divider")) {
+					state.toolbarDividerAppended = true;
+				}
+				return this;
+			}
+			children.push({ type: "button", element: child, attrs: child.attrs || {} });
+			return this;
+		},
+		find(selector) {
+			if (selector === '[data-action="remove-projects"]') {
+				const match = children.find(
+					(child) => child.type === "button" && child.attrs["data-action"] === "remove-projects"
+				);
+				return match?.element || { length: 0, prop() { return this; } };
+			}
+			return { length: 0, prop() { return this; } };
+		},
+	};
 }
 
 function makeFormDoc({ name = "PORT-001", isNew = false } = {}) {
@@ -497,31 +579,67 @@ test("get_projects_field_wrapper returns custom_portfolio_projects wrapper", () 
 	);
 });
 
-test("saved Project Portfolio form adds roadmap button", () => {
+test("saved Project Portfolio form adds roadmap button to View menu", () => {
 	const { portfolio } = loadPortfolioScript();
 	const frm = makeFormDoc();
 
-	portfolio.add_roadmap_button(frm);
+	portfolio.add_view_menu_items(frm);
 
 	assert.deepEqual(frm.getAddedButtons().map(({ label, group }) => ({ label, group })), [
 		{ label: "Projects Stage Roadmap", group: "View" },
 	]);
 });
 
-test("unsaved Project Portfolio form does not add roadmap button", () => {
+test("unsaved Project Portfolio form does not add View menu items", () => {
 	const { portfolio } = loadPortfolioScript();
 	const frm = makeFormDoc({ name: null, isNew: true });
 
-	portfolio.add_roadmap_button(frm);
+	portfolio.add_view_menu_items(frm);
 
 	assert.equal(frm.getAddedButtons().length, 0);
+});
+
+test("get_view_actions returns roadmap action for saved portfolio with permission", () => {
+	const { portfolio } = loadPortfolioScript();
+	const frm = makeFormDoc({ name: "PORT-001" });
+
+	const actions = portfolio.get_view_actions(frm);
+
+	assert.equal(actions.length, 1);
+	assert.equal(actions[0].label, "Projects Stage Roadmap");
+	assert.equal(actions[0].icon, "es-line-reports");
+});
+
+test("get_view_actions returns empty list without roadmap permission", () => {
+	const { portfolio, context } = loadPortfolioScript();
+	const frm = makeFormDoc({ name: "PORT-001" });
+	context.frappe.perm.has_perm = () => false;
+
+	assert.equal(portfolio.get_view_actions(frm).length, 0);
+});
+
+test("make_toolbar_button renders icon and standard grid footer classes", () => {
+	const { portfolio, state } = loadPortfolioScript();
+
+	const button = portfolio.make_toolbar_button({
+		label: "Add",
+		icon: "es-line-add",
+		btn_type: "secondary",
+		data_action: "add-projects",
+		click() {},
+	});
+
+	assert.match(button.html(), /data-icon="es-line-add"/);
+	assert.match(button.html(), /Add/);
+	assert.equal(button.attr("data-action"), "add-projects");
+	assert.equal(state.createdButtons.length, 1);
 });
 
 test("roadmap button routes to query report with portfolio filter", () => {
 	const { portfolio, state, context } = loadPortfolioScript();
 	const frm = makeFormDoc({ name: "Портфель 2026" });
 
-	portfolio.add_roadmap_button(frm);
+	portfolio.add_view_menu_items(frm);
 
 	const [button] = frm.getAddedButtons();
 	assert.ok(button, "Expected roadmap button to be registered");
@@ -530,6 +648,46 @@ test("roadmap button routes to query report with portfolio filter", () => {
 
 	assert.equal(context.frappe.route_options.portfolio, "Портфель 2026");
 	assert.deepEqual(state.setRouteCalls, [["query-report", "Project Stage Gate Roadmap"]]);
+});
+
+test("mount_toolbar_view_buttons adds divider and roadmap button", () => {
+	const { portfolio, state } = loadPortfolioScript();
+	const frm = makeFormDoc({ name: "PORT-001" });
+	const container = makeActionsContainer([], state);
+
+	portfolio.mount_toolbar_view_buttons(frm, container);
+
+	assert.equal(state.toolbarDividerAppended, true);
+	assert.equal(state.createdButtons.length, 1);
+	assert.match(state.createdButtons[0].html(), /data-icon="es-line-reports"/);
+	assert.match(state.createdButtons[0].html(), /Projects Stage Roadmap/);
+});
+
+test("mount_toolbar_view_buttons roadmap click routes to report", () => {
+	const { portfolio, state, context } = loadPortfolioScript();
+	const frm = makeFormDoc({ name: "PORT-001" });
+	const container = makeActionsContainer([], state);
+
+	portfolio.mount_toolbar_view_buttons(frm, container);
+
+	state.createdButtons[0].clickHandler();
+
+	assert.equal(context.frappe.route_options.portfolio, "PORT-001");
+	assert.deepEqual(state.setRouteCalls, [["query-report", "Project Stage Gate Roadmap"]]);
+});
+
+test("ensure_shell mounts toolbar buttons with icons via make_toolbar_button", () => {
+	const { portfolio, state } = loadPortfolioScript();
+	const frm = makeFormDoc();
+	attachProjectsField(frm, state);
+
+	portfolio.ensure_shell(frm);
+
+	assert.equal(state.createdButtons.length, 3);
+	assert.match(state.createdButtons[0].html(), /data-icon="es-line-add"/);
+	assert.match(state.createdButtons[1].html(), /data-icon="es-line-delete"/);
+	assert.equal(state.toolbarDividerAppended, true);
+	assert.match(state.createdButtons[2].html(), /data-icon="es-line-reports"/);
 });
 
 test("render_grid uses legacy AG Grid theme mode for CSS class theming", () => {
