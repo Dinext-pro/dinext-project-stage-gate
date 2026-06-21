@@ -15,6 +15,7 @@ from dinext_project_stage_gate.stage_gate import query
 DINEXT_UTP_STATUS_CONTEXT = "Dinext.UserTimesheetStatus"
 CANONICAL_UTP_APPROVED_STATUS = "Approved"
 _FALLBACK_UTP_APPROVED_STATUSES = frozenset({"Approved", "Согласовано"})
+_MILESTONE_CLOSED_STATUSES = frozenset({"Completed", "Cancelled"})
 
 PROJECT_FIELDS = [
 	"name",
@@ -244,7 +245,11 @@ def _get_nearest_milestones(project_names: list[str]) -> dict[str, dict[str, Any
 
 	task_rows = query._get_permission_aware_list(  # noqa: SLF001
 		"Task",
-		filters={"project": ["in", project_names], "is_milestone": 1},
+		filters={
+			"project": ["in", project_names],
+			"is_milestone": 1,
+			"status": ["not in", list(_MILESTONE_CLOSED_STATUSES)],
+		},
 		fields=["name", "project", "subject", "exp_start_date", "exp_end_date"],
 		order_by="project asc, exp_end_date asc, exp_start_date asc, modified asc",
 		limit_page_length=0,

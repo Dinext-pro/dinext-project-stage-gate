@@ -255,7 +255,7 @@ Labor,Трудозатраты,
 Loaded {0} projects,Загружено проектов: {0},
 Loading projects...,Загрузка проектов...,
 Milestone,Веха,
-Nearest Milestone,Ближайшая веха,
+Nearest Open Milestone,Ближайшая открытая веха,
 No projects are available for adding.,Нет проектов, доступных для добавления.,
 No projects in this portfolio yet.,В этом портфеле пока нет проектов.,
 No write permission,Нет прав на изменение,
@@ -323,7 +323,7 @@ Forecast Total,Прогноз всего,Dinext.PortfolioGrid
 P&L,P&L,Dinext.PortfolioGrid
 Actual Total,Факт всего,Dinext.PortfolioGrid
 Actual Today,Факт на сегодня,Dinext.PortfolioGrid
-Nearest Milestone,Ближайшая веха,Dinext.PortfolioGrid
+Nearest Open Milestone,Ближайшая открытая веха,Dinext.PortfolioGrid
 Milestone,Веха,Dinext.PortfolioGrid
 Forecast Date,Прогнозная дата,Dinext.PortfolioGrid
 Project,Проект,Dinext.PortfolioGrid
