@@ -12,7 +12,9 @@ from frappe.utils import add_months, flt, get_last_day, getdate, today
 
 from dinext_project_stage_gate.stage_gate import query
 
-UTP_STATUS_APPROVED = "Согласовано"
+DINEXT_UTP_STATUS_CONTEXT = "Dinext.UserTimesheetStatus"
+CANONICAL_UTP_APPROVED_STATUS = "Approved"
+_FALLBACK_UTP_APPROVED_STATUSES = frozenset({"Approved", "Согласовано"})
 
 PROJECT_FIELDS = [
 	"name",
@@ -131,7 +133,8 @@ def get_portfolio_project_rows(portfolio: str | Any) -> list[dict[str, Any]]:
 def get_unassigned_projects() -> list[dict[str, Any]]:
 	project_rows = query._get_permission_aware_list(  # noqa: SLF001
 		"Project",
-		fields=["name", "project_name", "project_type", "customer", "priority", "custom_project_portfolio"],
+		filters={"custom_project_portfolio": ["is", "not set"]},
+		fields=["name", "project_name", "project_type", "customer", "priority"],
 		order_by="project_name asc, name asc",
 		limit_page_length=500,
 	)
@@ -144,7 +147,6 @@ def get_unassigned_projects() -> list[dict[str, Any]]:
 			"priority": row.get("priority"),
 		}
 		for row in project_rows
-		if not row.get("custom_project_portfolio")
 	]
 
 
@@ -301,7 +303,7 @@ def _load_project_task_rows(project_names: list[str]) -> list[dict[str, Any]]:
 	return query._get_permission_aware_list(  # noqa: SLF001
 		"Task",
 		filters={"project": ["in", project_names]},
-		fields=["name", "project", "parent_task"],
+		fields=["name", "project", "parent_task", "is_milestone"],
 		order_by="project asc, lft asc, creation asc, name asc",
 		limit_page_length=0,
 	)
@@ -336,6 +338,24 @@ def _load_labor_plan_rows(project_names: list[str]) -> list[dict[str, Any]]:
 	)
 
 
+def _approved_utp_status_values() -> list[str]:
+	values = set(_FALLBACK_UTP_APPROVED_STATUSES)
+	translated = frappe._(CANONICAL_UTP_APPROVED_STATUS, context=DINEXT_UTP_STATUS_CONTEXT)
+	if translated:
+		values.add(translated)
+
+	approved_markers = {value.casefold() for value in values}
+	meta = frappe.get_meta("User Timesheet Position")
+	status_field = meta.get_field("status")
+	if status_field and status_field.options:
+		for option in status_field.options.split("\n"):
+			option = option.strip()
+			if option and option.casefold() in approved_markers:
+				values.add(option)
+
+	return sorted(values)
+
+
 def _load_labor_actual_rows(project_names: list[str], current_day: date) -> list[dict[str, Any]]:
 	if not project_names:
 		return []
@@ -351,7 +371,7 @@ def _load_labor_actual_rows(project_names: list[str], current_day: date) -> list
 			Sum(IfNull(actual_detail.hours, 0)).as_("actual_hours"),
 		)
 		.where(actual_doc.project.isin(project_names))
-		.where(actual_doc.status == UTP_STATUS_APPROVED)
+		.where(actual_doc.status.isin(_approved_utp_status_values()))
 		.where(IfNull(actual_doc.document_type, "") == "Task")
 		.where(actual_detail.date <= current_day)
 		.groupby(actual_doc.project)
@@ -387,28 +407,41 @@ def _get_labor_display_periods(project_row: dict[str, Any], current_day: date) -
 	return periods
 
 
+def _is_task_milestone(row: dict[str, Any]) -> bool:
+	return bool(int(row.get("is_milestone") or 0))
+
+
 def _build_task_children_map(
 	task_rows: list[dict[str, Any]], project_name: str
 ) -> tuple[set[str], dict[str, list[str]], list[str]]:
-	task_names = {
-		row.get("name")
+	"""Mirror Project card v5 work-efforts tree: non-milestone tasks only, no orphan promotion."""
+	project_tasks = [
+		row
 		for row in task_rows
-		if row.get("project") == project_name and row.get("name")
-	}
+		if row.get("project") == project_name and row.get("name") and not _is_task_milestone(row)
+	]
+	task_by_name = {row["name"]: row for row in project_tasks}
+
+	eligible_tasks: set[str] = set()
 	children_by_task: dict[str, list[str]] = {}
-	root_tasks: list[str] = []
-	for row in task_rows:
-		if row.get("project") != project_name:
-			continue
-		task_name = row.get("name")
-		if not task_name:
-			continue
-		parent_task = row.get("parent_task")
-		if parent_task in task_names:
-			children_by_task.setdefault(parent_task, []).append(task_name)
-		else:
-			root_tasks.append(task_name)
-	return task_names, children_by_task, root_tasks
+	queue: list[str] = []
+
+	for row in project_tasks:
+		if not row.get("parent_task"):
+			queue.append(row["name"])
+			eligible_tasks.add(row["name"])
+
+	while queue:
+		parent_name = queue.pop(0)
+		for task_name, row in task_by_name.items():
+			if task_name in eligible_tasks or row.get("parent_task") != parent_name:
+				continue
+			eligible_tasks.add(task_name)
+			children_by_task.setdefault(parent_name, []).append(task_name)
+			queue.append(task_name)
+
+	root_tasks = [task_name for task_name in eligible_tasks if not task_by_name[task_name].get("parent_task")]
+	return eligible_tasks, children_by_task, root_tasks
 
 
 def _build_labor_index(
@@ -442,54 +475,84 @@ def _collect_labor_roles(labor_index: dict[str, dict[str, dict[tuple[int, int], 
 	return roles
 
 
-def _task_role_period_totals(
+def _load_project_labor_roles(
+	project_name: str,
 	labor_index: dict[str, dict[str, dict[tuple[int, int], dict[str, float]]]],
-	task_name: str,
-	role: str,
-	period_keys: list[tuple[int, int]],
-) -> tuple[float, float]:
-	task_roles = labor_index.get(task_name, {})
-	role_cells = task_roles.get(role, {})
-	plan_total = 0.0
-	forecast_total = 0.0
-	for period_key in period_keys:
-		cell = role_cells.get(period_key, {})
-		plan_total += flt(cell.get("plan", 0))
-		forecast_total += flt(cell.get("forecast", 0))
-	return plan_total, forecast_total
+) -> list[str]:
+	role_rows = frappe.get_all(
+		"Project Team Details",
+		filters={"parent": project_name},
+		fields=["pt_role"],
+		pluck="pt_role",
+	)
+	roles: list[str] = []
+	seen: set[str] = set()
+	for role in role_rows or []:
+		role_key = str(role or "").strip()
+		if role_key and role_key not in seen:
+			roles.append(role_key)
+			seen.add(role_key)
+	if roles:
+		return roles
+	return sorted(_collect_labor_roles(labor_index))
 
 
-def _calculate_role_labor(
+def _monthly_labor_value(
 	role: str,
 	task_name: str,
 	children_by_task: dict[str, list[str]],
 	labor_index: dict[str, dict[str, dict[tuple[int, int], dict[str, float]]]],
-	period_keys: list[tuple[int, int]],
+	year: int,
+	month: int,
+	value_key: str,
 	visited: set[str] | None = None,
-) -> tuple[float, float]:
+) -> float:
 	visited = visited or set()
 	if task_name in visited:
-		return 0.0, 0.0
+		return 0.0
 	visited.add(task_name)
 
-	task_plan, task_forecast = _task_role_period_totals(labor_index, task_name, role, period_keys)
-	if task_plan > 0 or task_forecast > 0:
-		return task_plan, task_forecast
+	cell = labor_index.get(task_name, {}).get(role, {}).get((year, month), {})
+	value = flt(cell.get(value_key, 0))
+	if value > 0:
+		return value
 
-	child_plan = 0.0
-	child_forecast = 0.0
+	child_total = 0.0
 	for child_name in children_by_task.get(task_name, []):
-		plan_hours, forecast_hours = _calculate_role_labor(
+		child_total += _monthly_labor_value(
 			role,
 			child_name,
 			children_by_task,
 			labor_index,
-			period_keys,
+			year,
+			month,
+			value_key,
 			visited,
 		)
-		child_plan += plan_hours
-		child_forecast += forecast_hours
-	return child_plan, child_forecast
+	return child_total
+
+
+def _calc_we_column_total_month(
+	roles: list[str],
+	root_tasks: list[str],
+	children_by_task: dict[str, list[str]],
+	labor_index: dict[str, dict[str, dict[tuple[int, int], dict[str, float]]]],
+	year: int,
+	month: int,
+) -> tuple[float, float]:
+	plan_total = 0.0
+	forecast_total = 0.0
+	for role in roles:
+		if not role.strip():
+			continue
+		for root_task in root_tasks:
+			plan_total += _monthly_labor_value(
+				role, root_task, children_by_task, labor_index, year, month, "plan"
+			)
+			forecast_total += _monthly_labor_value(
+				role, root_task, children_by_task, labor_index, year, month, "forecast"
+			)
+	return plan_total, forecast_total
 
 
 def _summarize_project_labor(
@@ -504,31 +567,28 @@ def _summarize_project_labor(
 
 	periods = _get_labor_display_periods(project_row, current_day)
 	period_set = set(periods)
-	_, children_by_task, root_tasks = _build_task_children_map(task_rows, project_name)
+	eligible_tasks, children_by_task, root_tasks = _build_task_children_map(task_rows, project_name)
 	labor_index = _build_labor_index(plan_rows, project_name, period_set)
+	labor_index = {
+		task_name: role_data
+		for task_name, role_data in labor_index.items()
+		if task_name in eligible_tasks
+	}
+	roles = _load_project_labor_roles(project_name, labor_index)
 
 	summary = ProjectLaborSummary()
-	for role in _collect_labor_roles(labor_index):
-		for root_task in root_tasks:
-			plan_total, forecast_total = _calculate_role_labor(
-				role,
-				root_task,
-				children_by_task,
-				labor_index,
-				periods,
-			)
-			summary.plan_total += plan_total
-			summary.forecast_total += forecast_total
-
-			for year, month in periods:
-				plan_month, _forecast_month = _calculate_role_labor(
-					role,
-					root_task,
-					children_by_task,
-					labor_index,
-					[(year, month)],
-				)
-				summary.plan_today += plan_month * _month_progress_ratio(year, month, current_day)
+	for year, month in periods:
+		month_plan, month_forecast = _calc_we_column_total_month(
+			roles,
+			root_tasks,
+			children_by_task,
+			labor_index,
+			year,
+			month,
+		)
+		summary.plan_total += month_plan
+		summary.forecast_total += month_forecast
+		summary.plan_today += month_plan * _month_progress_ratio(year, month, current_day)
 
 	return summary
 

@@ -14,7 +14,8 @@ except ModuleNotFoundError:
 	_frappe_stub.get_doc = Mock()
 	_frappe_stub.has_permission = Mock(return_value=True)
 	_frappe_stub.parse_json = lambda value: value
-	_frappe_stub.qb = types.SimpleNamespace(from_=Mock())
+	_frappe_stub.get_all = lambda *args, **kwargs: []
+	_frappe_stub.get_meta = Mock(return_value=types.SimpleNamespace(get_field=lambda name: None))
 	sys.modules["frappe"] = _frappe_stub
 	_frappe_utils_stub = types.ModuleType("frappe.utils")
 
@@ -411,6 +412,160 @@ class TestPortfolioGrid(unittest.TestCase):
 		self.assertEqual(result["PROJ-BALTKHIM"].plan_total, 240.0)
 		self.assertEqual(result["PROJ-BALTKHIM"].forecast_total, 260.0)
 
+	@patch.object(portfolio_grid, "_month_progress_ratio", return_value=1.0)
+	@patch.object(portfolio_grid, "_load_labor_actual_rows", return_value=[])
+	@patch.object(portfolio_grid, "_load_labor_plan_rows")
+	@patch.object(portfolio_grid, "_load_project_task_rows")
+	@patch.object(portfolio_grid, "today", return_value="2026-06-21")
+	def test_get_labor_summaries_matches_live_baltkhim_monthly_parent_child_split(
+		self,
+		_mock_today,
+		load_project_task_rows,
+		load_labor_plan_rows,
+		_load_labor_actual_rows,
+		_month_progress_ratio,
+	):
+		"""Live BaltKhim: parent and child carry labor in different months for the same role."""
+		load_project_task_rows.return_value = [
+			{"name": "TASK-2026-00010", "project": "PROJ-BALTKHIM", "parent_task": None, "is_milestone": 0},
+			{"name": "TASK-2026-00156", "project": "PROJ-BALTKHIM", "parent_task": None, "is_milestone": 0},
+			{"name": "TASK-2026-00008", "project": "PROJ-BALTKHIM", "parent_task": "TASK-2026-00156", "is_milestone": 0},
+			{"name": "TASK-2026-00007", "project": "PROJ-BALTKHIM", "parent_task": "TASK-2026-00156", "is_milestone": 0},
+			{"name": "TASK-2026-00157", "project": "PROJ-BALTKHIM", "parent_task": None, "is_milestone": 0},
+			{"name": "TASK-2026-00158", "project": "PROJ-BALTKHIM", "parent_task": None, "is_milestone": 0},
+			{"name": "TASK-2026-00176", "project": "PROJ-BALTKHIM", "parent_task": None, "is_milestone": 0},
+		]
+		load_labor_plan_rows.return_value = [
+			{"project": "PROJ-BALTKHIM", "task": "TASK-2026-00007", "project_role": "Консультант", "year": 2026, "month": 6, "plan_hours": 15, "forecast_hours": 15},
+			{"project": "PROJ-BALTKHIM", "task": "TASK-2026-00007", "project_role": "Разработчик", "year": 2026, "month": 5, "plan_hours": 15, "forecast_hours": 16},
+			{"project": "PROJ-BALTKHIM", "task": "TASK-2026-00008", "project_role": "Консультант", "year": 2026, "month": 5, "plan_hours": 15, "forecast_hours": 15},
+			{"project": "PROJ-BALTKHIM", "task": "TASK-2026-00008", "project_role": "Разработчик", "year": 2026, "month": 4, "plan_hours": 60, "forecast_hours": 60},
+			{"project": "PROJ-BALTKHIM", "task": "TASK-2026-00008", "project_role": "Разработчик", "year": 2026, "month": 5, "plan_hours": 40, "forecast_hours": 40},
+			{"project": "PROJ-BALTKHIM", "task": "TASK-2026-00008", "project_role": "Руководитель проекта", "year": 2026, "month": 5, "plan_hours": 20, "forecast_hours": 20},
+			{"project": "PROJ-BALTKHIM", "task": "TASK-2026-00010", "project_role": "Консультант", "year": 2026, "month": 6, "plan_hours": 20, "forecast_hours": 20},
+			{"project": "PROJ-BALTKHIM", "task": "TASK-2026-00010", "project_role": "Разработчик", "year": 2026, "month": 6, "plan_hours": 20, "forecast_hours": 20},
+			{"project": "PROJ-BALTKHIM", "task": "TASK-2026-00010", "project_role": "Руководитель проекта", "year": 2026, "month": 6, "plan_hours": 20, "forecast_hours": 20},
+			{"project": "PROJ-BALTKHIM", "task": "TASK-2026-00156", "project_role": "Консультант", "year": 2026, "month": 4, "plan_hours": 10, "forecast_hours": 10},
+			{"project": "PROJ-BALTKHIM", "task": "TASK-2026-00156", "project_role": "Разработчик", "year": 2026, "month": 5, "plan_hours": 60, "forecast_hours": 60},
+			{"project": "PROJ-BALTKHIM", "task": "TASK-2026-00158", "project_role": "Руководитель проекта", "year": 2026, "month": 5, "plan_hours": 0, "forecast_hours": 20},
+		]
+
+		result = portfolio_grid._get_labor_summaries(
+			[
+				{
+					"name": "PROJ-BALTKHIM",
+					"expected_start_date": "2026-04-01",
+					"expected_end_date": "2026-10-15",
+				}
+			]
+		)
+
+		self.assertEqual(result["PROJ-BALTKHIM"].plan_total, 240.0)
+		self.assertEqual(result["PROJ-BALTKHIM"].forecast_total, 260.0)
+
+	@patch.object(portfolio_grid, "_month_progress_ratio", return_value=1.0)
+	@patch.object(portfolio_grid, "_load_labor_actual_rows", return_value=[])
+	@patch.object(portfolio_grid, "_load_labor_plan_rows")
+	@patch.object(portfolio_grid, "_load_project_task_rows")
+	@patch.object(portfolio_grid, "today", return_value="2026-03-16")
+	def test_get_labor_summaries_excludes_tasks_under_milestones_without_promoting_to_root(
+		self,
+		_mock_today,
+		load_project_task_rows,
+		load_labor_plan_rows,
+		_load_labor_actual_rows,
+		_month_progress_ratio,
+	):
+		load_project_task_rows.return_value = [
+			{"name": "TASK-ROOT", "project": "PROJ-001", "parent_task": None, "is_milestone": 0},
+			{"name": "TASK-MS", "project": "PROJ-001", "parent_task": "TASK-ROOT", "is_milestone": 1},
+			{"name": "TASK-CHILD", "project": "PROJ-001", "parent_task": "TASK-MS", "is_milestone": 0},
+		]
+		load_labor_plan_rows.return_value = [
+			{
+				"project": "PROJ-001",
+				"task": "TASK-ROOT",
+				"project_role": "Analyst",
+				"year": 2026,
+				"month": 3,
+				"plan_hours": 50,
+				"forecast_hours": 55,
+			},
+			{
+				"project": "PROJ-001",
+				"task": "TASK-CHILD",
+				"project_role": "Analyst",
+				"year": 2026,
+				"month": 3,
+				"plan_hours": 90,
+				"forecast_hours": 95,
+			},
+		]
+
+		result = portfolio_grid._get_labor_summaries(
+			[
+				{
+					"name": "PROJ-001",
+					"expected_start_date": "2026-03-01",
+					"expected_end_date": "2026-03-31",
+				}
+			]
+		)
+
+		self.assertEqual(result["PROJ-001"].plan_total, 50.0)
+		self.assertEqual(result["PROJ-001"].forecast_total, 55.0)
+
+	@patch.object(portfolio_grid, "_month_progress_ratio", return_value=1.0)
+	@patch.object(portfolio_grid, "_load_labor_actual_rows", return_value=[])
+	@patch.object(portfolio_grid, "_load_labor_plan_rows")
+	@patch.object(portfolio_grid, "_load_project_task_rows")
+	@patch.object(portfolio_grid, "today", return_value="2026-03-16")
+	def test_get_labor_summaries_excludes_unreachable_tasks_with_missing_parent(
+		self,
+		_mock_today,
+		load_project_task_rows,
+		load_labor_plan_rows,
+		_load_labor_actual_rows,
+		_month_progress_ratio,
+	):
+		load_project_task_rows.return_value = [
+			{"name": "TASK-ROOT", "project": "PROJ-001", "parent_task": None, "is_milestone": 0},
+			{"name": "TASK-ORPHAN", "project": "PROJ-001", "parent_task": "TASK-MISSING", "is_milestone": 0},
+		]
+		load_labor_plan_rows.return_value = [
+			{
+				"project": "PROJ-001",
+				"task": "TASK-ROOT",
+				"project_role": "Analyst",
+				"year": 2026,
+				"month": 3,
+				"plan_hours": 40,
+				"forecast_hours": 45,
+			},
+			{
+				"project": "PROJ-001",
+				"task": "TASK-ORPHAN",
+				"project_role": "Analyst",
+				"year": 2026,
+				"month": 3,
+				"plan_hours": 90,
+				"forecast_hours": 95,
+			},
+		]
+
+		result = portfolio_grid._get_labor_summaries(
+			[
+				{
+					"name": "PROJ-001",
+					"expected_start_date": "2026-03-01",
+					"expected_end_date": "2026-03-31",
+				}
+			]
+		)
+
+		self.assertEqual(result["PROJ-001"].plan_total, 40.0)
+		self.assertEqual(result["PROJ-001"].forecast_total, 45.0)
+
 	@patch.object(portfolio_grid, "today", return_value="2026-03-10")
 	@patch("dinext_project_stage_gate.stage_gate.portfolio_grid.query._get_permission_aware_list")
 	def test_get_nearest_milestones_skips_past_and_picks_first_future(
@@ -506,6 +661,56 @@ class TestPortfolioGrid(unittest.TestCase):
 		self.assertEqual(result["skipped"], [{"project": "PROJ-002", "reason": "not_in_portfolio"}])
 		self.assertIsNone(project_docs["PROJ-001"].custom_project_portfolio)
 		self.assertTrue(project_docs["PROJ-001"].saved)
+
+
+class TestApprovedUtpStatuses(unittest.TestCase):
+	def test_approved_utp_status_values_include_canonical_and_meta_options(self):
+		original_get_meta = getattr(portfolio_grid.frappe, "get_meta", None)
+		original_translate = portfolio_grid.frappe._
+		try:
+			portfolio_grid.frappe.get_meta = Mock(
+				return_value=Mock(
+					get_field=Mock(
+						return_value=types.SimpleNamespace(
+							options="\nРедактирование\nНа согласовании\nСогласовано\nОтклонено"
+						)
+					)
+				)
+			)
+			portfolio_grid.frappe._ = lambda value, context=None: value
+
+			values = portfolio_grid._approved_utp_status_values()
+		finally:
+			if original_get_meta is None:
+				delattr(portfolio_grid.frappe, "get_meta")
+			else:
+				portfolio_grid.frappe.get_meta = original_get_meta
+			portfolio_grid.frappe._ = original_translate
+
+		self.assertIn("Approved", values)
+		self.assertIn("Согласовано", values)
+		self.assertNotIn("Редактирование", values)
+
+
+class TestUnassignedProjects(unittest.TestCase):
+	@patch("dinext_project_stage_gate.stage_gate.portfolio_grid.query._get_permission_aware_list")
+	def test_get_unassigned_projects_filters_in_database(self, get_permission_aware_list):
+		get_permission_aware_list.return_value = [
+			{
+				"name": "PROJ-001",
+				"project_name": "Alpha",
+				"project_type": "Implementation",
+				"customer": "Dinext",
+				"priority": "High",
+			}
+		]
+
+		result = portfolio_grid.get_unassigned_projects()
+
+		get_permission_aware_list.assert_called_once()
+		call_kwargs = get_permission_aware_list.call_args.kwargs
+		self.assertEqual(call_kwargs["filters"], {"custom_project_portfolio": ["is", "not set"]})
+		self.assertEqual(result[0]["name"], "PROJ-001")
 
 
 if __name__ == "__main__":

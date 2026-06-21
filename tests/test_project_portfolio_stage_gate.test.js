@@ -6,8 +6,11 @@ const vm = require("node:vm");
 const HOOKS_PATH = "/home/frappe/frappe-bench/apps/dinext_project_stage_gate/dinext_project_stage_gate/hooks.py";
 const SCRIPT_PATH =
 	"/home/frappe/frappe-bench/apps/dinext_project_stage_gate/dinext_project_stage_gate/public/js/project_portfolio_stage_gate.js";
+const PALETTE_PATH =
+	"/home/frappe/frappe-bench/apps/dinext_project_stage_gate/dinext_project_stage_gate/public/js/stage_gate_status_palette.js";
 
 function loadPortfolioScript() {
+	const paletteScript = fs.readFileSync(PALETTE_PATH, "utf8");
 	const script = fs.readFileSync(SCRIPT_PATH, "utf8");
 	const state = {
 		handlers: {},
@@ -211,6 +214,7 @@ function loadPortfolioScript() {
 		},
 	};
 
+	vm.runInNewContext(paletteScript, context);
 	vm.runInNewContext(script, context);
 
 	return {
@@ -354,8 +358,6 @@ test("column definition pins project column on the left", () => {
 
 	assert.equal(columns[0].field, "project_name");
 	assert.equal(columns[0].pinned, "left");
-	assert.equal(columns[0].checkboxSelection, true);
-	assert.equal(columns[0].headerCheckboxSelection, true);
 	assert.equal(columns[0].minWidth, 180);
 	assert.equal(columns[0].maxWidth, 320);
 	assert.equal(columns[3].headerName, "Status");
@@ -543,6 +545,12 @@ test("render_grid uses legacy AG Grid theme mode for CSS class theming", () => {
 	portfolio.render_grid(frm, gridElement, [{ project_name: "Alpha" }]);
 
 	assert.equal(state.gridOptions?.theme, "legacy");
+	assert.equal(state.gridOptions?.rowSelection?.mode, "multiRow");
+	assert.equal(state.gridOptions?.rowSelection?.enableClickSelection, false);
+	assert.equal(state.gridOptions?.rowSelection?.checkboxes, true);
+	assert.equal(state.gridOptions?.rowSelection?.headerCheckbox, true);
+	assert.equal(state.gridOptions?.selectionColumnDef?.pinned, "left");
+	assert.equal(state.gridOptions?.selectionColumnDef?.lockPosition, "left");
 	assert.equal(typeof state.gridOptions?.onFirstDataRendered, "function");
 	assert.equal(typeof state.gridOptions?.onGridReady, "function");
 	assert.equal(state.gridOptions?.defaultColDef?.resizable, true);
@@ -666,6 +674,15 @@ test("overall status priority and active stage use pill renderers; rag columns s
 	assert.equal(byField.status_budget.cellRenderer, undefined);
 	assert.equal(byField.status_resources.cellRenderer, undefined);
 	assert.equal(byField.status_risks.cellRenderer, undefined);
+	assert.equal(byField.status_schedule.valueFormatter, portfolio.format_rag_status_value);
+});
+
+test("format_rag_status_value returns plain text", () => {
+	const { portfolio } = loadPortfolioScript();
+
+	assert.equal(portfolio.format_rag_status_value({ value: "🟢 В норме" }), "🟢 В норме");
+	assert.equal(portfolio.format_rag_status_value({ value: null }), "");
+	assert.equal(portfolio.format_rag_status_value({ value: "" }), "");
 });
 
 test("render_project_status_cell renders colored pill for overall status", () => {
@@ -710,6 +727,43 @@ test("centered columns expose portfolio-project-grid-cell-center class", () => {
 		);
 	}
 
-	assert.notEqual(byField.status_schedule.cellClass, "portfolio-project-grid-cell-center");
 	assert.notEqual(byField.customer.cellClass, "portfolio-project-grid-cell-center");
+	assert.notEqual(byField.status_schedule.cellClass, "portfolio-project-grid-cell-center");
+});
+
+test("resolve_stage_status_pill switches palette when theme changes", () => {
+	const { portfolio, context } = loadPortfolioScript();
+	context.document.documentElement.getAttribute = (name) =>
+		name === "data-theme" ? "light" : null;
+
+	const lightResolved = portfolio.resolve_stage_status_pill("Waiting Gate");
+	assert.equal(lightResolved.background, "#8f9aa8");
+
+	context.document.documentElement.getAttribute = (name) =>
+		name === "data-theme" ? "dark" : null;
+
+	const darkResolved = portfolio.resolve_stage_status_pill("Waiting Gate");
+	assert.equal(darkResolved.background, "#636f7c");
+});
+
+test("apply_theme refreshes grid cells after theme change", () => {
+	const { portfolio, context, state } = loadPortfolioScript();
+	const classList = makeClassList();
+	const refreshCalls = [];
+	const gridElement = { classList };
+	state.gridElement = gridElement;
+	const frm = makeFormDoc();
+	frm._portfolioGridApi = {
+		refreshCells() {
+			refreshCalls.push(true);
+		},
+	};
+	attachProjectsField(frm, state);
+	context.document.documentElement.getAttribute = (name) =>
+		name === "data-theme" ? "dark" : null;
+
+	portfolio.apply_theme(frm);
+
+	assert.equal(refreshCalls.length, 1);
+	assert.equal(classList.contains("ag-theme-quartz-dark"), true);
 });
