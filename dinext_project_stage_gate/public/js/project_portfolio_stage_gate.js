@@ -222,13 +222,13 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 				sortable: true,
 				resizable: true,
 				filter: false,
-				wrapHeaderText: true,
-				autoHeaderHeight: true,
-				minWidth: 110,
+				wrapHeaderText: false,
+				autoHeaderHeight: false,
+				minWidth: 90,
 			},
 			animateRows: true,
-			headerHeight: 56,
-			rowHeight: 44,
+			headerHeight: 36,
+			rowHeight: 32,
 			suppressCellFocus: true,
 			overlayNoRowsTemplate: `<span class="portfolio-project-grid-empty">${frappe.utils.escape_html(
 				__("No projects in this portfolio yet.")
@@ -248,7 +248,7 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 				headerName: __("Project"),
 				field: "project_name",
 				pinned: "left",
-				minWidth: 280,
+				minWidth: 220,
 				headerCheckboxSelection: true,
 				checkboxSelection: true,
 				cellRenderer(params) {
@@ -430,13 +430,12 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 		}
 		const projectName = frappe.utils.escape_html(row.project || "");
 		const projectTitle = frappe.utils.escape_html(row.project_name || row.project || "");
-		const stageStatus = row.stage_gate_status
-			? `<div class="portfolio-project-grid-meta">${frappe.utils.escape_html(row.stage_gate_status)}</div>`
+		const stageStatusAttr = row.stage_gate_status
+			? ` title="${frappe.utils.escape_html(row.stage_gate_status)}"`
 			: "";
-		return `<div class="portfolio-project-grid-project-cell">
+		return `<div class="portfolio-project-grid-project-cell"${stageStatusAttr}>
 			<div class="portfolio-project-grid-project-title">${projectTitle}</div>
 			<div class="portfolio-project-grid-project-code">${projectName}</div>
-			${stageStatus}
 		</div>`;
 	};
 

@@ -1,13 +1,13 @@
 .portfolio-project-grid-root {
-	margin: 16px 0 0 0;
+	margin: 8px 0 0 0;
 }
 
 .portfolio-project-grid-toolbar {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	gap: 12px;
-	margin-bottom: 10px;
+	gap: 6px;
+	margin-bottom: 6px;
 }
 
 .portfolio-project-grid-actions {
@@ -33,7 +33,10 @@
 	width: 100%;
 	height: 560px;
 	--ag-font-family: inherit;
-	--ag-font-size: var(--text-md);
+	--ag-font-size: var(--text-sm);
+	--ag-grid-size: 4px;
+	--ag-cell-horizontal-padding: 6px;
+	--ag-row-border-width: 0;
 	--ag-background-color: var(--card-bg);
 	--ag-foreground-color: var(--text-color);
 	--ag-header-background-color: var(--subtle-fg);
@@ -104,16 +107,33 @@
 .portfolio-project-grid .ag-header-cell,
 .portfolio-project-grid .ag-pinned-left-header {
 	font-weight: 600;
+	padding: 0 6px !important;
+}
+
+.portfolio-project-grid .ag-header-cell-label {
+	line-height: 1.2;
 }
 
 .portfolio-project-grid .ag-cell {
 	display: flex;
 	align-items: center;
+	padding: 0 !important;
+	margin: 0 !important;
+	line-height: normal;
+}
+
+.portfolio-project-grid .ag-cell-wrapper,
+.portfolio-project-grid .ag-cell-value {
+	width: 100%;
+	height: 100%;
+	padding: 0 !important;
+	margin: 0 !important;
 }
 
 .portfolio-project-grid .ag-row,
 .portfolio-project-grid .ag-pinned-left-cols-container .ag-row {
 	background-color: var(--card-bg);
+	border: none !important;
 }
 
 .portfolio-project-grid .ag-pinned-left-cols-container {
@@ -123,21 +143,32 @@
 .portfolio-project-grid-project-cell {
 	display: flex;
 	flex-direction: column;
-	gap: 2px;
-	line-height: 1.25;
-	padding: 6px 0;
+	gap: 0;
+	line-height: 1.15;
+	padding: 2px 0;
+	width: 100%;
+	overflow: hidden;
 }
 
 .portfolio-project-grid-project-title {
 	font-weight: 600;
 	color: var(--text-color);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .portfolio-project-grid-project-code,
 .portfolio-project-grid-meta,
 .portfolio-project-grid-empty {
 	color: var(--text-muted);
-	font-size: 12px;
+	font-size: 11px;
+}
+
+.portfolio-project-grid-project-code {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .portfolio-project-grid-empty {
