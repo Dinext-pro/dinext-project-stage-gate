@@ -35,7 +35,7 @@
 
 .portfolio-project-grid {
 	width: 100%;
-	height: 560px;
+	height: 460px;
 	--ag-font-family: inherit;
 	--ag-font-size: var(--text-sm);
 	--ag-grid-size: 4px;

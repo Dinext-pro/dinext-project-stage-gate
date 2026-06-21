@@ -375,6 +375,22 @@ test("leaf columns expose bounded width tiers", () => {
 	assert.equal(byField.nearest_milestone_subject.maxWidth, 280);
 });
 
+test("labor columns use the requested order and labels", () => {
+	const { portfolio } = loadPortfolioScript();
+	const laborGroup = portfolio.get_column_defs().find((colDef) => colDef.headerName === "Labor");
+
+	assert.ok(laborGroup);
+	assert.equal(
+		laborGroup.children.map((colDef) => `${colDef.headerName}:${colDef.field}`).join("|"),
+		[
+			"Plan Total:labor_plan_total",
+			"Plan Today:labor_plan_today",
+			"Actual:labor_actual_total",
+			"Forecast Total:labor_forecast_total",
+		].join("|")
+	);
+});
+
 test("autosize_grid_columns clamps measured widths to column bounds", () => {
 	const { portfolio } = loadPortfolioScript();
 	const updates = [];
@@ -679,7 +695,6 @@ test("centered columns expose portfolio-project-grid-cell-center class", () => {
 		"labor_actual_total",
 		"labor_forecast_total",
 		"labor_plan_today",
-		"labor_actual_today",
 		"pl_plan_total",
 		"pl_actual_total",
 		"pl_forecast_total",

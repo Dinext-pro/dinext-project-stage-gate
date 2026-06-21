@@ -1,6 +1,7 @@
 import sys
 import types
 import unittest
+from datetime import date
 from unittest.mock import Mock, patch
 
 try:
@@ -16,9 +17,22 @@ except ModuleNotFoundError:
 	_frappe_stub.qb = types.SimpleNamespace(from_=Mock())
 	sys.modules["frappe"] = _frappe_stub
 	_frappe_utils_stub = types.ModuleType("frappe.utils")
+
+	def _add_months(value, months):
+		current = date.fromisoformat(value) if isinstance(value, str) else value
+		month_index = current.month - 1 + months
+		year = current.year + month_index // 12
+		month = month_index % 12 + 1
+		return date(year, month, 1)
+
+	_frappe_utils_stub.add_months = _add_months
 	_frappe_utils_stub.flt = float
 	_frappe_utils_stub.get_last_day = lambda value: value
-	_frappe_utils_stub.getdate = lambda value=None: value
+	_frappe_utils_stub.getdate = lambda value=None: (
+		value
+		if isinstance(value, date)
+		else date.fromisoformat(value) if value else value
+	)
 	_frappe_utils_stub.today = lambda: "2026-03-16"
 	sys.modules["frappe.utils"] = _frappe_utils_stub
 	_frappe_qb_stub = types.ModuleType("frappe.query_builder")
@@ -117,7 +131,6 @@ class TestPortfolioGrid(unittest.TestCase):
 				actual_total=35,
 				forecast_total=140,
 				plan_today=62,
-				actual_today=35,
 			)
 		}
 		get_pl_summaries.return_value = {
@@ -140,10 +153,263 @@ class TestPortfolioGrid(unittest.TestCase):
 		self.assertEqual(row["status_budget"], "Amber")
 		self.assertEqual(row["active_stage"], "Discovery")
 		self.assertEqual(row["nearest_milestone_subject"], "Go Live")
+		self.assertEqual(row["labor_plan_total"], 120)
+		self.assertEqual(row["labor_actual_total"], 35)
 		self.assertEqual(row["labor_forecast_total"], 140)
+		self.assertEqual(row["labor_plan_today"], 62)
+		self.assertNotIn("labor_actual_today", row)
 		self.assertEqual(row["pl_actual_today"], 3200)
 		self.assertEqual(row["can_write"], True)
 		self.assertGreater(row["work_plan_percent"], 40)
+
+	@patch.object(portfolio_grid, "_month_progress_ratio")
+	@patch.object(portfolio_grid, "_load_labor_actual_rows")
+	@patch.object(portfolio_grid, "_load_labor_plan_rows")
+	@patch.object(portfolio_grid, "_load_project_task_rows")
+	@patch.object(portfolio_grid, "today", return_value="2026-03-16")
+	def test_get_labor_summaries_uses_role_aware_parent_task_labor_without_double_counting(
+		self,
+		_mock_today,
+		load_project_task_rows,
+		load_labor_plan_rows,
+		load_labor_actual_rows,
+		month_progress_ratio,
+	):
+		load_project_task_rows.return_value = [
+			{"name": "TASK-ROOT", "project": "PROJ-001", "parent_task": None},
+			{"name": "TASK-CHILD", "project": "PROJ-001", "parent_task": "TASK-ROOT"},
+			{"name": "TASK-ROOT-2", "project": "PROJ-001", "parent_task": None},
+			{"name": "TASK-LEAF-2", "project": "PROJ-001", "parent_task": "TASK-ROOT-2"},
+		]
+		load_labor_plan_rows.return_value = [
+			{
+				"project": "PROJ-001",
+				"task": "TASK-ROOT",
+				"project_role": "Role A",
+				"year": 2026,
+				"month": 3,
+				"plan_hours": 100,
+				"forecast_hours": 120,
+			},
+			{
+				"project": "PROJ-001",
+				"task": "TASK-CHILD",
+				"project_role": "Role A",
+				"year": 2026,
+				"month": 3,
+				"plan_hours": 40,
+				"forecast_hours": 50,
+			},
+			{
+				"project": "PROJ-001",
+				"task": "TASK-CHILD",
+				"project_role": "Role B",
+				"year": 2026,
+				"month": 3,
+				"plan_hours": 20,
+				"forecast_hours": 25,
+			},
+			{
+				"project": "PROJ-001",
+				"task": "TASK-LEAF-2",
+				"project_role": "Role A",
+				"year": 2026,
+				"month": 4,
+				"plan_hours": 30,
+				"forecast_hours": 35,
+			},
+		]
+		load_labor_actual_rows.return_value = [{"project": "PROJ-001", "actual_hours": 12.34}]
+		month_progress_ratio.side_effect = lambda year, month, current_day: 0.5 if (year, month) == (2026, 3) else 0.0
+
+		result = portfolio_grid._get_labor_summaries(
+			[
+				{
+					"name": "PROJ-001",
+					"expected_start_date": "2026-03-01",
+					"expected_end_date": "2026-04-30",
+				}
+			]
+		)
+
+		self.assertEqual(result["PROJ-001"].plan_total, 150.0)
+		self.assertEqual(result["PROJ-001"].forecast_total, 180.0)
+		self.assertEqual(result["PROJ-001"].plan_today, 60.0)
+		self.assertEqual(result["PROJ-001"].actual_total, 12.3)
+
+	@patch.object(portfolio_grid, "_month_progress_ratio", return_value=1.0)
+	@patch.object(portfolio_grid, "_load_labor_actual_rows", return_value=[])
+	@patch.object(portfolio_grid, "_load_labor_plan_rows")
+	@patch.object(portfolio_grid, "_load_project_task_rows")
+	@patch.object(portfolio_grid, "today", return_value="2026-03-16")
+	def test_get_labor_summaries_rolls_up_children_when_parent_has_no_in_window_data(
+		self,
+		_mock_today,
+		load_project_task_rows,
+		load_labor_plan_rows,
+		_load_labor_actual_rows,
+		_month_progress_ratio,
+	):
+		load_project_task_rows.return_value = [
+			{"name": "TASK-ROOT", "project": "PROJ-001", "parent_task": None},
+			{"name": "TASK-CHILD", "project": "PROJ-001", "parent_task": "TASK-ROOT"},
+		]
+		load_labor_plan_rows.return_value = [
+			{
+				"project": "PROJ-001",
+				"task": "TASK-CHILD",
+				"project_role": "Analyst",
+				"year": 2026,
+				"month": 3,
+				"plan_hours": 40,
+				"forecast_hours": 45,
+			},
+		]
+
+		result = portfolio_grid._get_labor_summaries(
+			[
+				{
+					"name": "PROJ-001",
+					"expected_start_date": "2026-03-01",
+					"expected_end_date": "2026-03-31",
+				}
+			]
+		)
+
+		self.assertEqual(result["PROJ-001"].plan_total, 40.0)
+		self.assertEqual(result["PROJ-001"].forecast_total, 45.0)
+
+	@patch.object(portfolio_grid, "_month_progress_ratio", return_value=1.0)
+	@patch.object(portfolio_grid, "_load_labor_actual_rows", return_value=[])
+	@patch.object(portfolio_grid, "_load_labor_plan_rows")
+	@patch.object(portfolio_grid, "_load_project_task_rows")
+	@patch.object(portfolio_grid, "today", return_value="2026-03-16")
+	def test_get_labor_summaries_excludes_months_outside_project_window(
+		self,
+		_mock_today,
+		load_project_task_rows,
+		load_labor_plan_rows,
+		_load_labor_actual_rows,
+		_month_progress_ratio,
+	):
+		load_project_task_rows.return_value = [
+			{"name": "TASK-ROOT", "project": "PROJ-001", "parent_task": None},
+		]
+		load_labor_plan_rows.return_value = [
+			{
+				"project": "PROJ-001",
+				"task": "TASK-ROOT",
+				"project_role": "Analyst",
+				"year": 2025,
+				"month": 12,
+				"plan_hours": 100,
+				"forecast_hours": 110,
+			},
+			{
+				"project": "PROJ-001",
+				"task": "TASK-ROOT",
+				"project_role": "Analyst",
+				"year": 2026,
+				"month": 3,
+				"plan_hours": 25,
+				"forecast_hours": 30,
+			},
+		]
+
+		result = portfolio_grid._get_labor_summaries(
+			[
+				{
+					"name": "PROJ-001",
+					"expected_start_date": "2026-03-01",
+					"expected_end_date": "2026-03-31",
+				}
+			]
+		)
+
+		self.assertEqual(result["PROJ-001"].plan_total, 25.0)
+		self.assertEqual(result["PROJ-001"].forecast_total, 30.0)
+
+	@patch.object(portfolio_grid, "_month_progress_ratio", return_value=1.0)
+	@patch.object(portfolio_grid, "_load_labor_actual_rows", return_value=[])
+	@patch.object(portfolio_grid, "_load_labor_plan_rows")
+	@patch.object(portfolio_grid, "_load_project_task_rows")
+	@patch.object(portfolio_grid, "today", return_value="2026-03-16")
+	def test_get_labor_summaries_matches_project_card_for_baltkhim_style_nested_same_role(
+		self,
+		_mock_today,
+		load_project_task_rows,
+		load_labor_plan_rows,
+		_load_labor_actual_rows,
+		_month_progress_ratio,
+	):
+		"""Parent PWE exists only outside the display window; children carry in-window labor."""
+		load_project_task_rows.return_value = [
+			{"name": "TASK-ROOT", "project": "PROJ-BALTKHIM", "parent_task": None},
+			{"name": "TASK-CHILD-1", "project": "PROJ-BALTKHIM", "parent_task": "TASK-ROOT"},
+			{"name": "TASK-CHILD-2", "project": "PROJ-BALTKHIM", "parent_task": "TASK-ROOT"},
+			{"name": "TASK-ROOT-2", "project": "PROJ-BALTKHIM", "parent_task": None},
+			{"name": "TASK-LEAF-2", "project": "PROJ-BALTKHIM", "parent_task": "TASK-ROOT-2"},
+		]
+		load_labor_plan_rows.return_value = [
+			{
+				"project": "PROJ-BALTKHIM",
+				"task": "TASK-ROOT",
+				"project_role": "Role A",
+				"year": 2025,
+				"month": 11,
+				"plan_hours": 100,
+				"forecast_hours": 110,
+			},
+			{
+				"project": "PROJ-BALTKHIM",
+				"task": "TASK-CHILD-1",
+				"project_role": "Role A",
+				"year": 2026,
+				"month": 3,
+				"plan_hours": 90,
+				"forecast_hours": 95,
+			},
+			{
+				"project": "PROJ-BALTKHIM",
+				"task": "TASK-CHILD-2",
+				"project_role": "Role A",
+				"year": 2026,
+				"month": 3,
+				"plan_hours": 50,
+				"forecast_hours": 55,
+			},
+			{
+				"project": "PROJ-BALTKHIM",
+				"task": "TASK-CHILD-2",
+				"project_role": "Role B",
+				"year": 2026,
+				"month": 4,
+				"plan_hours": 20,
+				"forecast_hours": 25,
+			},
+			{
+				"project": "PROJ-BALTKHIM",
+				"task": "TASK-LEAF-2",
+				"project_role": "Role A",
+				"year": 2026,
+				"month": 4,
+				"plan_hours": 80,
+				"forecast_hours": 85,
+			},
+		]
+
+		result = portfolio_grid._get_labor_summaries(
+			[
+				{
+					"name": "PROJ-BALTKHIM",
+					"expected_start_date": "2026-03-01",
+					"expected_end_date": "2026-04-30",
+				}
+			]
+		)
+
+		self.assertEqual(result["PROJ-BALTKHIM"].plan_total, 240.0)
+		self.assertEqual(result["PROJ-BALTKHIM"].forecast_total, 260.0)
 
 	@patch.object(portfolio_grid, "today", return_value="2026-03-10")
 	@patch("dinext_project_stage_gate.stage_gate.portfolio_grid.query._get_permission_aware_list")
