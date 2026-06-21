@@ -12,6 +12,7 @@
 - Transactional-слой исполнения через `Project Stage Instance`, `Project Gate Checkpoint` и `Project Gate Checklist Item`
 - Whitelisted Python API для цепочки стадий проекта и данных roadmap-отчета
 - Виджет на форме `Project`, подключаемый через `doctype_js`, без отдельного HTML custom field
+- AG Grid-таблица проектов на форме `Project Portfolio`: статусы RAG, трудозатраты, P&L, вехи, добавление и удаление проектов из портфеля
 - Кнопка `Project Stage Gate Roadmap` на форме `Project Portfolio`, открывающая отчет сразу с фильтром по текущему портфелю
 - Автоматическое создание `Project Stage Instance` при назначении `Project Governance Model` проекту
 - Автоматическое создание `Project Gate Checkpoint` из `Checkpoint Template`, указанного в строке модели управления
@@ -83,15 +84,44 @@ bench --site <site> export-fixtures --app dinext_project_stage_gate
 
 На форме `Project Portfolio` появляется кнопка в меню `View`, которая открывает Script Report `Project Stage Gate Roadmap` с уже заполненным фильтром `portfolio` для текущего портфеля.
 
+### Таблица проектов на форме Project Portfolio
+
+Для сохранённого портфеля (не новой записи) под полем `Description` монтируется AG Grid-таблица с проектами портфеля. Таблица подключается через `doctype_js` и использует [`DinextAgGrid`](../dinext_common/dinext_common/public/js/ag-grid/bootstrap.js) (AG Grid v35, `theme: "legacy"` для CSS-темизации).
+
+Возможности таблицы:
+
+1. Просмотр сводных данных по каждому проекту: тип, приоритет, RAG-статусы, активная стадия, заказчик, подразделение, трудозатраты, P&L, ближайшие вехи.
+2. Закреплённая слева колонка `Project` с названием и кодом проекта; статус stage-gate доступен во всплывающей подсказке при наведении.
+3. Кнопки **Add** / **Remove** для привязки и отвязки проектов через поле `custom_project_portfolio` на `Project`.
+4. Автоматическая синхронизация светлой/тёмной темы AG Grid с темой Frappe Desk (`data-theme` / `data-theme-mode`).
+5. Компактная вёрстка: плотные строки и заголовки, минимальные отступы в ячейках.
+
+Read-model и мутации реализованы в [`stage_gate/portfolio_grid.py`](dinext_project_stage_gate/stage_gate/portfolio_grid.py) и экспонируются через whitelisted API (см. раздел «Вызов API»).
+
+Стили таблицы: [`public/css/project_portfolio_grid.css`](dinext_project_stage_gate/public/css/project_portfolio_grid.css).
+
+После изменения frontend-ассетов выполните:
+
+```bash
+bench build --app dinext_project_stage_gate
+bench --site <site> clear-cache
+```
+
 Если цепочка уже создана, смена или очистка `governance_model` требует подтверждения в диалоге на форме `Project`. После подтверждения и сохранения текущая активная цепочка переводится в архив (все связанные исполнительные документы — в статус `Canceled`), номер активной версии цепочки на `Project` увеличивается; при назначенной новой модели создаётся новая цепочка, при пустой модели summary-поля проекта очищаются. Исторические строки остаются в БД, но не попадают в виджет и выборки roadmap для активной версии.
 
 ### Вызов API
 
-Приложение предоставляет два основных whitelisted-метода:
+Приложение предоставляет whitelisted-методы для stage chain, roadmap и портфельной таблицы:
 
 ```python
 dinext_project_stage_gate.stage_gate.api.get_project_stage_chain(project)
 dinext_project_stage_gate.stage_gate.api.get_roadmap_dataset(filters=None)
+
+# Project Portfolio grid
+dinext_project_stage_gate.stage_gate.api.get_portfolio_project_grid(portfolio)
+dinext_project_stage_gate.stage_gate.api.get_unassigned_projects()
+dinext_project_stage_gate.stage_gate.api.add_projects_to_portfolio(portfolio, projects)
+dinext_project_stage_gate.stage_gate.api.remove_projects_from_portfolio(portfolio, projects)
 ```
 
 Вызов через bench:
@@ -106,6 +136,7 @@ bench --site <site> execute dinext_project_stage_gate.stage_gate.api.get_roadmap
 - Python 3.10+
 - Frappe Framework / ERPNext
 - JavaScript form scripts и Script Reports
+- AG Grid (через `dinext_common`) для таблицы проектов на форме `Project Portfolio`
 - ECharts для визуализации дорожной карты
 - Node.js built-in test runner для изолированных JS regression-тестов
 - Ruff для Python linting
@@ -145,6 +176,7 @@ bench --site <site> execute dinext_project_stage_gate.stage_gate.api.get_roadmap
   - `frappe`
   - `erpnext`
   - `dinext_projects`
+  - `dinext_common` (AG Grid bootstrap для портфельной таблицы)
 - Доступ к запуску `bench --site <site> migrate`
 - Включенный developer mode при создании/обновлении DocType или metadata в базе данных
 
@@ -191,13 +223,16 @@ node --test tests/*.js
 - [`dinext_project_stage_gate/stage_gate/query.py`](dinext_project_stage_gate/stage_gate/query.py) — read-model слой для виджета и отчета
 - [`dinext_project_stage_gate/stage_gate/service.py`](dinext_project_stage_gate/stage_gate/service.py) — pure business logic для сборки stage chain и project summary
 - [`dinext_project_stage_gate/stage_gate/working_days.py`](dinext_project_stage_gate/stage_gate/working_days.py) — расчет рабочих дат стадий с учетом holiday list
+- [`dinext_project_stage_gate/stage_gate/portfolio_grid.py`](dinext_project_stage_gate/stage_gate/portfolio_grid.py) — read-model и мутации для AG Grid на форме `Project Portfolio`
 - [`dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_gate_checkpoint/project_gate_checkpoint.js`](dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_gate_checkpoint/project_gate_checkpoint.js) — клиентская логика чеклиста (удаление обязательных строк, скрытие «Удалить все строки»)
 - [`dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_gate_checkpoint/project_gate_checkpoint.py`](dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_gate_checkpoint/project_gate_checkpoint.py) — валидация и синхронизация `checklist_completed` с чеклистом
 - [`dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_stage_instance/project_stage_instance.py`](dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_stage_instance/project_stage_instance.py) — вычисление плановых/фактических дат и `after_insert` provisioning gate checkpoint
-- [`dinext_project_stage_gate/public/js/project_portfolio_stage_gate.js`](dinext_project_stage_gate/public/js/project_portfolio_stage_gate.js) — shortcut из `Project Portfolio` в roadmap-отчет
+- [`dinext_project_stage_gate/public/js/project_portfolio_stage_gate.js`](dinext_project_stage_gate/public/js/project_portfolio_stage_gate.js) — AG Grid на форме `Project Portfolio`, shortcut в roadmap-отчет
+- [`dinext_project_stage_gate/public/css/project_portfolio_grid.css`](dinext_project_stage_gate/public/css/project_portfolio_grid.css) — стили портфельной таблицы (тема Frappe + compact layout)
 - [`dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_gate_checkpoint/test_project_gate_checkpoint.py`](dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_gate_checkpoint/test_project_gate_checkpoint.py) — тесты пересчёта `checklist_completed`
 - [`dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_stage_instance/test_project_stage_instance.py`](dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_stage_instance/test_project_stage_instance.py) — integration-тесты автосоздания и guard-логики
-- [`tests/test_project_portfolio_stage_gate.test.js`](tests/test_project_portfolio_stage_gate.test.js) — JS regression-тест интеграции `Project Portfolio`
+- [`dinext_project_stage_gate/tests/test_portfolio_grid.py`](dinext_project_stage_gate/tests/test_portfolio_grid.py) — Python-тесты read-model и link/unlink проектов портфеля
+- [`tests/test_project_portfolio_stage_gate.test.js`](tests/test_project_portfolio_stage_gate.test.js) — JS regression-тест AG Grid, темы и интеграции `Project Portfolio`
 - [`tests/test_project_gate_checkpoint_form.test.js`](tests/test_project_gate_checkpoint_form.test.js) — JS regression-тест клиентских ограничений чеклиста
 - [`tests/test_project_stage_gate_widget.test.js`](tests/test_project_stage_gate_widget.test.js) — JS regression-тест виджета `Project`
 - [`tests/test_project_stage_gate_roadmap.test.js`](tests/test_project_stage_gate_roadmap.test.js) — JS regression-тест roadmap-отчета
@@ -234,6 +269,7 @@ node --test tests/*.js
     │   └── workflow_state.json
     ├── public/
     │   ├── css/
+    │   │   ├── project_portfolio_grid.css
     │   │   └── project_stage_gate.css
     │   └── js/
     │       ├── project_portfolio_stage_gate.js
@@ -244,6 +280,7 @@ node --test tests/*.js
     │   ├── api.py
     │   ├── checkpoint_provision.py
     │   ├── permissions.py
+    │   ├── portfolio_grid.py
     │   ├── project_hooks.py
     │   ├── query.py
     │   ├── service.py
@@ -251,6 +288,7 @@ node --test tests/*.js
     │   └── working_days.py
     ├── tests/
     │   ├── test_app_bootstrap.py
+    │   ├── test_portfolio_grid.py
     │   ├── test_project_stage_gate_roadmap_report.py
     │   ├── test_stage_gate_api.py
     │   ├── test_stage_gate_permissions.py
@@ -276,7 +314,7 @@ node --test tests/*.js
 
 - `dinext_project_stage_gate/dinext_project_stage_gate/doctype/` содержит metadata-backed определения DocType, контроллеры и тесты.
 - `dinext_project_stage_gate/stage_gate/` содержит service/query/API, orchestration hooks, provisioning checkpoint и утилиты расчета рабочих дат.
-- `dinext_project_stage_gate/public/` содержит UI-ассеты формы `Project`, shortcut для `Project Portfolio` и vendored ECharts stub.
+- `dinext_project_stage_gate/public/` содержит UI-ассеты формы `Project`, AG Grid и стили для `Project Portfolio`, vendored ECharts stub.
 - `dinext_project_stage_gate/fixtures/` хранит экспортированные metadata, необходимые для воспроизведения ролей, прав, workflow, отчетов и custom fields.
 - `dinext_project_stage_gate/tests/` содержит точечные Python unit-тесты для service, query, API, permissions и report-поведения.
 - `tests/` в корне репозитория содержит изолированные JavaScript regression-тесты для виджета `Project`, формы `Project Portfolio`, клиентской логики `Project Gate Checkpoint` и roadmap-отчета.
@@ -324,7 +362,7 @@ flowchart LR
 3. После вставки `Project Stage Instance` модуль provisioning создает `Project Gate Checkpoint`, если для стадии задан template.
 4. Изменения самих `Project Stage Instance` также пересчитывают summary проекта через `doc_events`.
 5. `stage_gate.query` собирает read-optimized datasets для виджета проекта и roadmap-отчета.
-6. Клиентский код отрисовывает Stage-gate цепочку на форме `Project`, добавляет shortcut в `Project Portfolio` и строит roadmap chart в Script Report.
+6. Клиентский код отрисовывает Stage-gate цепочку на форме `Project`, AG Grid проектов и shortcut в roadmap на форме `Project Portfolio`, строит roadmap chart в Script Report.
 7. При сохранении `Project Gate Checkpoint` пересчитывается `checklist_completed` по статусам строк чеклиста; workflow checkpoint опирается на это поле для разрешения отправки на согласование.
 
 ## Лицензия
