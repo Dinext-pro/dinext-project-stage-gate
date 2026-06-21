@@ -3,7 +3,7 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 (function () {
 	const BOOTSTRAP_JS = "/assets/dinext_common/js/ag-grid/bootstrap.js";
 	const GRID_CSS = "/assets/dinext_project_stage_gate/css/project_portfolio_grid.css";
-	const GRID_ROOT_SELECTOR = ".portfolio-project-grid-root";
+	const PROJECTS_HTML_FIELD = "custom_portfolio_projects";
 	const GRID_SELECTOR = ".portfolio-project-grid";
 	const GRID_DARK_CLASS = "ag-theme-quartz-dark";
 	const GRID_LIGHT_CLASS = "ag-theme-quartz";
@@ -115,11 +115,14 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 		portfolio.teardown(frm);
 		portfolio.add_roadmap_button(frm);
 
-		if (frm.is_new() || !frm.doc.name || !frm.page?.wrapper) {
+		if (frm.is_new() || !frm.doc.name) {
 			return;
 		}
 
 		const shell = portfolio.ensure_shell(frm);
+		if (!shell) {
+			return;
+		}
 		portfolio.apply_theme(frm);
 		portfolio.set_status_text(shell, __("Loading projects..."));
 
@@ -154,10 +157,14 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 
 		portfolio.destroy_grid(frm);
 
-		const root = frm?.page?.wrapper?.find?.(GRID_ROOT_SELECTOR);
-		if (root?.length) {
-			root.remove();
+		const fieldWrapper = portfolio.get_projects_field_wrapper(frm);
+		if (fieldWrapper?.length && typeof fieldWrapper.empty === "function") {
+			fieldWrapper.empty();
 		}
+	};
+
+	portfolio.get_projects_field_wrapper = function (frm) {
+		return frm?.fields_dict?.[PROJECTS_HTML_FIELD]?.$wrapper || null;
 	};
 
 	portfolio.destroy_grid = function (frm) {
@@ -216,25 +223,27 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 	};
 
 	portfolio.ensure_shell = function (frm) {
-		const page = frm.page.wrapper;
-		let root = page.find(GRID_ROOT_SELECTOR);
-		if (!root.length) {
-			root = $(
-				`<section class="portfolio-project-grid-root">
-					<div class="portfolio-project-grid-toolbar">
-						<div class="portfolio-project-grid-actions">
-							<button type="button" class="btn btn-primary btn-sm" data-action="add-projects">${__("Add")}</button>
-							<button type="button" class="btn btn-default btn-sm" data-action="remove-projects" disabled>${__("Remove")}</button>
-						</div>
-						<div class="portfolio-project-grid-status text-muted small"></div>
-					</div>
-					<div class="portfolio-project-grid-surface">
-						<div class="portfolio-project-grid"></div>
-					</div>
-				</section>`
-			);
-			portfolio.insert_shell_after_description(frm, root, page);
+		const fieldWrapper = portfolio.get_projects_field_wrapper(frm);
+		if (!fieldWrapper?.length) {
+			return null;
 		}
+
+		fieldWrapper.empty();
+		const root = $(
+			`<section class="portfolio-project-grid-root">
+				<div class="portfolio-project-grid-toolbar">
+					<div class="portfolio-project-grid-actions">
+						<button type="button" class="btn btn-primary btn-sm" data-action="add-projects">${__("Add")}</button>
+						<button type="button" class="btn btn-default btn-sm" data-action="remove-projects" disabled>${__("Remove")}</button>
+					</div>
+					<div class="portfolio-project-grid-status text-muted small"></div>
+				</div>
+				<div class="portfolio-project-grid-surface">
+					<div class="portfolio-project-grid"></div>
+				</div>
+			</section>`
+		);
+		root.appendTo(fieldWrapper);
 
 		root.find('[data-action="add-projects"]').off("click").on("click", () => {
 			portfolio.open_add_dialog(frm);
@@ -249,20 +258,6 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 			status: root.find(".portfolio-project-grid-status"),
 			removeButton: root.find('[data-action="remove-projects"]'),
 		};
-	};
-
-	portfolio.insert_shell_after_description = function (frm, root, page) {
-		const descriptionWrapper = portfolio.get_description_wrapper(frm);
-		if (descriptionWrapper?.length && typeof descriptionWrapper.after === "function") {
-			descriptionWrapper.after(root);
-			return;
-		}
-
-		page.find(".layout-main-section").first().prepend(root);
-	};
-
-	portfolio.get_description_wrapper = function (frm) {
-		return frm?.fields_dict?.description?.$wrapper || null;
 	};
 
 	portfolio.set_status_text = function (shell, text) {
@@ -670,7 +665,7 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 			gridElement.classList.toggle(GRID_DARK_CLASS, isDark);
 			gridElement.classList.toggle(GRID_CUSTOM_DARK_CLASS, isDark);
 		} else {
-			const grid = frm?.page?.wrapper?.find?.(GRID_SELECTOR);
+			const grid = portfolio.get_projects_field_wrapper(frm)?.find?.(GRID_SELECTOR);
 			grid?.removeClass?.(`${GRID_LIGHT_CLASS} ${GRID_DARK_CLASS} ${GRID_CUSTOM_DARK_CLASS}`);
 			grid?.addClass?.(isDark ? `${GRID_DARK_CLASS} ${GRID_CUSTOM_DARK_CLASS}` : GRID_LIGHT_CLASS);
 		}
@@ -680,7 +675,7 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 	};
 
 	portfolio.get_grid_element = function (frm) {
-		const grid = frm?.page?.wrapper?.find?.(GRID_SELECTOR);
+		const grid = portfolio.get_projects_field_wrapper(frm)?.find?.(GRID_SELECTOR);
 		if (!grid?.length || typeof grid.get !== "function") {
 			return null;
 		}
@@ -705,9 +700,11 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 
 	portfolio.update_remove_button_state = function (frm) {
 		const selected = frm?._portfolioGridApi?.getSelectedRows?.() || [];
-		const shell = frm?.page?.wrapper ? portfolio.ensure_shell(frm) : null;
-		if (shell?.removeButton?.length) {
-			shell.removeButton.prop("disabled", selected.length === 0);
+		const removeButton = portfolio.get_projects_field_wrapper(frm)?.find?.(
+			'[data-action="remove-projects"]'
+		);
+		if (removeButton?.length) {
+			removeButton.prop("disabled", selected.length === 0);
 		}
 	};
 
