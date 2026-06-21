@@ -128,9 +128,22 @@
 .portfolio-project-grid .ag-cell {
 	display: flex;
 	align-items: center;
-	padding: 0 !important;
+	padding: 0 6px !important;
 	margin: 0 !important;
 	line-height: normal;
+}
+
+.portfolio-project-grid-pill {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	max-width: 100%;
+	min-height: 20px;
+	padding: 1px 8px;
+	font-size: 11px;
+	font-weight: 600;
+	line-height: 1.2;
+	white-space: nowrap;
 }
 
 .portfolio-project-grid .ag-cell-wrapper,

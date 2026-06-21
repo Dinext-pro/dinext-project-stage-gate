@@ -102,8 +102,56 @@ function loadPortfolioScript() {
 			},
 			utils: {
 				escape_html(value) {
-					return value;
+					return String(value)
+						.replace(/&/g, "&amp;")
+						.replace(/</g, "&lt;")
+						.replace(/>/g, "&gt;")
+						.replace(/"/g, "&quot;");
 				},
+				guess_colour(value) {
+					const map = {
+						High: "red",
+						Medium: "orange",
+						Low: "green",
+						Open: "orange",
+						Completed: "green",
+						Cancelled: "red",
+					};
+					return map[value] || "gray";
+				},
+			},
+			get_indicator(doc, doctype) {
+				if (doctype === "Project" && doc.status) {
+					return [doc.status, context.frappe.utils.guess_colour(doc.status)];
+				}
+				if (doctype === "Project Stage Instance" && doc.status) {
+					const meta = context.frappe.get_meta("Project Stage Instance");
+					const state = meta?.states?.find((entry) => entry.title === doc.status);
+					if (state?.color) {
+						return [doc.status, context.frappe.scrub(state.color, "-")];
+					}
+				}
+				return null;
+			},
+			get_meta(doctype) {
+				if (doctype === "Project Stage Instance") {
+					return {
+						states: [
+							{ title: "Active", color: "Blue" },
+							{ title: "Completed", color: "Green" },
+							{ title: "Skipped", color: "Gray" },
+							{ title: "Canceled", color: "Gray" },
+							{ title: "Planned", color: "Gray" },
+						],
+					};
+				}
+				return { states: [] };
+			},
+			scrub(value, separator) {
+				return String(value || "")
+					.trim()
+					.toLowerCase()
+					.replace(/\s+/g, separator || "-");
 			},
 			require(_files, callback) {
 				if (callback) {
@@ -531,4 +579,84 @@ test("project option formatter includes project type and customer", () => {
 		}),
 		"Alpha / Implementation / Dinext"
 	);
+});
+
+test("render_indicator_pill escapes label text", () => {
+	const { portfolio } = loadPortfolioScript();
+
+	const html = portfolio.render_indicator_pill('<script>', "green");
+
+	assert.match(html, /indicator-pill green/);
+	assert.match(html, /&lt;script&gt;/);
+	assert.doesNotMatch(html, /<script>/);
+});
+
+test("resolve_project_status_pill uses frappe.get_indicator", () => {
+	const { portfolio } = loadPortfolioScript();
+	const resolved = portfolio.resolve_project_status_pill("Open");
+
+	assert.equal(resolved.label, "Open");
+	assert.equal(resolved.colorClass, "orange");
+});
+
+test("resolve_priority_pill uses system guess_colour", () => {
+	const { portfolio } = loadPortfolioScript();
+	const resolved = portfolio.resolve_priority_pill("High");
+
+	assert.equal(resolved.label, "High");
+	assert.equal(resolved.colorClass, "red");
+});
+
+test("resolve_stage_status_pill prefers Project Stage Instance meta colors", () => {
+	const { portfolio } = loadPortfolioScript();
+
+	assert.equal(portfolio.resolve_stage_status_pill("Active").colorClass, "blue");
+	assert.equal(portfolio.resolve_stage_status_pill("Completed").colorClass, "green");
+});
+
+test("resolve_stage_status_pill falls back to roadmap palette for uncovered statuses", () => {
+	const { portfolio } = loadPortfolioScript();
+
+	const resolved = portfolio.resolve_stage_status_pill("Waiting Gate");
+
+	assert.equal(resolved.colorClass, undefined);
+	assert.equal(resolved.background, "#8f9aa8");
+	assert.equal(resolved.color, "#ffffff");
+});
+
+test("render_active_stage_cell colors pill from stage_gate_status", () => {
+	const { portfolio } = loadPortfolioScript();
+
+	const html = portfolio.render_active_stage_cell({
+		data: {
+			active_stage: "Discovery",
+			stage_gate_status: "Active",
+		},
+	});
+
+	assert.match(html, /Discovery/);
+	assert.match(html, /indicator-pill blue/);
+});
+
+test("overall status priority and active stage use pill renderers; rag columns stay plain", () => {
+	const { portfolio } = loadPortfolioScript();
+	const leaves = portfolio.collect_leaf_column_defs(portfolio.get_column_defs());
+	const byField = Object.fromEntries(leaves.map((colDef) => [colDef.field, colDef]));
+
+	assert.equal(typeof byField.status_overall.cellRenderer, "function");
+	assert.equal(typeof byField.priority.cellRenderer, "function");
+	assert.equal(typeof byField.active_stage.cellRenderer, "function");
+	assert.equal(byField.status_schedule.cellRenderer, undefined);
+	assert.equal(byField.status_budget.cellRenderer, undefined);
+	assert.equal(byField.status_resources.cellRenderer, undefined);
+	assert.equal(byField.status_risks.cellRenderer, undefined);
+});
+
+test("render_project_status_cell renders colored pill for overall status", () => {
+	const { portfolio } = loadPortfolioScript();
+
+	const html = portfolio.render_project_status_cell({ value: "Open" });
+
+	assert.match(html, /indicator-pill orange/);
+	assert.match(html, /Open/);
 });
