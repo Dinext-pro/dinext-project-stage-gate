@@ -268,7 +268,7 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 		}
 
 		portfolio.teardown(frm);
-		portfolio.add_roadmap_button(frm);
+		portfolio.add_view_menu_items(frm);
 
 		if (frm.is_new() || !frm.doc.name) {
 			return;
@@ -394,10 +394,7 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 		const root = $(
 			`<section class="portfolio-project-grid-root">
 				<div class="portfolio-project-grid-toolbar">
-					<div class="portfolio-project-grid-actions">
-						<button type="button" class="btn btn-primary btn-sm" data-action="add-projects">${portfolio.t("Add")}</button>
-						<button type="button" class="btn btn-default btn-sm" data-action="remove-projects" disabled>${portfolio.t("Remove")}</button>
-					</div>
+					<div class="portfolio-project-grid-actions"></div>
 					<div class="portfolio-project-grid-status text-muted small"></div>
 				</div>
 				<div class="portfolio-project-grid-surface">
@@ -407,12 +404,27 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 		);
 		root.appendTo(fieldWrapper);
 
-		root.find('[data-action="add-projects"]').off("click").on("click", () => {
-			portfolio.open_add_dialog(frm);
-		});
-		root.find('[data-action="remove-projects"]').off("click").on("click", () => {
-			portfolio.remove_selected_projects(frm);
-		});
+		const $actions = root.find(".portfolio-project-grid-actions");
+		$actions.append(
+			portfolio.make_toolbar_button({
+				label: portfolio.t("Add"),
+				icon: "es-line-add",
+				btn_type: "secondary",
+				data_action: "add-projects",
+				click: () => portfolio.open_add_dialog(frm),
+			})
+		);
+		$actions.append(
+			portfolio.make_toolbar_button({
+				label: portfolio.t("Remove"),
+				icon: "es-line-delete",
+				btn_type: "danger",
+				disabled: true,
+				data_action: "remove-projects",
+				click: () => portfolio.remove_selected_projects(frm),
+			})
+		);
+		portfolio.mount_toolbar_view_buttons(frm, $actions);
 
 		return {
 			root,
@@ -898,18 +910,67 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 		}
 	};
 
-	portfolio.add_roadmap_button = function (frm) {
+	portfolio.make_toolbar_button = function ({
+		label,
+		icon,
+		btn_type = "secondary",
+		disabled,
+		click,
+		data_action,
+	}) {
+		const $btn = $(`<button type="button" class="btn btn-xs btn-${btn_type}">`)
+			.attr("data-label", label)
+			.html(`${frappe.utils.icon(icon, "xs")} ${label}`)
+			.on("click", click);
+		if (data_action) {
+			$btn.attr("data-action", data_action);
+		}
+		if (disabled) {
+			$btn.prop("disabled", true);
+		}
+		return $btn;
+	};
+
+	portfolio.open_projects_stage_roadmap = function (frm) {
+		frappe.route_options = { portfolio: frm.doc.name };
+		frappe.set_route("query-report", "Project Stage Gate Roadmap");
+	};
+
+	portfolio.get_view_actions = function (frm) {
 		if (!frm || frm.is_new() || !frm.doc?.name || !frappe.perm.has_perm("Project Stage Gate Roadmap")) {
+			return [];
+		}
+		return [
+			{
+				label: __("Projects Stage Roadmap"),
+				icon: "es-line-reports",
+				handler: () => portfolio.open_projects_stage_roadmap(frm),
+			},
+		];
+	};
+
+	portfolio.add_view_menu_items = function (frm) {
+		portfolio.get_view_actions(frm).forEach(({ label, handler }) => {
+			frm.add_custom_button(label, handler, __("View"));
+		});
+	};
+
+	portfolio.mount_toolbar_view_buttons = function (frm, $container) {
+		const actions = portfolio.get_view_actions(frm);
+		if (!actions.length || !$container?.length) {
 			return;
 		}
-		frm.add_custom_button(
-			__("Projects Stage Roadmap"),
-			() => {
-				frappe.route_options = { portfolio: frm.doc.name };
-				frappe.set_route("query-report", "Project Stage Gate Roadmap");
-			},
-			__("View")
-		);
+		$container.append('<span class="portfolio-project-grid-toolbar-divider" aria-hidden="true"></span>');
+		actions.forEach(({ label, icon, handler }) => {
+			$container.append(
+				portfolio.make_toolbar_button({
+					label,
+					icon,
+					btn_type: "secondary",
+					click: handler,
+				})
+			);
+		});
 	};
 
 	portfolio.open_add_dialog = async function (frm) {
