@@ -738,7 +738,7 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 				],
 			},
 			{
-				headerName: portfolio.t("Nearest Milestone"),
+				headerName: portfolio.t("Nearest Open Milestone"),
 				children: [
 					portfolio.with_width(
 						{
@@ -747,7 +747,7 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 						},
 						"milestone"
 					),
-					portfolio.with_width(
+					portfolio.with_centered(
 						{
 							headerName: portfolio.t("Forecast Date"),
 							field: "nearest_milestone_date",
@@ -816,7 +816,7 @@ frappe.provide("dinext_project_stage_gate.portfolio");
 			return "";
 		}
 		if (typeof frappe.format === "function") {
-			return frappe.format(value, { fieldtype: "Currency" });
+			return frappe.format(value, { fieldtype: "Currency" }, { only_value: true });
 		}
 		return Number(value).toFixed(2);
 	};

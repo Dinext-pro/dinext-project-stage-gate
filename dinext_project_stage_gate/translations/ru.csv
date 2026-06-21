@@ -362,3 +362,5 @@
 "Already assigned to another portfolio","Уже привязан к другому портфелю","Dinext.PortfolioGrid"
 "Already in this portfolio","Уже включен в этот портфель","Dinext.PortfolioGrid"
 "Project is not linked to this portfolio","Проект не связан с этим портфелем","Dinext.PortfolioGrid"
+"Nearest Open Milestone","Ближайшая открытая веха",""
+"Nearest Open Milestone","Ближайшая открытая веха","Dinext.PortfolioGrid"
