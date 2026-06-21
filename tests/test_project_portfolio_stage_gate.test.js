@@ -660,3 +660,41 @@ test("render_project_status_cell renders colored pill for overall status", () =>
 	assert.match(html, /indicator-pill orange/);
 	assert.match(html, /Open/);
 });
+
+test("centered columns expose portfolio-project-grid-cell-center class", () => {
+	const { portfolio } = loadPortfolioScript();
+	const leaves = portfolio.collect_leaf_column_defs(portfolio.get_column_defs());
+	const byField = Object.fromEntries(leaves.map((colDef) => [colDef.field, colDef]));
+	const centeredFields = [
+		"project_type",
+		"priority",
+		"status_overall",
+		"active_stage",
+		"expected_start_date",
+		"expected_end_date",
+		"progress_current_percent",
+		"work_plan_percent",
+		"work_actual_percent",
+		"labor_plan_total",
+		"labor_actual_total",
+		"labor_forecast_total",
+		"labor_plan_today",
+		"labor_actual_today",
+		"pl_plan_total",
+		"pl_actual_total",
+		"pl_forecast_total",
+		"pl_plan_today",
+		"pl_actual_today",
+	];
+
+	for (const field of centeredFields) {
+		assert.equal(
+			byField[field].cellClass,
+			"portfolio-project-grid-cell-center",
+			`Expected ${field} to be centered`
+		);
+	}
+
+	assert.notEqual(byField.status_schedule.cellClass, "portfolio-project-grid-cell-center");
+	assert.notEqual(byField.customer.cellClass, "portfolio-project-grid-cell-center");
+});
