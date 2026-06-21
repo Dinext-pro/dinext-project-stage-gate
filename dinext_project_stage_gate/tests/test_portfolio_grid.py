@@ -801,5 +801,27 @@ class TestUnassignedProjects(unittest.TestCase):
 		self.assertEqual(result[0]["name"], "PROJ-001")
 
 
+class TestLoadPlActualRows(unittest.TestCase):
+	def test_returns_empty_for_no_projects(self):
+		self.assertEqual(portfolio_grid._load_pl_actual_rows([]), [])
+
+	@patch.object(portfolio_grid.frappe.db, "sql")
+	def test_uses_query_builder_instead_of_raw_sql(self, mock_sql):
+		mock_query = Mock()
+		mock_query.inner_join.return_value = mock_query
+		mock_query.on.return_value = mock_query
+		mock_query.select.return_value = mock_query
+		mock_query.where.return_value = mock_query
+		mock_query.groupby.return_value = mock_query
+		mock_query.run.return_value = [{"project": "PROJ-001", "actual_net": 1500.0}]
+
+		with patch.object(portfolio_grid.frappe.qb, "from_", return_value=mock_query) as mock_from:
+			result = portfolio_grid._load_pl_actual_rows(["PROJ-001"])
+
+		mock_from.assert_called_once()
+		mock_sql.assert_not_called()
+		self.assertEqual(result, [{"project": "PROJ-001", "actual_net": 1500.0}])
+
+
 if __name__ == "__main__":
 	unittest.main()

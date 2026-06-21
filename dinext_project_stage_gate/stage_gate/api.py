@@ -2,6 +2,7 @@ import frappe
 from frappe import _
 
 from dinext_project_stage_gate.stage_gate import portfolio_grid, query
+from dinext_project_stage_gate.stage_gate.portfolio_grid import DINEXT_PERMISSION_CONTEXT
 
 @frappe.whitelist()
 def ping():
@@ -40,13 +41,13 @@ def get_unassigned_projects():
 	}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def add_projects_to_portfolio(portfolio, projects):
 	_ensure_permission("Project Portfolio", "write", doc=portfolio)
 	return portfolio_grid.add_projects_to_portfolio(portfolio, _coerce_list(projects))
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def remove_projects_from_portfolio(portfolio, projects):
 	_ensure_permission("Project Portfolio", "write", doc=portfolio)
 	return portfolio_grid.remove_projects_from_portfolio(portfolio, _coerce_list(projects))
@@ -76,7 +77,7 @@ def _coerce_list(values):
 def _ensure_permission(doctype, ptype="read", doc=None):
 	if not frappe.has_permission(doctype, ptype, doc=doc):
 		frappe.throw(
-			_("Not permitted to {0} {1}").format(ptype, doctype),
+			_("Not permitted to {0} {1}", context=DINEXT_PERMISSION_CONTEXT).format(ptype, doctype),
 			frappe.PermissionError,
 		)
 
