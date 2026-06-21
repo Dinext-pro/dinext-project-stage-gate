@@ -86,7 +86,7 @@ bench --site <site> export-fixtures --app dinext_project_stage_gate
 
 ### Таблица проектов на форме Project Portfolio
 
-Для сохранённого портфеля (не новой записи) под полем `Description` монтируется AG Grid-таблица с проектами портфеля. Таблица подключается через `doctype_js` и использует [`DinextAgGrid`](../dinext_common/dinext_common/public/js/ag-grid/bootstrap.js) (AG Grid v35, `theme: "legacy"` для CSS-темизации).
+Для сохранённого портфеля (не новой записи) AG Grid-таблица с проектами рендерится в HTML-поле `custom_portfolio_projects` (секция `custom_projects`). Таблица подключается через `doctype_js` и использует [`DinextAgGrid`](../dinext_common/dinext_common/public/js/ag-grid/bootstrap.js) (AG Grid v35, `theme: "legacy"` для CSS-темизации).
 
 Возможности таблицы:
 

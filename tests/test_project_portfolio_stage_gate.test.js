@@ -128,6 +128,9 @@ function loadPortfolioScript() {
 			if (value === fakeDocument) {
 				return { on() {} };
 			}
+			if (typeof value === "string" && value.includes("portfolio-project-grid-root")) {
+				return makeGridRootElement(state);
+			}
 			return {
 				length: 0,
 				find() {
@@ -170,6 +173,85 @@ function loadPortfolioScript() {
 	};
 }
 
+function makeProjectsFieldWrapper(state, { gridElement } = {}) {
+	return {
+		length: 1,
+		empty() {
+			state.fieldEmptied = true;
+			return this;
+		},
+		find(selector) {
+			if (selector === ".portfolio-project-grid") {
+				const element = gridElement || state.gridElement;
+				if (!element) {
+					return { length: 0, get() { return null; } };
+				}
+				return {
+					length: 1,
+					get(index) {
+						return index === 0 ? element : null;
+					},
+				};
+			}
+			if (selector === '[data-action="remove-projects"]') {
+				return {
+					length: 1,
+					prop(_name, value) {
+						if (value !== undefined) {
+							state.removeDisabled = value;
+						}
+						return this;
+					},
+				};
+			}
+			return { length: 0, get() { return null; } };
+		},
+	};
+}
+
+function attachProjectsField(frm, state, options = {}) {
+	frm.fields_dict.custom_portfolio_projects = {
+		$wrapper: makeProjectsFieldWrapper(state, options),
+	};
+}
+
+function makeGridRootElement(state) {
+	const element = {
+		appendTo(wrapper) {
+			state.appendedToWrapper = wrapper;
+			state.appendedRoot = element;
+			return element;
+		},
+		find(selector) {
+			return {
+				length: 1,
+				off() {
+					return this;
+				},
+				on() {
+					return this;
+				},
+				prop() {
+					return this;
+				},
+				text() {
+					return this;
+				},
+				html() {
+					return this;
+				},
+				get(index) {
+					if (selector === ".portfolio-project-grid") {
+						return state.gridElement || { classList: makeClassList(), innerHTML: "" };
+					}
+					return null;
+				},
+			};
+		},
+	};
+	return element;
+}
+
 function makeFormDoc({ name = "PORT-001", isNew = false } = {}) {
 	const addedButtons = [];
 	return {
@@ -183,31 +265,6 @@ function makeFormDoc({ name = "PORT-001", isNew = false } = {}) {
 		},
 		getAddedButtons() {
 			return addedButtons;
-		},
-	};
-}
-
-function makePageWithFallback(state) {
-	return {
-		find(selector) {
-			if (selector === ".layout-main-section") {
-				return {
-					first() {
-						return {
-							prepend(node) {
-								state.prependedNode = node;
-							},
-						};
-					},
-				};
-			}
-			return {
-				length: 0,
-				first() {
-					return this;
-				},
-				prepend() {},
-			};
 		},
 	};
 }
@@ -326,30 +383,12 @@ test("dark theme detection supports data-theme-mode fallback", () => {
 });
 
 test("apply_theme toggles AG Grid dark class on the grid element", () => {
-	const { portfolio, context } = loadPortfolioScript();
+	const { portfolio, context, state } = loadPortfolioScript();
 	const classList = makeClassList();
 	const gridElement = { classList };
+	state.gridElement = gridElement;
 	const frm = makeFormDoc();
-	frm.page = {
-		wrapper: {
-			find(selector) {
-				if (selector === ".portfolio-project-grid") {
-					return {
-						length: 1,
-						get(index) {
-							return index === 0 ? gridElement : null;
-						},
-					};
-				}
-				return {
-					length: 0,
-					get() {
-						return null;
-					},
-				};
-			},
-		},
-	};
+	attachProjectsField(frm, state);
 	context.document.documentElement.getAttribute = (name) =>
 		name === "data-theme-mode" ? "dark" : null;
 
@@ -360,38 +399,36 @@ test("apply_theme toggles AG Grid dark class on the grid element", () => {
 	assert.equal(classList.contains("portfolio-project-grid-dark"), true);
 });
 
-test("grid shell mounts right after Description when field wrapper is available", () => {
-	const { portfolio } = loadPortfolioScript();
-	const state = {};
-	const root = { nodeName: "grid-root" };
+test("grid shell mounts into custom_portfolio_projects HTML field", () => {
+	const { portfolio, state } = loadPortfolioScript();
 	const frm = makeFormDoc();
-	const page = makePageWithFallback(state);
-	frm.fields_dict.description = {
-		$wrapper: {
-			length: 1,
-			after(node) {
-				state.afterNode = node;
-			},
-		},
-	};
+	attachProjectsField(frm, state);
 
-	portfolio.insert_shell_after_description(frm, root, page);
+	const shell = portfolio.ensure_shell(frm);
 
-	assert.equal(state.afterNode, root);
-	assert.equal(state.prependedNode, undefined);
+	assert.equal(state.fieldEmptied, true);
+	assert.ok(state.appendedToWrapper);
+	assert.ok(state.appendedRoot);
+	assert.ok(shell);
+	assert.ok(shell.grid);
 });
 
-test("grid shell falls back to layout main section when Description wrapper is unavailable", () => {
+test("ensure_shell returns null when HTML field is missing", () => {
 	const { portfolio } = loadPortfolioScript();
-	const state = {};
-	const root = { nodeName: "grid-root" };
 	const frm = makeFormDoc();
-	const page = makePageWithFallback(state);
 
-	portfolio.insert_shell_after_description(frm, root, page);
+	assert.equal(portfolio.ensure_shell(frm), null);
+});
 
-	assert.equal(state.prependedNode, root);
-	assert.equal(state.afterNode, undefined);
+test("get_projects_field_wrapper returns custom_portfolio_projects wrapper", () => {
+	const { portfolio, state } = loadPortfolioScript();
+	const frm = makeFormDoc();
+	attachProjectsField(frm, state);
+
+	assert.equal(
+		portfolio.get_projects_field_wrapper(frm),
+		frm.fields_dict.custom_portfolio_projects.$wrapper
+	);
 });
 
 test("saved Project Portfolio form adds roadmap button", () => {
@@ -433,27 +470,9 @@ test("render_grid uses legacy AG Grid theme mode for CSS class theming", () => {
 	const { portfolio, context, state } = loadPortfolioScript();
 	const classList = makeClassList();
 	const gridElement = { classList, innerHTML: "" };
+	state.gridElement = gridElement;
 	const frm = makeFormDoc();
-	frm.page = {
-		wrapper: {
-			find(selector) {
-				if (selector === ".portfolio-project-grid") {
-					return {
-						length: 1,
-						get(index) {
-							return index === 0 ? gridElement : null;
-						},
-					};
-				}
-				return {
-					length: 0,
-					get() {
-						return null;
-					},
-				};
-			},
-		},
-	};
+	attachProjectsField(frm, state);
 	context.document.documentElement.getAttribute = (name) =>
 		name === "data-theme" ? "dark" : null;
 
@@ -484,30 +503,12 @@ test("open_project_form ignores rows without project id", () => {
 });
 
 test("render_grid onRowDoubleClicked opens Project form", () => {
-	const { portfolio, context, state } = loadPortfolioScript();
+	const { portfolio, state } = loadPortfolioScript();
 	const classList = makeClassList();
 	const gridElement = { classList, innerHTML: "" };
+	state.gridElement = gridElement;
 	const frm = makeFormDoc();
-	frm.page = {
-		wrapper: {
-			find(selector) {
-				if (selector === ".portfolio-project-grid") {
-					return {
-						length: 1,
-						get(index) {
-							return index === 0 ? gridElement : null;
-						},
-					};
-				}
-				return {
-					length: 0,
-					get() {
-						return null;
-					},
-				};
-			},
-		},
-	};
+	attachProjectsField(frm, state);
 
 	portfolio.render_grid(frm, gridElement, [{ project: "PROJ-001", project_name: "Alpha" }]);
 
