@@ -8,7 +8,7 @@ from typing import Any
 import frappe
 from frappe.query_builder import DocType
 from frappe.query_builder.functions import IfNull, Sum
-from frappe.utils import flt, get_last_day, getdate, today
+from frappe.utils import add_months, flt, get_last_day, getdate, today
 
 from dinext_project_stage_gate.stage_gate import query
 
@@ -43,7 +43,6 @@ class ProjectLaborSummary:
 	actual_total: float = 0.0
 	forecast_total: float = 0.0
 	plan_today: float = 0.0
-	actual_today: float = 0.0
 
 
 @dataclass
@@ -74,7 +73,7 @@ def get_portfolio_project_rows(portfolio: str | Any) -> list[dict[str, Any]]:
 
 	_attach_project_managers(project_rows)
 	milestones_by_project = _get_nearest_milestones(project_names)
-	labor_by_project = _get_labor_summaries(project_names)
+	labor_by_project = _get_labor_summaries(project_rows)
 	pl_by_project = _get_pl_summaries(project_rows)
 
 	out = []
@@ -113,7 +112,6 @@ def get_portfolio_project_rows(portfolio: str | Any) -> list[dict[str, Any]]:
 				"labor_actual_total": labor.actual_total,
 				"labor_forecast_total": labor.forecast_total,
 				"labor_plan_today": labor.plan_today,
-				"labor_actual_today": labor.actual_today,
 				"pl_plan_total": pl_summary.plan_total,
 				"pl_actual_total": pl_summary.actual_total,
 				"pl_forecast_total": pl_summary.forecast_total,
@@ -297,22 +295,32 @@ def _planned_progress_percent(start_value: Any, end_value: Any) -> float:
 	return round(min(completed_days / total_days * 100.0, 100.0), 1)
 
 
-def _get_labor_summaries(project_names: list[str]) -> dict[str, ProjectLaborSummary]:
+def _load_project_task_rows(project_names: list[str]) -> list[dict[str, Any]]:
 	if not project_names:
-		return {}
+		return []
+	return query._get_permission_aware_list(  # noqa: SLF001
+		"Task",
+		filters={"project": ["in", project_names]},
+		fields=["name", "project", "parent_task"],
+		order_by="project asc, lft asc, creation asc, name asc",
+		limit_page_length=0,
+	)
+
+
+def _load_labor_plan_rows(project_names: list[str]) -> list[dict[str, Any]]:
+	if not project_names:
+		return []
 
 	pwe = DocType("Project Work Efforts")
 	amount = DocType("Project Work Efforts Amount")
-	actual_doc = DocType("User Timesheet Position")
-	actual_detail = DocType("User Timesheet Position Details")
-	current_day = getdate(today())
-
-	plan_rows = (
+	return (
 		frappe.qb.from_(pwe)
 		.inner_join(amount)
 		.on(amount.parent == pwe.name)
 		.select(
 			pwe.pwe_project.as_("project"),
+			pwe.pwe_task.as_("task"),
+			pwe.pwe_project_role.as_("project_role"),
 			amount.pwea_year.as_("year"),
 			amount.pwea_month.as_("month"),
 			Sum(IfNull(amount.pwea_plan, 0)).as_("plan_hours"),
@@ -320,11 +328,21 @@ def _get_labor_summaries(project_names: list[str]) -> dict[str, ProjectLaborSumm
 		)
 		.where(pwe.pwe_project.isin(project_names))
 		.groupby(pwe.pwe_project)
+		.groupby(pwe.pwe_task)
+		.groupby(pwe.pwe_project_role)
 		.groupby(amount.pwea_year)
 		.groupby(amount.pwea_month)
 		.run(as_dict=True)
 	)
-	actual_rows = (
+
+
+def _load_labor_actual_rows(project_names: list[str], current_day: date) -> list[dict[str, Any]]:
+	if not project_names:
+		return []
+
+	actual_doc = DocType("User Timesheet Position")
+	actual_detail = DocType("User Timesheet Position Details")
+	return (
 		frappe.qb.from_(actual_doc)
 		.inner_join(actual_detail)
 		.on(actual_detail.parent == actual_doc.name)
@@ -340,33 +358,208 @@ def _get_labor_summaries(project_names: list[str]) -> dict[str, ProjectLaborSumm
 		.run(as_dict=True)
 	)
 
-	out = {project_name: ProjectLaborSummary() for project_name in project_names}
-	for row in plan_rows:
-		project_name = row.get("project")
-		if not project_name:
+
+def _labor_role_key(row: dict[str, Any]) -> str:
+	return str(row.get("project_role") or "").strip()
+
+
+def _get_labor_display_periods(project_row: dict[str, Any], current_day: date) -> list[tuple[int, int]]:
+	month_start = current_day.replace(day=1)
+	start_date = (
+		getdate(project_row.get("expected_start_date"))
+		if project_row.get("expected_start_date")
+		else month_start
+	)
+	end_date = (
+		getdate(project_row.get("expected_end_date"))
+		if project_row.get("expected_end_date")
+		else add_months(start_date, 12)
+	)
+	if end_date < start_date:
+		start_date, end_date = end_date, start_date
+
+	periods: list[tuple[int, int]] = []
+	current = getdate(start_date)
+	end = getdate(end_date)
+	while current <= end:
+		periods.append((current.year, current.month))
+		current = add_months(current, 1)
+	return periods
+
+
+def _build_task_children_map(
+	task_rows: list[dict[str, Any]], project_name: str
+) -> tuple[set[str], dict[str, list[str]], list[str]]:
+	task_names = {
+		row.get("name")
+		for row in task_rows
+		if row.get("project") == project_name and row.get("name")
+	}
+	children_by_task: dict[str, list[str]] = {}
+	root_tasks: list[str] = []
+	for row in task_rows:
+		if row.get("project") != project_name:
 			continue
-		summary = out.setdefault(project_name, ProjectLaborSummary())
-		plan_hours = flt(row.get("plan_hours"))
-		forecast_hours = flt(row.get("forecast_hours"))
-		summary.plan_total += plan_hours
-		summary.forecast_total += forecast_hours
-		summary.plan_today += plan_hours * _month_progress_ratio(
-			int(row.get("year") or 0), int(row.get("month") or 0), current_day
+		task_name = row.get("name")
+		if not task_name:
+			continue
+		parent_task = row.get("parent_task")
+		if parent_task in task_names:
+			children_by_task.setdefault(parent_task, []).append(task_name)
+		else:
+			root_tasks.append(task_name)
+	return task_names, children_by_task, root_tasks
+
+
+def _build_labor_index(
+	plan_rows: list[dict[str, Any]],
+	project_name: str,
+	periods: set[tuple[int, int]],
+) -> dict[str, dict[str, dict[tuple[int, int], dict[str, float]]]]:
+	index: dict[str, dict[str, dict[tuple[int, int], dict[str, float]]]] = {}
+	for row in plan_rows:
+		if row.get("project") != project_name:
+			continue
+		task_name = row.get("task")
+		if not task_name:
+			continue
+		period_key = (int(row.get("year") or 0), int(row.get("month") or 0))
+		if period_key not in periods:
+			continue
+		role_key = _labor_role_key(row)
+		cell = index.setdefault(task_name, {}).setdefault(role_key, {}).setdefault(
+			period_key, {"plan": 0.0, "forecast": 0.0}
 		)
+		cell["plan"] += flt(row.get("plan_hours"))
+		cell["forecast"] += flt(row.get("forecast_hours"))
+	return index
+
+
+def _collect_labor_roles(labor_index: dict[str, dict[str, dict[tuple[int, int], dict[str, float]]]]) -> set[str]:
+	roles: set[str] = set()
+	for task_roles in labor_index.values():
+		roles.update(task_roles.keys())
+	return roles
+
+
+def _task_role_period_totals(
+	labor_index: dict[str, dict[str, dict[tuple[int, int], dict[str, float]]]],
+	task_name: str,
+	role: str,
+	period_keys: list[tuple[int, int]],
+) -> tuple[float, float]:
+	task_roles = labor_index.get(task_name, {})
+	role_cells = task_roles.get(role, {})
+	plan_total = 0.0
+	forecast_total = 0.0
+	for period_key in period_keys:
+		cell = role_cells.get(period_key, {})
+		plan_total += flt(cell.get("plan", 0))
+		forecast_total += flt(cell.get("forecast", 0))
+	return plan_total, forecast_total
+
+
+def _calculate_role_labor(
+	role: str,
+	task_name: str,
+	children_by_task: dict[str, list[str]],
+	labor_index: dict[str, dict[str, dict[tuple[int, int], dict[str, float]]]],
+	period_keys: list[tuple[int, int]],
+	visited: set[str] | None = None,
+) -> tuple[float, float]:
+	visited = visited or set()
+	if task_name in visited:
+		return 0.0, 0.0
+	visited.add(task_name)
+
+	task_plan, task_forecast = _task_role_period_totals(labor_index, task_name, role, period_keys)
+	if task_plan > 0 or task_forecast > 0:
+		return task_plan, task_forecast
+
+	child_plan = 0.0
+	child_forecast = 0.0
+	for child_name in children_by_task.get(task_name, []):
+		plan_hours, forecast_hours = _calculate_role_labor(
+			role,
+			child_name,
+			children_by_task,
+			labor_index,
+			period_keys,
+			visited,
+		)
+		child_plan += plan_hours
+		child_forecast += forecast_hours
+	return child_plan, child_forecast
+
+
+def _summarize_project_labor(
+	project_row: dict[str, Any],
+	task_rows: list[dict[str, Any]],
+	plan_rows: list[dict[str, Any]],
+	current_day: date,
+) -> ProjectLaborSummary:
+	project_name = project_row.get("name")
+	if not project_name:
+		return ProjectLaborSummary()
+
+	periods = _get_labor_display_periods(project_row, current_day)
+	period_set = set(periods)
+	_, children_by_task, root_tasks = _build_task_children_map(task_rows, project_name)
+	labor_index = _build_labor_index(plan_rows, project_name, period_set)
+
+	summary = ProjectLaborSummary()
+	for role in _collect_labor_roles(labor_index):
+		for root_task in root_tasks:
+			plan_total, forecast_total = _calculate_role_labor(
+				role,
+				root_task,
+				children_by_task,
+				labor_index,
+				periods,
+			)
+			summary.plan_total += plan_total
+			summary.forecast_total += forecast_total
+
+			for year, month in periods:
+				plan_month, _forecast_month = _calculate_role_labor(
+					role,
+					root_task,
+					children_by_task,
+					labor_index,
+					[(year, month)],
+				)
+				summary.plan_today += plan_month * _month_progress_ratio(year, month, current_day)
+
+	return summary
+
+
+def _get_labor_summaries(project_rows: list[dict[str, Any]]) -> dict[str, ProjectLaborSummary]:
+	if not project_rows:
+		return {}
+
+	current_day = getdate(today())
+	project_names = [row["name"] for row in project_rows if row.get("name")]
+	task_rows = _load_project_task_rows(project_names)
+	plan_rows = _load_labor_plan_rows(project_names)
+	actual_rows = _load_labor_actual_rows(project_names, current_day)
+
+	out = {
+		project_row["name"]: _summarize_project_labor(project_row, task_rows, plan_rows, current_day)
+		for project_row in project_rows
+		if project_row.get("name")
+	}
 	for row in actual_rows:
 		project_name = row.get("project")
 		if not project_name:
 			continue
 		summary = out.setdefault(project_name, ProjectLaborSummary())
 		summary.actual_total = flt(row.get("actual_hours"))
-		summary.actual_today = summary.actual_total
 
 	for summary in out.values():
 		summary.plan_total = round(summary.plan_total, 1)
 		summary.actual_total = round(summary.actual_total, 1)
 		summary.forecast_total = round(summary.forecast_total, 1)
 		summary.plan_today = round(summary.plan_today, 1)
-		summary.actual_today = round(summary.actual_today, 1)
 	return out
 
 
