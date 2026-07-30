@@ -1,13 +1,17 @@
 # Pilot: Gitflow MR guard using dinext_control_center policy/scripts.
-# Root of trust remains the Gitaly pre-receive hook; this job is audit/UX.
-# Control center commit pin (update after CC release): 25a950698a20c71b26bda3c16b83e46e44b6da06
+# GitLab protected branches and the required MR pipeline enforce the policy.
+# Immutable control-center commit used by this pilot.
 
 stages:
   - test
 
+variables:
+  DINEXT_CONTROL_CENTER_SHA: "6661928665c834af01e72aa4815ee5594520c343"
+
 gitflow:mr-guard:
   stage: test
   image: alpine:3.20
+  timeout: 10m
   tags:
     - dinext
     - validation
@@ -20,12 +24,18 @@ gitflow:mr-guard:
       set -euo pipefail
       rm -rf /tmp/dinext_cc
       git clone --depth 1 \
-        "/erpnext/dinext/dinext_control_center.git" /tmp/dinext_cc
-      git -C /tmp/dinext_cc checkout 25a950698a20c71b26bda3c16b83e46e44b6da06 || git -C /tmp/dinext_cc checkout main
+        "https://gitlab-ci-token:${CI_JOB_TOKEN}@${CI_SERVER_HOST}/erpnext/dinext/dinext_control_center.git" \
+        /tmp/dinext_cc
+      test "$(git -C /tmp/dinext_cc rev-parse HEAD)" = "${DINEXT_CONTROL_CENTER_SHA}"
       mkdir -p "$CI_PROJECT_DIR/scripts" "$CI_PROJECT_DIR/policy"
       cp /tmp/dinext_cc/scripts/validate-mr-gitflow.sh "$CI_PROJECT_DIR/scripts/"
       cp /tmp/dinext_cc/policy/gitflow-allowlist.yaml "$CI_PROJECT_DIR/policy/"
       cp /tmp/dinext_cc/policy/legacy-denylist.yaml "$CI_PROJECT_DIR/policy/"
       chmod +x "$CI_PROJECT_DIR/scripts/validate-mr-gitflow.sh"
   script:
-    - bash scripts/validate-mr-gitflow.sh
+    - bash scripts/validate-mr-gitflow.sh 2>&1 | tee gitflow-mr-guard.log
+  artifacts:
+    when: always
+    expire_in: 30 days
+    paths:
+      - gitflow-mr-guard.log
