@@ -699,6 +699,20 @@ dinext_project_stage_gate.roadmap.ROADMAP_CHECKPOINT_MIN_STAGE_HEIGHT_RATIO = 0.
 dinext_project_stage_gate.roadmap.ROADMAP_CHECKPOINT_MAX_STAGE_HEIGHT_RATIO = 2 / 3;
 dinext_project_stage_gate.roadmap.ROADMAP_ROW_USABLE_HEIGHT_RATIO = 0.8;
 dinext_project_stage_gate.roadmap.ROADMAP_SLOT_FILL_RATIO = 0.625;
+dinext_project_stage_gate.roadmap.todayMarkerPalette = {
+	light: {
+		cssVar: "--text-muted",
+		stroke: "#9ca3af",
+		lineWidth: 1,
+		lineDash: [6, 4],
+	},
+	dark: {
+		cssVar: "--text-muted",
+		stroke: "#8d99a8",
+		lineWidth: 1,
+		lineDash: [6, 4],
+	},
+};
 
 dinext_project_stage_gate.roadmap.taskTypePalette = {
 	light: ["#7fa6cf", "#b197d6", "#6faea5", "#d6a06c", "#c88f79", "#c988ac", "#8f96d6"],
@@ -1017,10 +1031,25 @@ dinext_project_stage_gate.roadmap.isDimmedStageStatus = function (status) {
 	return status === "Skipped" || status === "Canceled";
 };
 
+dinext_project_stage_gate.roadmap.isOverdueEntity = function (entity) {
+	if (!entity) {
+		return false;
+	}
+	return Boolean(Number(entity.is_overdue ?? entity.isOverdue ?? 0));
+};
+
+dinext_project_stage_gate.roadmap.getOverdueOutlineColors = function () {
+	const isDark = dinext_project_stage_gate.roadmap.getEChartsThemeName() === "dark";
+	return {
+		stroke: isDark ? "#ef4444" : "#dc2626",
+		lineWidth: 1.5,
+	};
+};
+
 dinext_project_stage_gate.roadmap.getStageItemStyle = function (stage) {
 	const fallback = dinext_project_stage_gate.roadmap.getStageColors(stage.status);
 	const isDimmed = dinext_project_stage_gate.roadmap.isDimmedStageStatus(stage.status);
-	return {
+	const style = {
 		fill: fallback.fill,
 		stroke: fallback.stroke,
 		lineWidth: 1,
@@ -1029,6 +1058,12 @@ dinext_project_stage_gate.roadmap.getStageItemStyle = function (stage) {
 			: dinext_project_stage_gate.roadmap.getContrastTextColor(fallback.fill),
 		textOpacity: isDimmed ? 0.6 : 1,
 	};
+	if (dinext_project_stage_gate.roadmap.isOverdueEntity(stage)) {
+		const overdueOutline = dinext_project_stage_gate.roadmap.getOverdueOutlineColors();
+		style.stroke = overdueOutline.stroke;
+		style.lineWidth = overdueOutline.lineWidth;
+	}
+	return style;
 };
 
 dinext_project_stage_gate.roadmap.getCheckpointColor = function (status) {
@@ -1036,10 +1071,10 @@ dinext_project_stage_gate.roadmap.getCheckpointColor = function (status) {
 	return palette.checkpoint[status] || palette.fallbackCheckpoint;
 };
 
-dinext_project_stage_gate.roadmap.getCheckpointItemStyle = function (status) {
+dinext_project_stage_gate.roadmap.getCheckpointItemStyle = function (status, context = {}) {
 	const fill = dinext_project_stage_gate.roadmap.getCheckpointColor(status);
 	const isDark = dinext_project_stage_gate.roadmap.getEChartsThemeName() === "dark";
-	return {
+	const style = {
 		color: fill,
 		borderColor: dinext_project_stage_gate.roadmap.getThemeVariableColor(
 			"--card-bg",
@@ -1049,6 +1084,12 @@ dinext_project_stage_gate.roadmap.getCheckpointItemStyle = function (status) {
 		shadowBlur: 8,
 		shadowColor: dinext_project_stage_gate.roadmap.hexToRgba(fill, isDark ? 0.45 : 0.28),
 	};
+	if (dinext_project_stage_gate.roadmap.isOverdueEntity(context)) {
+		const overdueOutline = dinext_project_stage_gate.roadmap.getOverdueOutlineColors();
+		style.borderColor = overdueOutline.stroke;
+		style.borderWidth = overdueOutline.lineWidth;
+	}
+	return style;
 };
 
 dinext_project_stage_gate.roadmap.getTaskTypeColorIndex = function (taskType) {
@@ -1429,6 +1470,80 @@ dinext_project_stage_gate.roadmap.buildProjectSeparatorSeries = function ({
 			y: 0,
 		},
 		data: projectSeparators,
+	};
+};
+
+dinext_project_stage_gate.roadmap.getTodayMarkerLineStyle = function () {
+	const isDark = dinext_project_stage_gate.roadmap.getEChartsThemeName() === "dark";
+	const palette = isDark
+		? dinext_project_stage_gate.roadmap.todayMarkerPalette.dark
+		: dinext_project_stage_gate.roadmap.todayMarkerPalette.light;
+	return {
+		stroke: dinext_project_stage_gate.roadmap.getThemeVariableColor(
+			palette.cssVar,
+			palette.stroke
+		),
+		lineWidth: palette.lineWidth,
+		lineDash: palette.lineDash,
+	};
+};
+
+dinext_project_stage_gate.roadmap.getTodayMarkerLineColor = function () {
+	return dinext_project_stage_gate.roadmap.getTodayMarkerLineStyle().stroke;
+};
+
+/** Normalize a report date to the chart's YYYY-MM-DD time-axis value. */
+dinext_project_stage_gate.roadmap.getTodayChartDate = function (today) {
+	const fallback =
+		today || frappe?.datetime?.get_today?.() || new Date().toISOString().slice(0, 10);
+	const time = dinext_project_stage_gate.roadmap._parseTimeMs(fallback);
+	if (!Number.isFinite(time)) {
+		return null;
+	}
+	return dinext_project_stage_gate.roadmap._formatDateForChart(time);
+};
+
+dinext_project_stage_gate.roadmap.buildTodayMarkerSeries = function ({
+	today,
+	categoryCount = 0,
+} = {}) {
+	const chartToday = dinext_project_stage_gate.roadmap.getTodayChartDate(today);
+	if (!chartToday || !categoryCount) {
+		return null;
+	}
+
+	return {
+		name: "__today-marker__",
+		type: "custom",
+		silent: true,
+		tooltip: { show: false },
+		legendHoverLink: false,
+		z: 0,
+		animation: false,
+		renderItem(params, api) {
+			const { stroke, lineWidth, lineDash } =
+				dinext_project_stage_gate.roadmap.getTodayMarkerLineStyle();
+			const topY = -0.5;
+			const bottomY = Math.max(0, categoryCount - 1) + 0.5;
+			const top = api.coord([chartToday, topY]);
+			const bottom = api.coord([chartToday, bottomY]);
+			return {
+				type: "line",
+				shape: {
+					x1: top[0],
+					y1: top[1],
+					x2: bottom[0],
+					y2: bottom[1],
+				},
+				style: {
+					stroke,
+					lineWidth,
+					lineDash,
+				},
+				silent: true,
+			};
+		},
+		data: [{ value: [chartToday] }],
 	};
 };
 
@@ -2483,6 +2598,7 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 	onSortProjects,
 	monthOnlyXAxisLabels = false,
 	rowSpanUnits = 1,
+	today,
 } = {}) {
 	const gridLineColor = dinext_project_stage_gate.roadmap.getThemeVariableColor(
 		"--border-color",
@@ -2558,6 +2674,10 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 		gates,
 		taskBars: safeTaskBars,
 		milestones,
+	});
+	const todayMarkerSeries = dinext_project_stage_gate.roadmap.buildTodayMarkerSeries({
+		today,
+		categoryCount: categoryEntries.length,
 	});
 
 	return {
@@ -2885,6 +3005,7 @@ dinext_project_stage_gate.roadmap.buildChartOptions = function ({
 				startValue: fullHorizontalViewport.startValue,
 				endValue: fullHorizontalViewport.endValue,
 			}),
+			...(todayMarkerSeries ? [todayMarkerSeries] : []),
 			...dinext_project_stage_gate.roadmap.buildLegendProxySeries({
 				taskBars: safeTaskBars,
 				milestones,
@@ -3401,7 +3522,7 @@ dinext_project_stage_gate.roadmap.prepareSeriesData = function (payload, options
 				dinext_project_stage_gate.roadmap.translateStatus(gate.status),
 			],
 			itemStyle: {
-				...dinext_project_stage_gate.roadmap.getCheckpointItemStyle(gate.status),
+				...dinext_project_stage_gate.roadmap.getCheckpointItemStyle(gate.status, gate),
 			},
 		}));
 
@@ -4037,6 +4158,7 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 	});
 	const monthOnlyXAxisLabels =
 		dinext_project_stage_gate.roadmap.getMonthOnlyXAxisLabelsForDataZoom(dataZoom);
+	const today = frappe?.datetime?.get_today?.();
 	const getCurrentViewportState = function () {
 		return (
 			dinext_project_stage_gate.roadmap.captureViewportStateFromChart(chart) ||
@@ -4055,6 +4177,7 @@ dinext_project_stage_gate.roadmap.render = async function (report) {
 			dataZoom,
 			monthOnlyXAxisLabels,
 			rowSpanUnits,
+			today,
 			onShowFullWidth() {
 				const fitWidthDataZoom = dinext_project_stage_gate.roadmap.buildAxisFitDataZoomConfig({
 					axis: "horizontal",

@@ -407,6 +407,7 @@ def get_roadmap_dataset(filters=None):
 				"actual_end_date",
 				"gate_due_date",
 				"gate_result",
+				"is_overdue",
 			],
 			order_by="project asc, sequence asc",
 		)
@@ -445,6 +446,7 @@ def get_roadmap_dataset(filters=None):
 				"approval_date",
 				"gate_due_date",
 				"checkpoint_level",
+				"is_overdue",
 			],
 			order_by="project asc, creation asc",
 		)
