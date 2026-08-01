@@ -8,6 +8,7 @@ from frappe.utils import cint, getdate, today
 from dinext_project_stage_gate.stage_gate.checkpoint_provision import (
 	provision_checkpoint_for_stage_instance,
 )
+from dinext_project_stage_gate.stage_gate.overdue_sync import apply_stage_instance_overdue
 from dinext_project_stage_gate.stage_gate.working_days import (
 	first_working_day_on_or_after,
 	next_working_day_after,
@@ -59,6 +60,7 @@ class ProjectStageInstance(Document):
 
 		row = self._governance_stage_row_for_instance()
 		self.is_skippable = cint(row.is_skippable) if row else 0
+		apply_stage_instance_overdue(self)
 
 	def after_insert(self):
 		provision_checkpoint_for_stage_instance(self)

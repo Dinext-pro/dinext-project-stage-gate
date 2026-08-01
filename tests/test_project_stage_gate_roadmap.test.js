@@ -2550,6 +2550,109 @@ test("project separator series uses chart time range instead of pixel width for 
 	assert.equal(graphic.style.stroke, "#334155");
 });
 
+test("buildChartOptions adds today marker series when today is provided", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const options = roadmap.buildChartOptions({
+		categories: ["Project A"],
+		bars: [{ value: [0, "2026-02-01", "2026-02-28"] }],
+		gates: [],
+		milestones: [],
+		taskBars: [],
+		dataZoom: [],
+		today: "2026-06-02",
+	});
+
+	const todaySeries = options.series.find((series) => series.name === "__today-marker__");
+	assert.ok(todaySeries);
+	assert.equal(todaySeries.type, "custom");
+	assert.equal(todaySeries.silent, true);
+	assert.equal(todaySeries.z, 0);
+	assert.equal(todaySeries.data.length, 1);
+	assert.equal(todaySeries.data[0].value[0], "2026-06-02");
+});
+
+test("buildChartOptions omits today marker when today is invalid", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const options = roadmap.buildChartOptions({
+		categories: ["Project A"],
+		bars: [],
+		gates: [],
+		milestones: [],
+		taskBars: [],
+		dataZoom: [],
+		today: "not-a-date",
+	});
+
+	assert.equal(
+		options.series.find((series) => series.name === "__today-marker__"),
+		undefined
+	);
+});
+
+test("todayMarkerPalette uses thin muted gray strokes", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	assert.equal(roadmap.todayMarkerPalette.light.stroke, "#9ca3af");
+	assert.equal(roadmap.todayMarkerPalette.dark.stroke, "#8d99a8");
+	assert.equal(roadmap.todayMarkerPalette.light.lineWidth, 1);
+	assert.equal(roadmap.todayMarkerPalette.dark.lineWidth, 1);
+});
+
+test("getTodayMarkerLineStyle reads text-muted from Desk theme", () => {
+	const { roadmap, context } = loadRoadmapScript();
+
+	const lightStyle = roadmap.getTodayMarkerLineStyle();
+	assert.equal(lightStyle.stroke, "#7c7c7c");
+	assert.equal(lightStyle.lineWidth, 1);
+	assert.equal(lightStyle.lineDash[0], 6);
+	assert.equal(lightStyle.lineDash[1], 4);
+
+	context.document.documentElement.getAttribute = function (name) {
+		return name === "data-theme" ? "dark" : null;
+	};
+	const darkStyle = roadmap.getTodayMarkerLineStyle();
+	assert.equal(darkStyle.stroke, "#c7c7c7");
+	assert.equal(darkStyle.lineWidth, 1);
+	assert.equal(darkStyle.lineDash[0], 6);
+	assert.equal(darkStyle.lineDash[1], 4);
+});
+
+test("today marker series draws a vertical line at the chart date on the x-axis", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const series = roadmap.buildTodayMarkerSeries({
+		today: "2026-06-02",
+		categoryCount: 3,
+	});
+
+	const coordCalls = [];
+	const graphic = series.renderItem(
+		{},
+		{
+			coord(value) {
+				coordCalls.push(value);
+				if (value[1] === -0.5) {
+					return [120, 10];
+				}
+				return [120, 310];
+			},
+		}
+	);
+
+	assert.deepEqual(Array.from(coordCalls, (value) => Array.from(value)), [
+		["2026-06-02", -0.5],
+		["2026-06-02", 2.5],
+	]);
+	assert.equal(graphic.shape.x1, 120);
+	assert.equal(graphic.shape.y1, 10);
+	assert.equal(graphic.shape.x2, 120);
+	assert.equal(graphic.shape.y2, 310);
+	assert.equal(graphic.style.lineDash[0], 6);
+	assert.equal(graphic.style.lineDash[1], 4);
+});
+
 test("buildChartOptions configures standard ECharts legend entries for roadmap series", () => {
 	const { roadmap } = loadRoadmapScript();
 
@@ -3446,6 +3549,81 @@ test("prepareSeriesData adds outlined checkpoint styling for contrast", () => {
 	assert.equal(gates[0].itemStyle.borderWidth, 2);
 	assert.ok(gates[0].itemStyle.shadowBlur >= 6);
 	assert.ok(gates[0].itemStyle.borderColor);
+});
+
+test("getStageItemStyle and getCheckpointItemStyle apply red outline when is_overdue is set", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const activeStage = roadmap.getStageItemStyle({ status: "Active" });
+	const overdueStage = roadmap.getStageItemStyle({ status: "Active", is_overdue: 1 });
+	assert.equal(activeStage.lineWidth, 1);
+	assert.notEqual(activeStage.stroke, overdueStage.stroke);
+	assert.equal(overdueStage.lineWidth, 3);
+	assert.equal(overdueStage.stroke, "#dc2626");
+
+	const approvedGate = roadmap.getCheckpointItemStyle("Approved");
+	const overdueGate = roadmap.getCheckpointItemStyle("Approved", { is_overdue: 1 });
+	assert.equal(approvedGate.borderWidth, 2);
+	assert.notEqual(approvedGate.borderColor, overdueGate.borderColor);
+	assert.equal(overdueGate.borderWidth, 3);
+	assert.equal(overdueGate.borderColor, "#dc2626");
+});
+
+test("prepareSeriesData applies overdue outline only to flagged stage bars and gate checkpoints", () => {
+	const { roadmap } = loadRoadmapScript();
+
+	const { bars, gates } = roadmap.prepareSeriesData({
+		projects: [{ name: "PRJ-1", project_name: "Alpha" }],
+		stageBars: [
+			{
+				name: "PSI-1",
+				project: "PRJ-1",
+				stage: "Discovery",
+				status: "Active",
+				sequence: 1,
+				planned_start_date: "2026-01-01",
+				planned_end_date: "2026-01-31",
+				is_overdue: 0,
+			},
+			{
+				name: "PSI-2",
+				project: "PRJ-1",
+				stage: "Build",
+				status: "Active",
+				sequence: 2,
+				planned_start_date: "2026-02-01",
+				planned_end_date: "2026-02-28",
+				is_overdue: 1,
+			},
+		],
+		gates: [
+			{
+				name: "PGC-1",
+				project: "PRJ-1",
+				approval_date: "2026-02-15",
+				status: "Draft",
+				checkpoint_level: "Gate 1",
+				is_overdue: 0,
+			},
+			{
+				name: "PGC-2",
+				project: "PRJ-1",
+				approval_date: "2026-03-15",
+				status: "Draft",
+				checkpoint_level: "Gate 2",
+				is_overdue: 1,
+			},
+		],
+	});
+
+	assert.equal(bars[0].itemStyle.borderWidth, 1);
+	assert.notEqual(bars[0].itemStyle.borderColor, "#dc2626");
+	assert.equal(bars[1].itemStyle.borderWidth, 3);
+	assert.equal(bars[1].itemStyle.borderColor, "#dc2626");
+	assert.equal(gates[0].itemStyle.borderWidth, 2);
+	assert.notEqual(gates[0].itemStyle.borderColor, "#dc2626");
+	assert.equal(gates[1].itemStyle.borderWidth, 3);
+	assert.equal(gates[1].itemStyle.borderColor, "#dc2626");
 });
 
 test("calculateChartHeight keeps at least 65vh and does not cap tall datasets", () => {
