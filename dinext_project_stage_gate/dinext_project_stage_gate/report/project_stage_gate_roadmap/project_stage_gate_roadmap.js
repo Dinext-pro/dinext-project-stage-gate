@@ -3513,7 +3513,7 @@ dinext_project_stage_gate.roadmap.prepareSeriesData = function (payload, options
 			);
 		})
 		.map((gate) => ({
-			name: gate.checkpoint_level || __("Gate"),
+			name: gate.checkpoint_level || dinext_project_stage_gate.roadmap.translateStageGateLabel("Gate"),
 			docType: "Project Gate Checkpoint",
 			docName: gate.name,
 			value: [
