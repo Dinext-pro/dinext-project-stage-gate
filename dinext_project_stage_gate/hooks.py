@@ -5,8 +5,8 @@ app_description = "Dinext Project Stage Gate"
 app_email = "info@dinext.ru"
 app_license = "mit"
 
-required_apps = ["erpnext", "dinext/dinext_projects"]
-
+required_apps = ["dinext_common", "dinext_projects"]
+'''
 fixtures = [
 	{
 		"doctype": "Role",
@@ -149,12 +149,10 @@ fixtures = [
 		],
 	},
 ]
-''''''
+'''
 
 # Apps
 # ------------------
-
-# required_apps = []
 
 # Each item in the list will be shown as an app in the apps page
 # add_to_apps_screen = [
@@ -191,6 +189,7 @@ fixtures = [
 # include js in doctype views
 doctype_js = {
 	"Project": "public/js/project_stage_gate_project.js",
+	"Project Portfolio": "public/js/project_portfolio_stage_gate.js",
 }
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
@@ -231,7 +230,8 @@ doctype_js = {
 # ------------
 
 # before_install = "dinext_project_stage_gate.install.before_install"
-# after_install = "dinext_project_stage_gate.install.after_install"
+after_install = "dinext_project_stage_gate.install.after_install"
+after_migrate = "dinext_project_stage_gate.install.after_migrate"
 
 # Uninstallation
 # ------------
