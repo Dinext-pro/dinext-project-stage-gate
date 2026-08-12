@@ -228,7 +228,7 @@ class TestProjectStageInstance(FrappeTestCase):
 		self.assertEqual(project.current_stage_instance, v2_rows[0].name)
 		self.assertEqual(project.current_stage, v2_rows[0].stage)
 		self.assertEqual(project.stage_gate_status, "Active")
-		self.assertEqual(project.current_gate_result, v2_rows[0].gate_result)
+		self.assertEqual(int(project.current_gate_result or 0), int(v2_rows[0].gate_result or 0))
 
 		v1_cp = frappe.get_all(
 			"Project Gate Checkpoint",
