@@ -281,6 +281,12 @@ class TestProjectStageInstance(FrappeTestCase):
 				"holidays": [{"holiday_date": "2026-01-05", "description": "Test holiday"}],
 			}
 		).insert(ignore_permissions=True)
+		# Weekend offs are not automatic — populate Saturday/Sunday into holidays
+		# so duration spans match inclusive working-day expectations below.
+		for weekly_off in ("Saturday", "Sunday"):
+			holiday_list.weekly_off = weekly_off
+			holiday_list.get_weekly_off_dates()
+		holiday_list.save(ignore_permissions=True)
 
 		governance_model = self._make_governance_model(
 			label="Dates", stage_durations=[3, 5]
