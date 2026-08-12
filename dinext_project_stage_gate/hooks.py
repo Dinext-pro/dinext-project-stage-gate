@@ -6,7 +6,7 @@ app_email = "info@dinext.ru"
 app_license = "mit"
 
 required_apps = ["dinext_common", "dinext_projects"]
-'''
+
 fixtures = [
 	{
 		"doctype": "Role",
@@ -149,7 +149,6 @@ fixtures = [
 		],
 	},
 ]
-'''
 
 # Apps
 # ------------------
