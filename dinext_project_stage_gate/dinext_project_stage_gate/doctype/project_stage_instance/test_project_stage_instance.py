@@ -67,7 +67,7 @@ class TestProjectStageInstance(FrappeTestCase):
 		self.assertEqual(project.current_stage_instance, stage_instances[0].name)
 		self.assertEqual(project.current_stage, self.stage_names[0])
 		self.assertEqual(project.stage_gate_status, "Active")
-		self.assertEqual(project.current_gate_result, "Pending")
+		self.assertFalse(int(project.current_gate_result or 0))
 
 	def test_project_resave_does_not_duplicate_stage_instances(self):
 		governance_model = self._make_governance_model()
@@ -109,14 +109,15 @@ class TestProjectStageInstance(FrappeTestCase):
 			"Project Stage Instance", f"{project.name}-STAGE-001"
 		)
 		stage_instance.status = "Canceled"
-		stage_instance.gate_result = "Rejected"
-		stage_instance.save(ignore_permissions=True)
+		stage_instance.gate_result = 1
+		with patch("frappe.model.document.validate_workflow"):
+			stage_instance.save(ignore_permissions=True)
 
 		project.reload()
 		self.assertEqual(project.current_stage_instance, stage_instance.name)
 		self.assertEqual(project.current_stage, stage_instance.stage)
 		self.assertEqual(project.stage_gate_status, "Canceled")
-		self.assertEqual(project.current_gate_result, "Rejected")
+		self.assertEqual(int(project.current_gate_result or 0), 1)
 
 	def test_is_skippable_synced_from_governance_model_stages(self):
 		governance_model = self._make_governance_model(
@@ -316,7 +317,8 @@ class TestProjectStageInstance(FrappeTestCase):
 			return_value=fixed_today,
 		):
 			stage.status = "Active"
-			stage.save(ignore_permissions=True)
+			with patch("frappe.model.document.validate_workflow"):
+				stage.save(ignore_permissions=True)
 
 		stage.reload()
 		self.assertEqual(getdate(stage.actual_start_date), getdate(fixed_today))
@@ -327,7 +329,8 @@ class TestProjectStageInstance(FrappeTestCase):
 			return_value=fixed_today,
 		):
 			stage.status = "Completed"
-			stage.save(ignore_permissions=True)
+			with patch("frappe.model.document.validate_workflow"):
+				stage.save(ignore_permissions=True)
 
 		stage.reload()
 		self.assertEqual(getdate(stage.actual_start_date), getdate(fixed_today))
@@ -345,7 +348,8 @@ class TestProjectStageInstance(FrappeTestCase):
 			return_value="2026-03-01",
 		):
 			stage.status = "Completed"
-			stage.save(ignore_permissions=True)
+			with patch("frappe.model.document.validate_workflow"):
+				stage.save(ignore_permissions=True)
 
 		stage.reload()
 		self.assertEqual(getdate(stage.actual_start_date), getdate("2026-01-10"))

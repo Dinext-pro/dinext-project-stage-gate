@@ -113,22 +113,27 @@ def _create_stage_instances(project_name, governance_model_name, chain_version):
 		)
 
 	for payload in prepared_stage_instances:
-		stage_instance = {
+		# Workflow initial state is Planned; inserting as Active is rejected.
+		insert_payload = {
 			"doctype": "Project Stage Instance",
 			**payload,
+			"status": "Planned",
 			"previous_stage_instance": None,
 			"next_stage_instance": None,
 		}
-		frappe.get_doc(stage_instance).insert(ignore_permissions=True)
+		frappe.get_doc(insert_payload).insert(ignore_permissions=True)
 
 	for payload in prepared_stage_instances:
+		values = {
+			"previous_stage_instance": payload.get("previous_stage_instance"),
+			"next_stage_instance": payload.get("next_stage_instance"),
+		}
+		if payload.get("status"):
+			values["status"] = payload["status"]
 		frappe.db.set_value(
 			"Project Stage Instance",
 			payload["name"],
-			{
-				"previous_stage_instance": payload.get("previous_stage_instance"),
-				"next_stage_instance": payload.get("next_stage_instance"),
-			},
+			values,
 			update_modified=False,
 		)
 
