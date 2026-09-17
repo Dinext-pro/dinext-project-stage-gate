@@ -136,6 +136,8 @@ function __(value) {
 			"In Review": "На рассмотрении",
 			Pending: "Ожидает решения",
 			"Waiting Gate": "Ожидание гейта",
+			Идея: "Idea",
+			"Портфельный комитет": "Portfolio Committee",
 		}[value] || value
 	);
 }
@@ -254,6 +256,40 @@ test("render_chain translates displayed statuses but preserves raw status class 
 	assert.match(state.lastHtml, /Stage Exit: На рассмотрении/);
 	assert.match(state.lastHtml, /stage-gate-checkpoint/);
 	assert.match(state.lastHtml, /data-checkpoint="PGC-001"/);
+});
+
+test("render_chain translates displayed stage names but keeps instance name for navigation", () => {
+	const { project, state } = loadWidgetScript();
+	const widget = {
+		length: 1,
+		html(value) {
+			state.lastHtml = value;
+		},
+		find() {
+			return { on() {} };
+		},
+	};
+
+	project.render_chain(widget, [
+		{
+			name: "PSI-IDEA",
+			stage: "Идея",
+			stage_name: "Идея",
+			status: "Active",
+			checkpoints: [
+				{
+					name: "PGC-IDEA",
+					checkpoint_level: "Портфельный комитет",
+					status: "Draft",
+				},
+			],
+		},
+	]);
+
+	assert.match(state.lastHtml, /data-stage-instance="PSI-IDEA"/);
+	assert.match(state.lastHtml, /data-checkpoint="PGC-IDEA"/);
+	assert.match(state.lastHtml, />Idea</);
+	assert.match(state.lastHtml, /Portfolio Committee \(Draft\)/);
 });
 
 test("render_chain inserts checkpoint diamonds including after last stage", () => {
