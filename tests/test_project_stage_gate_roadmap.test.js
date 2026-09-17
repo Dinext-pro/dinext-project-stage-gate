@@ -1236,6 +1236,44 @@ test("buildStageBarGraphic includes text label and uses explicit stage colors", 
 	assert.equal(graphic.children[0].transition, "all");
 });
 
+test("prepareSeriesData translates stage and checkpoint display names without changing docName", () => {
+	const { roadmap } = loadRoadmapScript({
+		Идея: "Idea",
+		"Портфельный комитет": "Portfolio Committee",
+	});
+
+	const { bars, gates } = roadmap.prepareSeriesData({
+		projects: [{ name: "PRJ-1", project_name: "Alpha" }],
+		stageBars: [
+			{
+				name: "PSI-10",
+				project: "PRJ-1",
+				stage: "Идея",
+				stage_name: "Идея",
+				status: "Active",
+				sequence: 1,
+				planned_start_date: "2026-02-01",
+				planned_end_date: "2026-02-28",
+			},
+		],
+		gates: [
+			{
+				name: "PGC-20",
+				project: "PRJ-1",
+				approval_date: "2026-02-15",
+				status: "Approved",
+				checkpoint_level: "Портфельный комитет",
+			},
+		],
+	});
+
+	assert.equal(bars[0].name, "Idea");
+	assert.equal(bars[0].value[3], "Idea");
+	assert.equal(bars[0].docName, "PSI-10");
+	assert.equal(gates[0].name, "Portfolio Committee");
+	assert.equal(gates[0].docName, "PGC-20");
+});
+
 test("prepareSeriesData attaches docType and docName for stages and gates", () => {
 	const { roadmap } = loadRoadmapScript();
 

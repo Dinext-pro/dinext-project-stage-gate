@@ -144,6 +144,13 @@ frappe.query_reports["Project Stage Gate Roadmap"] = {
 		applyRoadmapStyle();
 	},
 
+	formatter(value, row, column, data, default_formatter) {
+		if (column.fieldname === "current_stage" && value) {
+			return __(value);
+		}
+		return default_formatter(value, row, column, data);
+	},
+
 	after_datatable_render(_datatable) {
 		const report = frappe.query_report;
 		if (!dinext_project_stage_gate.roadmap.isRoadmapReport(report)) {
@@ -671,6 +678,10 @@ dinext_project_stage_gate.roadmap.getEChartsThemeName = function () {
 };
 
 dinext_project_stage_gate.roadmap.translateStatus = function (value) {
+	return value ? __(value) : value;
+};
+
+dinext_project_stage_gate.roadmap.translateStageName = function (value) {
 	return value ? __(value) : value;
 };
 
@@ -3477,7 +3488,9 @@ dinext_project_stage_gate.roadmap.prepareSeriesData = function (payload, options
 
 	const bars = (safe.stageBars || []).map((stage) => {
 		const colors = dinext_project_stage_gate.roadmap.getStageItemStyle(stage);
-		const stageLabel = stage.stage_name || stage.stage;
+		const stageLabel = dinext_project_stage_gate.roadmap.translateStageName(
+			stage.stage_name || stage.stage
+		);
 		const range = dinext_project_stage_gate.roadmap.getStageDisplayRange(stage);
 		return {
 			name: stageLabel,
@@ -3513,7 +3526,9 @@ dinext_project_stage_gate.roadmap.prepareSeriesData = function (payload, options
 			);
 		})
 		.map((gate) => ({
-			name: gate.checkpoint_level || __("Gate"),
+			name: gate.checkpoint_level
+				? dinext_project_stage_gate.roadmap.translateStageName(gate.checkpoint_level)
+				: dinext_project_stage_gate.roadmap.translateStageGateLabel("Gate"),
 			docType: "Project Gate Checkpoint",
 			docName: gate.name,
 			value: [

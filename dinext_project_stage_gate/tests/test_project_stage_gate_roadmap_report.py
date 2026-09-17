@@ -138,9 +138,9 @@ class TestProjectStageGateRoadmapReport(unittest.TestCase):
 	)
 	def test_execute_sends_roadmap_client_translations_through_frappe(self, _translate, get_roadmap_dataset):
 		get_roadmap_dataset.return_value = {
-			"projects": [],
-			"stageBars": [],
-			"gates": [],
+			"projects": [{"current_stage": "Идея"}],
+			"stageBars": [{"stage_name": "Реализация", "stage": "Реализация"}],
+			"gates": [{"checkpoint_level": "Портфельный комитет"}],
 			"taskEntities": [{"type": "Sprint", "lane_label": "Phase"}],
 			"taskBars": [{"value": [0, "2026-01-01", "2026-01-10", "Task 1", "Open", "Stage"]}],
 		}
@@ -153,6 +153,9 @@ class TestProjectStageGateRoadmapReport(unittest.TestCase):
 				"Sprint:Dinext.TaskType": "Спринт",
 				"Phase:Dinext.TaskType": "Фаза",
 				"Stage:Dinext.TaskType": "Этап",
+				"Идея": "Idea",
+				"Реализация": "Implementation",
+				"Портфельный комитет": "Portfolio Committee",
 			},
 			send_translations=unittest.mock.Mock(),
 		)
@@ -169,3 +172,6 @@ class TestProjectStageGateRoadmapReport(unittest.TestCase):
 		self.assertEqual(sent_translations["Sprint:Dinext.TaskType"], "Спринт")
 		self.assertEqual(sent_translations["Phase:Dinext.TaskType"], "Фаза")
 		self.assertEqual(sent_translations["Stage:Dinext.TaskType"], "Этап")
+		self.assertEqual(sent_translations["Идея"], "Idea")
+		self.assertEqual(sent_translations["Реализация"], "Implementation")
+		self.assertEqual(sent_translations["Портфельный комитет"], "Portfolio Committee")
