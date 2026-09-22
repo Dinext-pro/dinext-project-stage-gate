@@ -300,6 +300,7 @@ class TestStageGateOverdueSync(FrappeTestCase):
 				"status": "Active",
 				"planned_start_date": "2026-01-01",
 				"planned_end_date": "2026-06-01",
+				"actual_start_date": "2026-01-01",
 				"is_overdue": 0,
 			},
 			update_modified=False,

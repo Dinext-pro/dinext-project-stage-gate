@@ -5,7 +5,7 @@ class TestAppBootstrap(unittest.TestCase):
 	def test_hooks_define_required_apps(self):
 		from dinext_project_stage_gate import hooks
 
-		self.assertEqual(hooks.required_apps, ["erpnext", "dinext_projects"])
+		self.assertEqual(hooks.required_apps, ["dinext_common", "dinext_projects"])
 
 	def test_hooks_define_project_assets_and_fixtures(self):
 		from dinext_project_stage_gate import hooks

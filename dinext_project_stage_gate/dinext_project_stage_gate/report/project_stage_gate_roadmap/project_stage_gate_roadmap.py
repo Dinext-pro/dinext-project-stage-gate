@@ -208,10 +208,27 @@ def send_roadmap_client_translations(dataset):
 	sources = set(ROADMAP_CLIENT_TRANSLATION_SOURCES)
 	task_type_sources = set(get_task_type_translation_sources(dataset))
 	sources.update(task_type_sources)
+	sources.update(get_master_name_translation_sources(dataset))
 
 	translations = _collect_roadmap_client_translations(all_translations, sources, task_type_sources)
 	if translations:
 		translate.send_translations(translations)
+
+
+def get_master_name_translation_sources(dataset):
+	sources = set()
+	for stage in dataset.get("stageBars") or []:
+		if stage.get("stage_name"):
+			sources.add(stage["stage_name"])
+		if stage.get("stage"):
+			sources.add(stage["stage"])
+	for project in dataset.get("projects") or []:
+		if project.get("current_stage"):
+			sources.add(project["current_stage"])
+	for gate in dataset.get("gates") or []:
+		if gate.get("checkpoint_level"):
+			sources.add(gate["checkpoint_level"])
+	return sources
 
 
 def get_task_type_translation_sources(dataset):
