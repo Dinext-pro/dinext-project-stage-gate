@@ -185,11 +185,12 @@ dinext_project_stage_gate.project.render_chain = function (widget, stages) {
 		const statusLabel = dinext_project_stage_gate.project.translate_status(status);
 		const gateStatus = stage.gate_result || stage.checkpoints?.[0]?.status || "Pending";
 		const gateStatusLabel = dinext_project_stage_gate.project.translate_status(gateStatus);
-		const title = frappe.utils.escape_html(stage.stage_name || stage.stage || __("Unnamed stage"));
+		const rawTitle = stage.stage_name || stage.stage;
+		const title = frappe.utils.escape_html(rawTitle ? __(rawTitle) : __("Unnamed stage"));
 		const stageName = frappe.utils.escape_html(stage.name || "");
 		const tooltipParts = [`${__("Status")}: ${statusLabel}`];
 		if (gateStatus) {
-			tooltipParts.push(`${__("Gate")}: ${gateStatusLabel}`);
+			tooltipParts.push(`${__("Gate", null, "Dinext.StageGateModel")}: ${gateStatusLabel}`);
 		}
 		const tooltip = frappe.utils.escape_html(tooltipParts.join(" | "));
 
@@ -206,7 +207,9 @@ dinext_project_stage_gate.project.render_chain = function (widget, stages) {
 				return;
 			}
 			const checkpointStatus = checkpoint.status || "Draft";
-			const checkpointLevel = checkpoint.checkpoint_level || __("Gate");
+			const checkpointLevel = checkpoint.checkpoint_level
+				? __(checkpoint.checkpoint_level)
+				: __("Gate", null, "Dinext.StageGateModel");
 			const checkpointStatusLabel = dinext_project_stage_gate.project.translate_status(checkpointStatus);
 			const checkpointTooltip = frappe.utils.escape_html(
 				`${checkpointLevel}: ${checkpointStatusLabel}`
