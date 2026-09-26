@@ -329,4 +329,4 @@ flowchart LR
 
 ## Лицензия
 
-`mit`
+GNU GPL v3. Текст — в [license.txt](license.txt).
