@@ -3,7 +3,7 @@ app_title = "Dinext Project Stage Gate"
 app_publisher = "Dinext"
 app_description = "Dinext Project Stage Gate"
 app_email = "info@dinext.ru"
-app_license = "mit"
+app_license = "GNU General Public License (v3)"
 
 required_apps = ["dinext_common", "dinext_projects"]
 
