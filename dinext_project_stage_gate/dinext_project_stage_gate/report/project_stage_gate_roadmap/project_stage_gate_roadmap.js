@@ -133,6 +133,9 @@ frappe.query_reports["Project Stage Gate Roadmap"] = {
 	],
 
 	onload(report) {
+		frappe.require(["/assets/dinext_project_stage_gate/js/stage_gate_status_palette.js"], () => {
+			dinext_project_stage_gate.roadmap.ensureStatusPalette();
+		});
 		report._dinextRoadmapProjectFocusPromise =
 			dinext_project_stage_gate.roadmap.applyProjectFocusRouteOptions(report);
 		dinext_project_stage_gate.roadmap.wrapReportRefresh(report);
@@ -620,56 +623,71 @@ dinext_project_stage_gate.roadmap.ensureActionsMenuObserver = function (report) 
 	page._dinextRoadmapActionsMenuObserverInstalled = true;
 };
 
-dinext_project_stage_gate.roadmap.statusPalette = {
-	light: {
-		stage: {
-			// Keep report colors aligned with the Project widget status classes.
-			Planned: { fill: "#8f9aa8", stroke: "#8f9aa8" },
-			"Waiting Gate": { fill: "#8f9aa8", stroke: "#8f9aa8" },
-			Active: { fill: "#7f95c1", stroke: "#7f95c1" },
-			Skipped: { fill: "#b6b9bd", stroke: "#b6b9bd" },
-			Completed: { fill: "#739b7f", stroke: "#739b7f" },
-			Rejected: { fill: "#c08b8b", stroke: "#c08b8b" },
-			Blocked: { fill: "#c08b8b", stroke: "#c08b8b" },
-			Canceled: { fill: "#9787b0", stroke: "#9787b0" },
+dinext_project_stage_gate.roadmap._legacyStatusPalette = function () {
+	return {
+		light: {
+			stage: {
+				Planned: { fill: "#8f9aa8", stroke: "#8f9aa8" },
+				"Waiting Gate": { fill: "#8f9aa8", stroke: "#8f9aa8" },
+				Active: { fill: "#7f95c1", stroke: "#7f95c1" },
+				Skipped: { fill: "#b6b9bd", stroke: "#b6b9bd" },
+				Completed: { fill: "#739b7f", stroke: "#739b7f" },
+				Rejected: { fill: "#c08b8b", stroke: "#c08b8b" },
+				Blocked: { fill: "#c08b8b", stroke: "#c08b8b" },
+				Canceled: { fill: "#9787b0", stroke: "#9787b0" },
+			},
+			checkpoint: {
+				Draft: "#8f9aa8",
+				"In Review": "#8ba0c9",
+				Approved: "#739b7f",
+				Rejected: "#c08b8b",
+				Canceled: "#9787b0",
+			},
+			fallbackStage: { fill: "#8f9aa8", stroke: "#8f9aa8" },
+			fallbackCheckpoint: "#8f9aa8",
 		},
-		checkpoint: {
-			Draft: "#8f9aa8",
-			"In Review": "#8ba0c9",
-			Approved: "#739b7f",
-			Rejected: "#c08b8b",
-			Canceled: "#9787b0",
+		dark: {
+			stage: {
+				Planned: { fill: "#636f7c", stroke: "#636f7c" },
+				"Waiting Gate": { fill: "#636f7c", stroke: "#636f7c" },
+				Active: { fill: "#4f6fa8", stroke: "#4f6fa8" },
+				Skipped: { fill: "#5c708a", stroke: "#5c708a" },
+				Completed: { fill: "#4e7d5c", stroke: "#4e7d5c" },
+				Rejected: { fill: "#a85c5c", stroke: "#a85c5c" },
+				Blocked: { fill: "#a85c5c", stroke: "#a85c5c" },
+				Canceled: { fill: "#6b5b8f", stroke: "#6b5b8f" },
+			},
+			checkpoint: {
+				Draft: "#6a7d92",
+				"In Review": "#5f7fbf",
+				Approved: "#4e7d5c",
+				Rejected: "#a85c5c",
+				Canceled: "#6b5b8f",
+			},
+			fallbackStage: { fill: "#636f7c", stroke: "#636f7c" },
+			fallbackCheckpoint: "#6a7d92",
 		},
-		fallbackStage: { fill: "#8f9aa8", stroke: "#8f9aa8" },
-		fallbackCheckpoint: "#8f9aa8",
-	},
-	dark: {
-		stage: {
-			Planned: { fill: "#636f7c", stroke: "#636f7c" },
-			"Waiting Gate": { fill: "#636f7c", stroke: "#636f7c" },
-			Active: { fill: "#4f6fa8", stroke: "#4f6fa8" },
-			Skipped: { fill: "#5c708a", stroke: "#5c708a" },
-			Completed: { fill: "#4e7d5c", stroke: "#4e7d5c" },
-			Rejected: { fill: "#a85c5c", stroke: "#a85c5c" },
-			Blocked: { fill: "#a85c5c", stroke: "#a85c5c" },
-			Canceled: { fill: "#6b5b8f", stroke: "#6b5b8f" },
-		},
-		checkpoint: {
-			Draft: "#6a7d92",
-			"In Review": "#5f7fbf",
-			Approved: "#4e7d5c",
-			Rejected: "#a85c5c",
-			Canceled: "#6b5b8f",
-		},
-		fallbackStage: { fill: "#636f7c", stroke: "#636f7c" },
-		fallbackCheckpoint: "#6a7d92",
-	},
+	};
 };
+
+dinext_project_stage_gate.roadmap.ensureStatusPalette = function () {
+	if (dinext_project_stage_gate.roadmap.statusPalette) {
+		return dinext_project_stage_gate.roadmap.statusPalette;
+	}
+	const builder = dinext_project_stage_gate.status_palette?.buildRoadmapStatusPalette;
+	dinext_project_stage_gate.roadmap.statusPalette = builder
+		? builder()
+		: dinext_project_stage_gate.roadmap._legacyStatusPalette();
+	return dinext_project_stage_gate.roadmap.statusPalette;
+};
+
+dinext_project_stage_gate.roadmap.ensureStatusPalette();
 
 dinext_project_stage_gate.roadmap.getActivePalette = function () {
 	const root = document.documentElement;
 	const isDark = root && root.getAttribute("data-theme") === "dark";
-	return isDark ? dinext_project_stage_gate.roadmap.statusPalette.dark : dinext_project_stage_gate.roadmap.statusPalette.light;
+	const palette = dinext_project_stage_gate.roadmap.ensureStatusPalette();
+	return isDark ? palette.dark : palette.light;
 };
 
 dinext_project_stage_gate.roadmap.getEChartsThemeName = function () {
