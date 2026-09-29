@@ -3,7 +3,7 @@ app_title = "Dinext Project Stage Gate"
 app_publisher = "Dinext"
 app_description = "Dinext Project Stage Gate"
 app_email = "info@dinext.ru"
-app_license = "mit"
+app_license = "GNU General Public License (v3)"
 
 required_apps = ["dinext_common", "dinext_projects"]
 
@@ -188,6 +188,7 @@ fixtures = [
 # include js in doctype views
 doctype_js = {
 	"Project": "public/js/project_stage_gate_project.js",
+	"Project Portfolio": "public/js/project_portfolio_stage_gate.js",
 }
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
