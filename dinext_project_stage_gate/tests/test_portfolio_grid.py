@@ -618,7 +618,7 @@ class TestPortfolioGrid(unittest.TestCase):
 		call_kwargs = get_permission_aware_list.call_args.kwargs
 		self.assertEqual(
 			call_kwargs["filters"]["status"],
-			["not in", ["Completed", "Cancelled"]],
+			["not in", ["Cancelled", "Completed"]],
 		)
 		self.assertEqual(result["PROJ-001"]["name"], "TASK-NEW")
 		self.assertEqual(result["PROJ-001"]["milestone_date"], "2026-03-15")
@@ -644,7 +644,7 @@ class TestPortfolioGrid(unittest.TestCase):
 		self.assertEqual(call_kwargs["filters"]["is_milestone"], 1)
 		self.assertEqual(
 			call_kwargs["filters"]["status"],
-			["not in", ["Completed", "Cancelled"]],
+			["not in", ["Cancelled", "Completed"]],
 		)
 		self.assertEqual(result["PROJ-001"]["name"], "TASK-OPEN")
 

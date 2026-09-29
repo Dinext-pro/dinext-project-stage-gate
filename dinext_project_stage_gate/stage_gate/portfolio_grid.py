@@ -248,7 +248,7 @@ def _get_nearest_milestones(project_names: list[str]) -> dict[str, dict[str, Any
 		filters={
 			"project": ["in", project_names],
 			"is_milestone": 1,
-			"status": ["not in", list(_MILESTONE_CLOSED_STATUSES)],
+			"status": ["not in", sorted(_MILESTONE_CLOSED_STATUSES)],
 		},
 		fields=["name", "project", "subject", "exp_start_date", "exp_end_date"],
 		order_by="project asc, exp_end_date asc, exp_start_date asc, modified asc",
