@@ -94,12 +94,16 @@ class TestStageGateApi(unittest.TestCase):
 
 		has_permission.assert_called_once_with("Project", "read", doc="PROJ-001")
 
-	@patch("dinext_project_stage_gate.stage_gate.api._", side_effect=lambda message: f"TR:{message}", create=True)
+	@patch(
+		"dinext_project_stage_gate.stage_gate.api._",
+		side_effect=lambda message, context=None: f"TR:{message}",
+		create=True,
+	)
 	@patch("dinext_project_stage_gate.stage_gate.api.frappe.has_permission", return_value=False)
 	def test_permission_error_uses_translatable_english_source(self, has_permission, translate):
 		with self.assertRaisesRegex(frappe.PermissionError, r"TR:Not permitted to read Project"):
 			api.get_project_stage_chain("PROJ-001")
 
 		has_permission.assert_called_once_with("Project", "read", doc="PROJ-001")
-		translate.assert_called_once_with("Not permitted to read {0}")
+		translate.assert_called_once_with("Not permitted to {0} {1}", context="Dinext.StageGate")
 
