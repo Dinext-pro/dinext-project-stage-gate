@@ -34,7 +34,6 @@ fixtures = [
 		"doctype": "Client Script",
 		"filters": [
 			["module", "=", "Dinext Project Stage Gate"],
-			["enabled", "=", 1],
 		],
 	},
 	{
