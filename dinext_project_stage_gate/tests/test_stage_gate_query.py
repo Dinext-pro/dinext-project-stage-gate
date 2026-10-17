@@ -232,7 +232,7 @@ class TestStageGateQuery(unittest.TestCase):
 		result = query.get_roadmap_dataset()
 
 		self.assertEqual(result["gates"][0]["checkpoint_level"], "Stage Exit")
-		self.assertEqual(result["projects"][0]["project_manager"], "Project Manager")
+		self.assertEqual(result["projects"][0]["project_manager"], "Administrator")
 		self.assertEqual(result["stageBars"][0]["stage_name"], "Discovery")
 		self.assertEqual(result["stageBars"][0]["is_overdue"], 1)
 		self.assertEqual(result["gates"][0]["is_overdue"], 0)
@@ -398,7 +398,8 @@ class TestStageGateQuery(unittest.TestCase):
 
 		result = query.get_roadmap_dataset({"from_date": "2026-04-10", "to_date": "2026-04-20"})
 
-		self.assertEqual(result["projects"][0]["project_manager"], "Valid Manager")
+		self.assertEqual(result["projects"][0]["project_manager"], "Administrator")
+		self.assertEqual(get_all.call_args_list[1].kwargs["filters"]["name"], ["in", ["valid@example.com"]])
 
 	@patch.object(query, "_today", return_value=date(2026, 4, 19))
 	@patch("dinext_project_stage_gate.stage_gate.query.frappe.get_all")
