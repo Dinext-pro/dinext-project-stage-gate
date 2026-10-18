@@ -1,34 +1,36 @@
+[Русский](README.ru.md)
+
 # Dinext Project Stage Gate
 
-## 📖 Обзор
+## 📖 Overview
 
-`dinext_project_stage_gate` добавляет отдельный слой управления по модели Stage-gate поверх стандартных записей ERPNext `Project`. Приложение сохраняет `Project` как основной бизнес-объект и вводит отдельные metadata- и transactional-DocType для реестра стадий, моделей управления, шаблонов gate, исполнения стадий, согласования checkpoint и дорожной карты.
+`dinext_project_stage_gate` adds a separate Stage-gate management layer on top of standard ERPNext `Project` records. The application retains `Project` as the main business object and introduces dedicated metadata and transactional DocTypes for the stage registry, governance models, gate templates, stage execution, checkpoint approval and roadmap.
 
-Реализация намеренно независима от стандартного workflow `Project` и от подхода `Task Type = Stage/Phase`. Задачи, issues и существующие связи с портфелями по-прежнему можно использовать как связанные артефакты и evidence, но источником истины для управленческого продвижения проекта является доменная модель Stage-gate.
+The implementation is deliberately independent of the standard `Project` workflow and the `Task Type = Stage/Phase` approach. Tasks, issues and existing portfolio relationships can still be used as related artifacts and evidence, while the Stage-gate domain model is the source of truth for the project's governance progression.
 
-## ✨ Возможности
+## ✨ Features
 
-- Отдельные master-справочники для `Project Stage`, `Project Governance Model`, `Stage Gate Template` и `Project Gate Checkpoint Level`
-- Transactional-слой исполнения через `Project Stage Instance`, `Project Gate Checkpoint` и `Project Gate Checklist Item`
-- Whitelisted Python API для цепочки стадий проекта и данных roadmap-отчета
-- Виджет на форме `Project`, подключаемый через `doctype_js`, без отдельного HTML custom field
-- AG Grid-таблица проектов на форме `Project Portfolio`: статусы RAG, трудозатраты, P&L, вехи, добавление и удаление проектов из портфеля; сводные трудозатраты совпадают с footer «Итого» на карточке «Трудозатраты» проекта (помесячная агрегация)
-- Поле `is_overdue` на `Project Stage Instance` и `Project Gate Checkpoint` с ежедневным пересчётом и подсветкой просрочки на roadmap
-- Кнопки перехода к отчётам в меню **View** формы `Project Portfolio` и в toolbar AG Grid-таблицы (с иконками Espresso): **Projects Stage Roadmap** (фильтр `portfolio`), **Сводный P&L по проектам** (отчёт `Project Budget Plan vs Forecast` при установленном `dinext_projects_pl`), иначе стандартный **Profit and Loss Statement** (фильтр `project` по проектам портфеля)
-- Автоматическое создание `Project Stage Instance` при назначении `Project Governance Model` проекту
-- Автоматическое создание `Project Gate Checkpoint` из `Checkpoint Template`, указанного в строке модели управления
-- Автоматическое обновление полей `current_stage_instance`, `current_stage`, `stage_gate_status` и `current_gate_result` на `Project`
-- Автоматический расчет `planned_start_date` / `planned_end_date` у `Project Stage Instance` по `expected_start_date`, `expected_duration_days` и рабочим дням из holiday list проекта / компании
-- Контролируемый сброс цепочки при смене или очистке `governance_model`: подтверждение на форме `Project`, отмена активных `Project Stage Instance` / `Project Gate Checkpoint` / строк чек-листа (статус `Canceled`), версионирование цепочки (`stage_chain_version`), скрытие архивных цепочек из виджета и roadmap
-- Script Report дорожной карты Stage-gate с ленивой загрузкой ECharts
-- Ролевая и permission-модель для `Stage Gate Owner`, `Stage Gate Reviewer`, `Stage Gate Approver` и `Project Governance Admin`
-- Отдельный workflow checkpoint, не изменяющий существующий approval-flow `Project`
-- На форме `Project Gate Checkpoint` строки чеклиста с флагом **Is Mandatory** нельзя удалить, пока флаг не снят; кнопка массового удаления **«Удалить все строки»** для таблицы чеклиста скрыта (см. `project_gate_checkpoint.js`)
-- При каждом сохранении `Project Gate Checkpoint` сервер пересчитывает скрытое поле **Checklist Completed** (`checklist_completed`): оно равно установленному флагу, только если все строки чеклиста в статусе **Done** или **Canceled**; иначе сбрасывается (в том числе если пункт снова переведён в **Open**). Это поле используется в fixture workflow как условие перехода **Submit for Review** (Draft → In Review)
+- Separate master reference data for `Project Stage`, `Project Governance Model`, `Stage Gate Template` and `Project Gate Checkpoint Level`
+- A transactional execution layer through `Project Stage Instance`, `Project Gate Checkpoint` and `Project Gate Checklist Item`
+- Whitelisted Python API for the project's stage chain and roadmap report data
+- A widget on the `Project` form, included through `doctype_js`, without a separate HTML custom field
+- An AG Grid project table on the `Project Portfolio` form: RAG statuses, work effort, P&L, milestones, adding projects to and removing them from a portfolio; aggregate effort matches the Total footer on the project's Work Effort card (monthly aggregation)
+- An `is_overdue` field on `Project Stage Instance` and `Project Gate Checkpoint`, recalculated daily, with overdue highlighting on the roadmap
+- Report shortcuts in the **View** menu of the `Project Portfolio` form and the AG Grid toolbar (with Espresso icons): **Projects Stage Roadmap** (`portfolio` filter), **Consolidated Project P&L** (the `Project Budget Plan vs Forecast` report when `dinext_projects_pl` is installed), otherwise the standard **Profit and Loss Statement** (`project` filter containing portfolio projects)
+- Automatic creation of `Project Stage Instance` records when a project is assigned a `Project Governance Model`
+- Automatic creation of `Project Gate Checkpoint` from the `Checkpoint Template` specified in the governance model row
+- Automatic updates of `current_stage_instance`, `current_stage`, `stage_gate_status` and `current_gate_result` on `Project`
+- Automatic calculation of `Project Stage Instance` `planned_start_date` / `planned_end_date` from `expected_start_date`, `expected_duration_days` and working days in the project / company holiday list
+- Controlled chain reset when `governance_model` changes or is cleared: confirmation on the `Project` form, cancellation of active `Project Stage Instance` / `Project Gate Checkpoint` / checklist rows (`Canceled` status), chain versioning (`stage_chain_version`), and exclusion of archived chains from the widget and roadmap
+- A Stage-gate roadmap Script Report with lazy-loaded ECharts
+- A role and permission model for `Stage Gate Owner`, `Stage Gate Reviewer`, `Stage Gate Approver` and `Project Governance Admin`
+- A separate checkpoint workflow that leaves the existing `Project` approval flow unchanged
+- On the `Project Gate Checkpoint` form, checklist rows marked **Is Mandatory** cannot be deleted until the flag is cleared; the checklist table's **Delete All Rows** bulk-delete button is hidden (see `project_gate_checkpoint.js`)
+- On every `Project Gate Checkpoint` save, the server recalculates the hidden **Checklist Completed** field (`checklist_completed`): it is checked only when every checklist row is **Done** or **Canceled**; otherwise it is cleared (including when an item returns to **Open**). The fixture workflow uses this field as a condition for the **Submit for Review** transition (Draft → In Review)
 
-## 🚀 Установка
+## 🚀 Installation
 
-Установите приложение в существующий Administrator, где уже есть `erpnext` и `dinext_projects`:
+Install the application into an existing Administrator that already has `erpnext` and `dinext_projects`:
 
 ```bash
 cd /path/to/frappe-bench
@@ -37,148 +39,148 @@ bench --site <site> install-app dinext_project_stage_gate
 bench --site <site> migrate
 ```
 
-Если вы применяете metadata-изменения в developer mode, убедитесь, что он включен на сайте до создания или обновления DocType:
+If you apply metadata changes in developer mode, make sure it is enabled on the site before creating or updating DocTypes:
 
 ```bash
 bench --site <site> set-config developer_mode 1
 ```
 
-После site-level metadata-изменений экспортируйте fixtures, чтобы состояние репозитория совпадало с базой данных:
+After site-level metadata changes, export fixtures so the repository state matches the database:
 
 ```bash
 bench --site <site> export-fixtures --app dinext_project_stage_gate
 ```
 
-## 🛠️ Использование
+## 🛠️ Usage
 
-### Назначение модели управления проекту
+### Assigning a governance model to a project
 
-1. Создайте или обновите записи `Project Stage`.
-2. Создайте записи `Project Gate Checkpoint Level` для нужных уровней согласования.
-3. Создайте `Stage Gate Template`, связанные с `Project Gate Checkpoint Level`.
-4. Соберите `Project Governance Model` с упорядоченными строками стадий; при необходимости укажите в каждой строке поле **Checkpoint Template** (ссылка на `Stage Gate Template`).
-5. Назначьте модель управления документу `Project`.
-6. Сохраните `Project`.
+1. Create or update `Project Stage` records.
+2. Create `Project Gate Checkpoint Level` records for the required approval levels.
+3. Create `Stage Gate Template` records linked to `Project Gate Checkpoint Level`.
+4. Assemble a `Project Governance Model` with ordered stage rows; specify the **Checkpoint Template** field (a link to `Stage Gate Template`) in each row as necessary.
+5. Assign the governance model to a `Project` document.
+6. Save `Project`.
 
-После сохранения серверный hook автоматически:
+After saving, the server hook automatically:
 
-1. Загружает выбранный `Project Governance Model`.
-2. Строит упорядоченную stage chain.
-3. Создает записи `Project Stage Instance` с детерминированными именами: первая цепочка — `<PROJECT>-STAGE-001`, при повторном назначении модели после сброса — `<PROJECT>-SG<N>-STAGE-001` (N = `stage_chain_version` на `Project`).
-4. Заполняет связи `previous_stage_instance` / `next_stage_instance`.
-5. Обновляет summary-поля на `Project`.
+1. Loads the selected `Project Governance Model`.
+2. Builds the ordered stage chain.
+3. Creates `Project Stage Instance` records with deterministic names: `<PROJECT>-STAGE-001` for the first chain, or `<PROJECT>-SG<N>-STAGE-001` when a model is reassigned after a reset (N = `stage_chain_version` on `Project`).
+4. Populates the `previous_stage_instance` / `next_stage_instance` links.
+5. Updates the summary fields on `Project`.
 
-Для каждой созданной `Project Stage Instance`, у которой в соответствующей строке модели управления задан **Checkpoint Template**, создаётся документ `Project Gate Checkpoint` с чек-листом, скопированным из шаблона (имя вида `<PROJECT>-STAGE-001-GATE`). Если шаблон в строке не указан, чекпоинт не создаётся. Если шаблон выключен или не содержит ни одного пункта чек-листа, создание цепочки прерывается валидационной ошибкой.
+For each created `Project Stage Instance` whose corresponding governance model row specifies a **Checkpoint Template**, a `Project Gate Checkpoint` document is created with a checklist copied from the template (a name such as `<PROJECT>-STAGE-001-GATE`). If the row has no template, no checkpoint is created. If the template is disabled or contains no checklist items, chain creation stops with a validation error.
 
-Плановые даты `Project Stage Instance` вычисляются автоматически:
+Planned `Project Stage Instance` dates are calculated automatically:
 
-1. Для первой стадии `planned_start_date` берётся из `Project.expected_start_date` (или `today()`), затем сдвигается на ближайший рабочий день.
-2. Для следующих стадий старт определяется как ближайший рабочий день после `planned_end_date` предыдущей стадии.
-3. `planned_end_date` считается по `expected_duration_days` строки модели управления с учетом holiday list проекта или компании.
-4. При переводе стадии в `Active` или `Completed` документ автоматически проставляет `actual_start_date`; при `Completed` также заполняет `actual_end_date`, если эти даты не были заданы вручную.
+1. The first stage's `planned_start_date` comes from `Project.expected_start_date` (or `today()`), then shifts to the nearest working day.
+2. Subsequent stages start on the nearest working day after the previous stage's `planned_end_date`.
+3. `planned_end_date` is calculated from the governance model row's `expected_duration_days`, using the project or company holiday list.
+4. When a stage moves to `Active` or `Completed`, the document automatically sets `actual_start_date`; on `Completed`, it also fills `actual_end_date` if those dates were not set manually.
 
-При редактировании чеклиста на форме `Project Gate Checkpoint` удаление строки с установленным **Is Mandatory** блокируется на клиенте до тех пор, пока флаг не снят; после снятия флага строку можно удалить и сохранить документ одним сохранением. Массовое удаление всех строк таблицы недоступно (кнопка скрыта), чтобы нельзя было обойти эту проверку.
+When editing the checklist on a `Project Gate Checkpoint` form, deleting a row with **Is Mandatory** checked is blocked on the client until the flag is cleared; after clearing it, the row can be deleted and the document saved in a single save operation. Bulk deletion of all table rows is unavailable (the button is hidden), preventing this check from being bypassed.
 
-Статусы строк чеклиста (**Open**, **Done**, **Canceled**) задаются в `Project Gate Checklist Item`. После сохранения чекпоинта поле **Checklist Completed** обновляется в контроллере [`project_gate_checkpoint.py`](dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_gate_checkpoint/project_gate_checkpoint.py): оно истинно только когда каждая строка в терминальном статусе (**Done** или **Canceled**). Условие `doc.checklist_completed` в [`fixtures/workflow.json`](dinext_project_stage_gate/fixtures/workflow.json) разрешает действие workflow **Submit for Review** только при полностью закрытом чеклисте.
+Checklist row statuses (**Open**, **Done**, **Canceled**) are defined in `Project Gate Checklist Item`. After a checkpoint is saved, **Checklist Completed** is updated in the [`project_gate_checkpoint.py`](dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_gate_checkpoint/project_gate_checkpoint.py) controller: it is true only when every row has a terminal status (**Done** or **Canceled**). The `doc.checklist_completed` condition in [`fixtures/workflow.json`](dinext_project_stage_gate/fixtures/workflow.json) permits the **Submit for Review** workflow action only when the entire checklist is closed.
 
-Дальше форма `Project` использует whitelisted API для отрисовки уже сохраненной Stage-gate цепочки. Если модель управления не назначена, виджет не показывается.
+The `Project` form then uses the whitelisted API to render the saved Stage-gate chain. If no governance model is assigned, the widget is not shown.
 
-На форме `Project Portfolio` для сохранённого портфеля доступны пункты меню **View** и дублирующие их кнопки в toolbar таблицы (единый реестр `get_view_actions` в [`project_portfolio_stage_gate.js`](dinext_project_stage_gate/public/js/project_portfolio_stage_gate.js)):
+For a saved portfolio, the `Project Portfolio` form provides **View** menu items and matching table toolbar buttons (a shared `get_view_actions` registry in [`project_portfolio_stage_gate.js`](dinext_project_stage_gate/public/js/project_portfolio_stage_gate.js)):
 
-| Действие | Условие | Отчёт / переход | Фильтр |
+| Action | Condition | Report / destination | Filter |
 |----------|---------|-----------------|--------|
-| Projects Stage Roadmap | право на отчёт | `Project Stage Gate Roadmap` | `portfolio` = текущий портфель |
-| P&L (dinext) | установлен `dinext_projects_pl` и право на отчёт | **Сводный P&L по проектам** → `Project Budget Plan vs Forecast` | `project_portfolio` = текущий портфель |
-| P&L (fallback) | **не** установлен `dinext_projects_pl` и право на отчёт | `Profit and Loss Statement` | `project` = список проектов портфеля (`custom_project_portfolio`) |
+| Projects Stage Roadmap | report permission | `Project Stage Gate Roadmap` | `portfolio` = current portfolio |
+| P&L (dinext) | `dinext_projects_pl` installed and report permission | **Consolidated Project P&L** → `Project Budget Plan vs Forecast` | `project_portfolio` = current portfolio |
+| P&L (fallback) | `dinext_projects_pl` **not** installed and report permission | `Profit and Loss Statement` | `project` = portfolio project list (`custom_project_portfolio`) |
 
-Установка `dinext_projects_pl` определяется на клиенте через `frappe.boot.versions.dinext_projects_pl` (на сервере в [`portfolio_grid.py`](dinext_project_stage_gate/stage_gate/portfolio_grid.py) используется тот же идентификатор app для P&L-сводки в таблице). Доступ к отчётам проверяется через `frappe.boot.user.all_reports`.
+The client detects `dinext_projects_pl` installation through `frappe.boot.versions.dinext_projects_pl` (the server in [`portfolio_grid.py`](dinext_project_stage_gate/stage_gate/portfolio_grid.py) uses the same app identifier for the table's P&L summary). Report access is checked through `frappe.boot.user.all_reports`.
 
-### Таблица проектов на форме Project Portfolio
+### Project table on the Project Portfolio form
 
-Для сохранённого портфеля (не новой записи) AG Grid-таблица с проектами рендерится в HTML-поле `custom_portfolio_projects` (секция `custom_projects`). Таблица подключается через `doctype_js` и использует [`DinextAgGrid`](../dinext_common/dinext_common/public/js/ag-grid/bootstrap.js) (AG Grid v35, `theme: "legacy"` для CSS-темизации).
+For a saved portfolio (not a new record), an AG Grid project table is rendered in the `custom_portfolio_projects` HTML field (`custom_projects` section). The table is included through `doctype_js` and uses [`DinextAgGrid`](../dinext_common/dinext_common/public/js/ag-grid/bootstrap.js) (AG Grid v35, `theme: "legacy"` for CSS theming).
 
-Возможности таблицы:
+Table features:
 
-1. Просмотр сводных данных по каждому проекту: тип, приоритет, RAG-статусы, активная стадия, заказчик, подразделение, трудозатраты, P&L, ближайшие открытые вехи.
-2. Закреплённая слева колонка `Project` с названием и кодом проекта; статус stage-gate доступен во всплывающей подсказке при наведении.
-3. Toolbar над таблицей: **Add** / **Remove** (иконки `es-line-add` / `es-line-delete`, классы как у footer child table Frappe) и, через разделитель, кнопки из меню **View** (roadmap и P&L-отчёт).
-4. Привязка и отвязка проектов через поле `custom_project_portfolio` на `Project` (диалог добавления, подтверждение удаления выбранных строк).
-5. Автоматическая синхронизация светлой/тёмной темы AG Grid с темой Frappe Desk (`data-theme` / `data-theme-mode`).
-6. Компактная вёрстка: плотные строки и заголовки, минимальные отступы в ячейках.
+1. Summary data for each project: type, priority, RAG statuses, active stage, customer, department, work effort, P&L and upcoming open milestones.
+2. A left-pinned `Project` column with the project name and code; Stage-gate status is available in the hover tooltip.
+3. A toolbar above the table: **Add** / **Remove** (icons `es-line-add` / `es-line-delete`, styled like a Frappe child table footer), then a separator and the **View** menu buttons (roadmap and P&L report).
+4. Linking and unlinking projects through `custom_project_portfolio` on `Project` (add dialog, confirmation when removing selected rows).
+5. Automatic synchronization of AG Grid's light/dark theme with Frappe Desk (`data-theme` / `data-theme-mode`).
+6. Compact layout: dense rows and headers, minimal cell padding.
 
-Read-model и мутации реализованы в [`stage_gate/portfolio_grid.py`](dinext_project_stage_gate/stage_gate/portfolio_grid.py) и экспонируются через whitelisted API (см. раздел «Вызов API»).
+The read model and mutations are implemented in [`stage_gate/portfolio_grid.py`](dinext_project_stage_gate/stage_gate/portfolio_grid.py) and exposed through the whitelisted API (see API calls).
 
-#### Трудозатраты (Labor)
+#### Work effort (Labor)
 
-Сводные колонки `labor_plan_total`, `labor_forecast_total`, `labor_plan_today` и `labor_actual_total` считаются на сервере и отображаются в AG Grid без дополнительной клиентской логики.
+The aggregate `labor_plan_total`, `labor_forecast_total`, `labor_plan_today` and `labor_actual_total` columns are calculated on the server and displayed in AG Grid without additional client logic.
 
-**Источники данных**
+**Data sources**
 
-| Поле | Источник |
+| Field | Source |
 |------|----------|
-| Plan / Forecast | `Project Work Efforts` + `Project Work Efforts Amount` (план и ожидание по задаче, роли и месяцу) |
-| Actual | утверждённые `User Timesheet Position` с `document_type = Task` (часы до текущей даты) |
+| Plan / Forecast | `Project Work Efforts` + `Project Work Efforts Amount` (plan and expectation by task, role and month) |
+| Actual | approved `User Timesheet Position` records with `document_type = Task` (hours through the current date) |
 
-**Окно периодов** — календарные месяцы от `Project.expected_start_date` до `Project.expected_end_date` (если даты не заданы, используются разумные значения по умолчанию).
+**Period window** — calendar months from `Project.expected_start_date` to `Project.expected_end_date` (reasonable defaults are used if dates are absent).
 
-**Дерево задач** — как на карточке «Трудозатраты» проекта: только задачи без флага `is_milestone`, обход от корней (`parent_task` пуст) вниз по BFS; «сироты» с недостижимым родителем не поднимаются в корень.
+**Task tree** — as on the project's Work Effort card: only tasks without the `is_milestone` flag, traversed downwards from roots (empty `parent_task`) using BFS; orphan tasks with unreachable parents are not promoted to roots.
 
-**Plan Total и Forecast Total** — сумма помесячных итогов по колонкам (аналог `calc_we_column_total` в client script «Трудозатраты»):
+**Plan Total and Forecast Total** — the sum of monthly column totals (equivalent to `calc_we_column_total` in the Work Effort client script):
 
-1. Роли берутся из `Project Team Details.pt_role`; если команда не задана — из ролей, встречающихся в PWE.
-2. Для каждого месяца окна, каждой роли и каждой корневой задачи:
-   - если у задачи в **этом месяце** план (или прогноз) > 0 — берётся значение задачи;
-   - иначе рекурсивно суммируются дочерние задачи **только за этот месяц**.
-3. Итог по проекту — сумма таких помесячных колонок.
+1. Roles come from `Project Team Details.pt_role`; if no team is defined, use roles found in PWE.
+2. For each month in the window, each role and each root task:
+   - if the task has a plan (or forecast) > 0 in **that month**, use the task's value;
+   - otherwise, recursively sum child tasks **for that month only**.
+3. The project total is the sum of those monthly columns.
 
-Эта семантика совпадает с footer «Итого» на форме проекта, а не с window-aggregate из отключённого `Project_Work_Efforts V5` (когда наличие плана у родителя в любом месяце окна блокировало все дочерние месяцы).
+These semantics match the Total footer on the project form, rather than the window aggregate from the disabled `Project_Work_Efforts V5` (where a parent's plan in any month of the window blocked every child month).
 
-**Plan Today** — «сколько плановых часов должно быть выполнено к сегодня»:
+**Plan Today** — how many planned hours should be completed by today:
 
 ```
-Plan Today = Σ (month_plan × коэффициент_прогресса_месяца)
+Plan Today = Σ (month_plan × month_progress_factor)
 ```
 
-где `month_plan` — тот же помесячный план, что для Plan Total, а коэффициент:
+where `month_plan` is the same monthly plan used for Plan Total, and the factor is:
 
-- **прошлые месяцы** — `1.0` (весь план месяца);
-- **текущий месяц** — `день / число дней в месяце` (линейное пропорционирование);
-- **будущие месяцы** — `0.0`.
+- **past months** — `1.0` (the entire month's plan);
+- **current month** — `day / number of days in the month` (linear proration);
+- **future months** — `0.0`.
 
-Forecast и Actual в Plan Today не участвуют. Округление labor-полей — до одного знака после запятой.
+Forecast and Actual do not contribute to Plan Today. Labor fields are rounded to one decimal place.
 
 #### P&L
 
-Если установлено приложение `dinext_projects_pl`, сводка строится из `Project Budget` / `Project Budget Amount` / `Project Budget Dimension`: Plan Total, Plan Today и Forecast Total считаются по месяцам с учётом иерархии статей `Account`, task/dimension buckets и правил rollup карточки проекта `dinext_projects_pl` (parent own data wins, иначе sum children). Actual берётся из `GL Entry` с учётом `Account.root_type` (Income/Expense); балансовые счета (Liability и др.) не включаются. Без `dinext_projects_pl` в колонке Actual используется `Project.gross_margin` как fallback. Колонки P&L: Plan Total, Plan Today, Actual, Forecast Total.
+When `dinext_projects_pl` is installed, the summary is built from `Project Budget` / `Project Budget Amount` / `Project Budget Dimension`: Plan Total, Plan Today and Forecast Total are calculated monthly, accounting for the `Account` hierarchy, task/dimension buckets and the project card rollup rules in `dinext_projects_pl` (parent's own data wins; otherwise sum children). Actuals come from `GL Entry`, respecting `Account.root_type` (Income/Expense); balance sheet accounts (Liability, etc.) are excluded. Without `dinext_projects_pl`, the Actual column falls back to `Project.gross_margin`. P&L columns: Plan Total, Plan Today, Actual, Forecast Total.
 
-#### Просрочка стадий и checkpoint
+#### Overdue stages and checkpoints
 
-Поле `is_overdue` на `Project Stage Instance` и `Project Gate Checkpoint` пересчитывается:
+The `is_overdue` field on `Project Stage Instance` and `Project Gate Checkpoint` is recalculated:
 
-- при каждом сохранении документа (метод `validate` в контроллере DocType);
-- ежедневно планировщиком (`dinext_project_stage_gate.tasks.daily` → `sync_overdue_flags`).
+- on every document save (the DocType controller's `validate` method);
+- daily by the scheduler (`dinext_project_stage_gate.tasks.daily` → `sync_overdue_flags`).
 
-Правила:
+Rules:
 
-- **стадия** — просрочена, если статус `Planned` и `planned_start_date` в прошлом, либо `planned_end_date` в прошлом (кроме статусов `Completed`, `Canceled`, `Skipped`);
-- **checkpoint** — просрочен, если `gate_due_date` в прошлом (кроме `Approved`, `Canceled`, `Skipped`).
+- **stage** — overdue if its status is `Planned` and `planned_start_date` is in the past, or if `planned_end_date` is in the past (except statuses `Completed`, `Canceled`, `Skipped`);
+- **checkpoint** — overdue if `gate_due_date` is in the past (except `Approved`, `Canceled`, `Skipped`).
 
-На roadmap-отчёте просроченные стадии и gate отображаются с красной обводкой.
+Overdue stages and gates are outlined in red on the roadmap report.
 
-Стили таблицы: [`public/css/project_portfolio_grid.css`](dinext_project_stage_gate/public/css/project_portfolio_grid.css).
+Table styles: [`public/css/project_portfolio_grid.css`](dinext_project_stage_gate/public/css/project_portfolio_grid.css).
 
-После изменения frontend-ассетов выполните:
+After changing frontend assets, run:
 
 ```bash
 bench build --app dinext_project_stage_gate
 bench --site <site> clear-cache
 ```
 
-Если цепочка уже создана, смена или очистка `governance_model` требует подтверждения в диалоге на форме `Project`. После подтверждения и сохранения текущая активная цепочка переводится в архив (все связанные исполнительные документы — в статус `Canceled`), номер активной версии цепочки на `Project` увеличивается; при назначенной новой модели создаётся новая цепочка, при пустой модели summary-поля проекта очищаются. Исторические строки остаются в БД, но не попадают в виджет и выборки roadmap для активной версии.
+If the chain already exists, changing or clearing `governance_model` requires confirmation in a dialog on the `Project` form. After confirmation and saving, the current active chain is archived (all related execution documents move to `Canceled`), and the active chain version on `Project` is incremented; a new model creates a new chain, while an empty model clears the project's summary fields. Historical rows remain in the database but are excluded from the widget and roadmap queries for the active version.
 
-### Вызов API
+### API calls
 
-Приложение предоставляет whitelisted-методы для stage chain, roadmap и портфельной таблицы:
+The application provides whitelisted methods for the stage chain, roadmap and portfolio table:
 
 ```python
 dinext_project_stage_gate.stage_gate.api.get_project_stage_chain(project)
@@ -191,43 +193,43 @@ dinext_project_stage_gate.stage_gate.api.add_projects_to_portfolio(portfolio, pr
 dinext_project_stage_gate.stage_gate.api.remove_projects_from_portfolio(portfolio, projects)
 ```
 
-Вызов через bench:
+Calling through bench:
 
 ```bash
 bench --site <site> execute dinext_project_stage_gate.stage_gate.api.ping
 bench --site <site> execute dinext_project_stage_gate.stage_gate.api.get_roadmap_dataset
 ```
 
-## 📦 Технологии
+## 📦 Technologies
 
 - Python 3.10+
 - Frappe Framework / ERPNext
-- JavaScript form scripts и Script Reports
-- AG Grid (через `dinext_common`) для таблицы проектов на форме `Project Portfolio`
-- ECharts для визуализации дорожной карты
-- Node.js built-in test runner для изолированных JS regression-тестов
-- Ruff для Python linting
-- Prettier / ESLint / pyupgrade через pre-commit tooling
+- JavaScript form scripts and Script Reports
+- AG Grid (through `dinext_common`) for the project table on the `Project Portfolio` form
+- ECharts for roadmap visualization
+- Node.js built-in test runner for isolated JS regression tests
+- Ruff for Python linting
+- Prettier / ESLint / pyupgrade through pre-commit tooling
 
-## 🔧 Конфигурация
+## 🔧 Configuration
 
-Основная конфигурация приложения находится в [`dinext_project_stage_gate/hooks.py`](dinext_project_stage_gate/hooks.py).
+The main application configuration is in [`dinext_project_stage_gate/hooks.py`](dinext_project_stage_gate/hooks.py).
 
-Ключевые настройки и точки интеграции:
+Key settings and integration points:
 
 - `required_apps = ["erpnext", "dinext_projects"]`
 - `doctype_js`:
   - `Project -> public/js/project_stage_gate_project.js`
   - `Project Portfolio -> public/js/project_portfolio_stage_gate.js`
 - `doc_events["Project"]`:
-  - `validate` требует флаг `confirm_governance_reset` при смене/очистке `governance_model`, если есть активная цепочка
-  - `before_save` выполняет отмену активной цепочки и инкремент `stage_chain_version` при подтверждённом сбросе
-  - `after_insert` и `on_update` синхронизируют stage chain и summary-поля
+  - `validate` requires the `confirm_governance_reset` flag when `governance_model` changes/is cleared if an active chain exists
+  - `before_save` cancels the active chain and increments `stage_chain_version` on a confirmed reset
+  - `after_insert` and `on_update` synchronize the stage chain and summary fields
 - `doc_events["Project Stage Instance"]`:
-  - `on_update` и `on_trash` пересчитывают summary-поля проекта
-- контроллеры `Project Stage Instance` и `Project Gate Checkpoint` в `validate` вызывают `overdue_sync` для поля `is_overdue`
-- `scheduler_events["daily"]` — `dinext_project_stage_gate.tasks.daily` (массовый пересчёт `is_overdue`)
-- экспорт fixtures для:
+  - `on_update` and `on_trash` recalculate the project's summary fields
+- The `Project Stage Instance` and `Project Gate Checkpoint` controllers call `overdue_sync` for the `is_overdue` field in `validate`
+- `scheduler_events["daily"]` — `dinext_project_stage_gate.tasks.daily` (bulk `is_overdue` recalculation)
+- Fixture export for:
   - `Role`
   - `Custom Field`
   - `Custom DocPerm`
@@ -236,86 +238,81 @@ bench --site <site> execute dinext_project_stage_gate.stage_gate.api.get_roadmap
   - `Workflow State`
   - `Report`
 
-Приложение опирается на site metadata и export-fixtures, а не на переменные окружения.
+The application relies on site metadata and export-fixtures rather than environment variables.
 
-## ✅ Требования
+## ✅ Requirements
 
-- Рабочий Administrator
-- Установленные приложения:
+- A working Administrator
+- Installed applications:
   - `frappe`
   - `erpnext`
   - `dinext_projects`
-  - `dinext_common` (AG Grid bootstrap для портфельной таблицы)
-  - `dinext_projects_pl` (опционально — полная P&L-сводка в портфельной таблице)
-- Доступ к запуску `bench --site <site> migrate`
-- Включенный developer mode при создании/обновлении DocType или metadata в базе данных
+  - `dinext_common` (AG Grid bootstrap for the portfolio table)
+  - `dinext_projects_pl` (optional — full P&L summary in the portfolio table)
+- Access to run `bench --site <site> migrate`
+- Developer mode enabled when creating/updating DocTypes or metadata in the database
 
-## 🤝 Вклад в проект
+## 🤝 Contributing
 
-Перед внесением изменений установите и включите `pre-commit`:
+Before making changes, install and enable `pre-commit`:
 
 ```bash
 cd apps/dinext_project_stage_gate
 pre-commit install
 ```
 
-В репозитории используются:
+The repository uses:
 
 - `ruff`
 - `eslint`
 - `prettier`
 - `pyupgrade`
 
-Минимальная проверка перед публикацией изменений:
+Minimum checks before publishing changes:
 
 ```bash
 bench run-tests --app dinext_project_stage_gate
 node --test tests/*.js
 ```
 
-При изменении metadata-driven поведения придерживайтесь такого процесса:
+Follow this process when changing metadata-driven behavior:
 
-1. Обновить код и metadata-файлы
-2. Выполнить site migration
-3. Запустить целевые тесты
-4. Экспортировать fixtures
+1. Update code and metadata files
+2. Run site migration
+3. Run targeted tests
+4. Export fixtures
 
-Проектные правила разработки находятся в [`AGENTS.md`](AGENTS.md).
+Project development rules are in [`AGENTS.md`](AGENTS.md).
 
-## 📄 Документация
+## 📄 Documentation
 
-- [`README.md`](README.md) — обзор проекта на верхнем уровне
-- [`AGENTS.md`](AGENTS.md) — проектная доктрина и правила работы с Frappe
-- [`dinext_project_stage_gate/hooks.py`](dinext_project_stage_gate/hooks.py) — bootstrap приложения, fixtures и client script bindings
+- [`README.md`](README.md) — high-level project overview
+- [`AGENTS.md`](AGENTS.md) — project doctrine and Frappe working rules
+- [`dinext_project_stage_gate/hooks.py`](dinext_project_stage_gate/hooks.py) — application bootstrap, fixtures and client script bindings
 - [`dinext_project_stage_gate/stage_gate/api.py`](dinext_project_stage_gate/stage_gate/api.py) — whitelisted API
-- [`dinext_project_stage_gate/stage_gate/checkpoint_provision.py`](dinext_project_stage_gate/stage_gate/checkpoint_provision.py) — создание checkpoint из шаблона при вставке `Project Stage Instance`
-- [`dinext_project_stage_gate/stage_gate/project_hooks.py`](dinext_project_stage_gate/stage_gate/project_hooks.py) — orchestration layer для автоматического provisioning и пересчета summary
-- [`dinext_project_stage_gate/stage_gate/query.py`](dinext_project_stage_gate/stage_gate/query.py) — read-model слой для виджета и отчета
-- [`dinext_project_stage_gate/stage_gate/service.py`](dinext_project_stage_gate/stage_gate/service.py) — pure business logic для сборки stage chain и project summary
-- [`dinext_project_stage_gate/stage_gate/working_days.py`](dinext_project_stage_gate/stage_gate/working_days.py) — расчет рабочих дат стадий с учетом holiday list
-- [`dinext_project_stage_gate/stage_gate/portfolio_grid.py`](dinext_project_stage_gate/stage_gate/portfolio_grid.py) — read-model и мутации для AG Grid на форме `Project Portfolio` (трудозатраты, P&L, вехи)
-- [`dinext_project_stage_gate/stage_gate/overdue_sync.py`](dinext_project_stage_gate/stage_gate/overdue_sync.py) — расчёт и массовая синхронизация `is_overdue` для стадий и checkpoint
-- [`dinext_project_stage_gate/tasks.py`](dinext_project_stage_gate/tasks.py) — ежедневный scheduler hook для `sync_overdue_flags`
-- [`dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_gate_checkpoint/project_gate_checkpoint.js`](dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_gate_checkpoint/project_gate_checkpoint.js) — клиентская логика чеклиста (удаление обязательных строк, скрытие «Удалить все строки»)
-- [`dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_gate_checkpoint/project_gate_checkpoint.py`](dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_gate_checkpoint/project_gate_checkpoint.py) — валидация и синхронизация `checklist_completed` с чеклистом
-- [`dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_stage_instance/project_stage_instance.py`](dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_stage_instance/project_stage_instance.py) — вычисление плановых/фактических дат и `after_insert` provisioning gate checkpoint
-- [`dinext_project_stage_gate/public/js/project_portfolio_stage_gate.js`](dinext_project_stage_gate/public/js/project_portfolio_stage_gate.js) — AG Grid на форме `Project Portfolio`, toolbar, реестр View-действий (roadmap, P&L-отчёты)
-- [`dinext_project_stage_gate/public/css/project_portfolio_grid.css`](dinext_project_stage_gate/public/css/project_portfolio_grid.css) — стили портфельной таблицы (тема Frappe + compact layout)
-- [`dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_gate_checkpoint/test_project_gate_checkpoint.py`](dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_gate_checkpoint/test_project_gate_checkpoint.py) — тесты пересчёта `checklist_completed`
-- [`dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_stage_instance/test_project_stage_instance.py`](dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_stage_instance/test_project_stage_instance.py) — integration-тесты автосоздания и guard-логики
-- [`dinext_project_stage_gate/tests/test_portfolio_grid.py`](dinext_project_stage_gate/tests/test_portfolio_grid.py) — Python-тесты read-model портфеля (трудозатраты, дерево задач, link/unlink)
-- [`dinext_project_stage_gate/tests/test_stage_gate_overdue_sync.py`](dinext_project_stage_gate/tests/test_stage_gate_overdue_sync.py) — тесты пересчёта `is_overdue` и daily sync
-- [`tests/test_project_portfolio_stage_gate.test.js`](tests/test_project_portfolio_stage_gate.test.js) — JS regression-тест AG Grid, toolbar/View-действий, P&L-навигации, темы и интеграции `Project Portfolio`
-- [`tests/test_project_gate_checkpoint_form.test.js`](tests/test_project_gate_checkpoint_form.test.js) — JS regression-тест клиентских ограничений чеклиста
-- [`tests/test_project_stage_gate_widget.test.js`](tests/test_project_stage_gate_widget.test.js) — JS regression-тест виджета `Project`
-- [`tests/test_project_stage_gate_roadmap.test.js`](tests/test_project_stage_gate_roadmap.test.js) — JS regression-тест roadmap-отчета
+- [`dinext_project_stage_gate/stage_gate/checkpoint_provision.py`](dinext_project_stage_gate/stage_gate/checkpoint_provision.py) — checkpoint creation from a template on `Project Stage Instance` insertion
+- [`dinext_project_stage_gate/stage_gate/project_hooks.py`](dinext_project_stage_gate/stage_gate/project_hooks.py) — orchestration layer for automatic provisioning and summary recalculation
+- [`dinext_project_stage_gate/stage_gate/query.py`](dinext_project_stage_gate/stage_gate/query.py) — read-model layer for the widget and report
+- [`dinext_project_stage_gate/stage_gate/service.py`](dinext_project_stage_gate/stage_gate/service.py) — pure business logic for stage chain and project summary assembly
+- [`dinext_project_stage_gate/stage_gate/working_days.py`](dinext_project_stage_gate/stage_gate/working_days.py) — stage working date calculation using the holiday list
+- [`dinext_project_stage_gate/stage_gate/portfolio_grid.py`](dinext_project_stage_gate/stage_gate/portfolio_grid.py) — read model and mutations for AG Grid on the `Project Portfolio` form (work effort, P&L, milestones)
+- [`dinext_project_stage_gate/stage_gate/overdue_sync.py`](dinext_project_stage_gate/stage_gate/overdue_sync.py) — calculation and bulk synchronization of `is_overdue` for stages and checkpoints
+- [`dinext_project_stage_gate/tasks.py`](dinext_project_stage_gate/tasks.py) — daily scheduler hook for `sync_overdue_flags`
+- [`dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_gate_checkpoint/project_gate_checkpoint.js`](dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_gate_checkpoint/project_gate_checkpoint.js) — client checklist logic (mandatory row deletion, hiding Delete All Rows)
+- [`dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_gate_checkpoint/project_gate_checkpoint.py`](dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_gate_checkpoint/project_gate_checkpoint.py) — validation and synchronization of `checklist_completed` with the checklist
+- [`dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_stage_instance/project_stage_instance.py`](dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_stage_instance/project_stage_instance.py) — planned/actual date calculation and gate checkpoint provisioning in `after_insert`
+- [`dinext_project_stage_gate/public/js/project_portfolio_stage_gate.js`](dinext_project_stage_gate/public/js/project_portfolio_stage_gate.js) — AG Grid on the `Project Portfolio` form, toolbar, View action registry (roadmap, P&L reports)
+- [`dinext_project_stage_gate/public/css/project_portfolio_grid.css`](dinext_project_stage_gate/public/css/project_portfolio_grid.css) — portfolio table styles (Frappe theme + compact layout)
+- [`dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_gate_checkpoint/test_project_gate_checkpoint.py`](dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_gate_checkpoint/test_project_gate_checkpoint.py) — `checklist_completed` recalculation tests
+- [`dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_stage_instance/test_project_stage_instance.py`](dinext_project_stage_gate/dinext_project_stage_gate/doctype/project_stage_instance/test_project_stage_instance.py) — automatic creation and guard logic integration tests
+- [`dinext_project_stage_gate/tests/test_portfolio_grid.py`](dinext_project_stage_gate/tests/test_portfolio_grid.py) — portfolio read-model Python tests (work effort, task tree, link/unlink)
+- [`dinext_project_stage_gate/tests/test_stage_gate_overdue_sync.py`](dinext_project_stage_gate/tests/test_stage_gate_overdue_sync.py) — `is_overdue` recalculation and daily synchronization tests
+- [`tests/test_project_portfolio_stage_gate.test.js`](tests/test_project_portfolio_stage_gate.test.js) — AG Grid, toolbar/View actions, P&L navigation, theme and `Project Portfolio` integration JS regression test
+- [`tests/test_project_gate_checkpoint_form.test.js`](tests/test_project_gate_checkpoint_form.test.js) — client checklist restrictions JS regression test
+- [`tests/test_project_stage_gate_widget.test.js`](tests/test_project_stage_gate_widget.test.js) — `Project` widget JS regression test
+- [`tests/test_project_stage_gate_roadmap.test.js`](tests/test_project_stage_gate_roadmap.test.js) — roadmap report JS regression test
 
-## ❤️ Благодарности
-
-- Frappe и ERPNext за metadata-driven платформу приложений
-- `dinext_projects` за окружающий контекст проектов, портфелей и отчетности, с которым интегрируется это приложение
-
-## 🗂️ Структура репозитория
+## 🗂️ Repository structure
 
 ```text
 .
@@ -386,16 +383,16 @@ node --test tests/*.js
             └── project_stage_gate_roadmap/
 ```
 
-Пояснения к структуре:
+Structure notes:
 
-- `dinext_project_stage_gate/dinext_project_stage_gate/doctype/` содержит metadata-backed определения DocType, контроллеры и тесты.
-- `dinext_project_stage_gate/stage_gate/` содержит service/query/API, orchestration hooks, provisioning checkpoint и утилиты расчета рабочих дат.
-- `dinext_project_stage_gate/public/` содержит UI-ассеты формы `Project`, AG Grid и стили для `Project Portfolio`, vendored ECharts stub.
-- `dinext_project_stage_gate/fixtures/` хранит экспортированные metadata, необходимые для воспроизведения ролей, прав, workflow, отчетов и custom fields.
-- `dinext_project_stage_gate/tests/` содержит точечные Python unit-тесты для service, query, API, permissions и report-поведения.
-- `tests/` в корне репозитория содержит изолированные JavaScript regression-тесты для виджета `Project`, формы `Project Portfolio`, клиентской логики `Project Gate Checkpoint` и roadmap-отчета.
+- `dinext_project_stage_gate/dinext_project_stage_gate/doctype/` contains metadata-backed DocType definitions, controllers and tests.
+- `dinext_project_stage_gate/stage_gate/` contains service/query/API, orchestration hooks, checkpoint provisioning and working date utilities.
+- `dinext_project_stage_gate/public/` contains `Project` form UI assets, AG Grid and styles for `Project Portfolio`, and a vendored ECharts stub.
+- `dinext_project_stage_gate/fixtures/` stores exported metadata needed to reproduce roles, permissions, workflows, reports and custom fields.
+- `dinext_project_stage_gate/tests/` contains focused Python unit tests for service, query, API, permissions and report behavior.
+- Root-level `tests/` contains isolated JavaScript regression tests for the `Project` widget, `Project Portfolio` form, `Project Gate Checkpoint` client logic and roadmap report.
 
-## 🔗 Схема потока
+## 🔗 Flow diagram
 
 ```mermaid
 flowchart LR
@@ -431,18 +428,18 @@ flowchart LR
   QueryLayer --> RoadmapReport
 ```
 
-Основной runtime-поток выглядит так:
+The main runtime flow is:
 
-1. Metadata DocType определяют модель управления, реестр стадий, уровни checkpoint и ExampleCustomer08 gate.
-2. При сохранении `Project` hook-слой создает и синхронизирует `Project Stage Instance`, а контроллер стадии вычисляет плановые даты по рабочему календарю.
-3. После вставки `Project Stage Instance` модуль provisioning создает `Project Gate Checkpoint`, если для стадии задан template.
-4. Изменения самих `Project Stage Instance` также пересчитывают summary проекта через `doc_events`.
-5. `stage_gate.query` собирает read-optimized datasets для виджета проекта и roadmap-отчета.
-6. Клиентский код отрисовывает Stage-gate цепочку на форме `Project`, AG Grid проектов на форме `Project Portfolio` (toolbar + переходы к отчётам из меню View), строит roadmap chart в Script Report.
-7. При сохранении `Project Gate Checkpoint` пересчитывается `checklist_completed` по статусам строк чеклиста; workflow checkpoint опирается на это поле для разрешения отправки на согласование.
-8. Контроллеры стадий и checkpoint при сохранении и ежедневный scheduler поддерживают актуальность `is_overdue` для roadmap и отчётности.
-9. Портфельная AG Grid-таблица запрашивает сводные трудозатраты и P&L через `portfolio_grid.get_portfolio_project_rows`, используя помесячную агрегацию PWE, совместимую с карточкой «Трудозатраты» проекта.
+1. Metadata DocTypes define the governance model, stage registry, checkpoint levels and gate ExampleCustomer08.
+2. When `Project` is saved, the hook layer creates and synchronizes `Project Stage Instance`, and the stage controller calculates planned dates from the working calendar.
+3. After `Project Stage Instance` insertion, the provisioning module creates `Project Gate Checkpoint` if the stage has a template.
+4. Changes to `Project Stage Instance` records also recalculate the project summary through `doc_events`.
+5. `stage_gate.query` assembles read-optimized datasets for the project widget and roadmap report.
+6. Client code renders the Stage-gate chain on the `Project` form and the project AG Grid on the `Project Portfolio` form (toolbar + View menu report shortcuts), and builds the roadmap chart in the Script Report.
+7. Saving `Project Gate Checkpoint` recalculates `checklist_completed` from checklist row statuses; the checkpoint workflow uses this field to permit submission for review.
+8. Stage and checkpoint controllers on save, plus the daily scheduler, keep `is_overdue` current for the roadmap and reporting.
+9. The portfolio AG Grid requests aggregate work effort and P&L through `portfolio_grid.get_portfolio_project_rows`, using monthly PWE aggregation compatible with the project's Work Effort card.
 
-## Лицензия
+## License
 
-GNU GPL v3. Текст — в [license.txt](license.txt).
+GNU GPL v3. See [license.txt](license.txt) for the license text.
