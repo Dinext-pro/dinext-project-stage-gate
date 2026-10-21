@@ -1,5 +1,25 @@
 [Русский](README.ru.md)
 
+<!-- dinext-presentation:start -->
+<p align="center">
+  <a href="https://dinext.ru"><img src="docs/assets/readme/dinext-logo.png" alt="Dinext" width="128"></a>
+</p>
+<h1 align="center">Dinext Project Stage Gate</h1>
+
+<hr>
+
+<p align="center">Project governance through stages, gate checkpoints, evidence checklists and a portfolio roadmap.</p>
+
+<p align="center">
+  <img src="docs/assets/readme/overview.png" alt="Stage and gate roadmap for a demonstration project portfolio." width="960">
+</p>
+<p align="center"><sub>Stage and gate roadmap for a demonstration project portfolio.</sub></p>
+
+<p align="center">
+  <a href="https://dinext.ru">Website</a> · <a href="https://docs.dinext.ru">Documentation</a>
+</p>
+<!-- dinext-presentation:end -->
+
 # Dinext Project Stage Gate
 
 ## 📖 Overview
