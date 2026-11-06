@@ -71,8 +71,6 @@ fixtures = [
 				"in",
 				[
 					"Submit for Review",
-					"Approve",
-					"Reject",
 					"Revise",
 					"Cancel",
 					"Activate",
@@ -86,10 +84,7 @@ fixtures = [
 		"doctype": "Workflow State",
 		"filters": [
 			["workflow_state_name", "in", [
-				"Draft",
 				"In Review",
-				"Approved",
-				"Rejected",
 				"Canceled",
 				"Planned",
 				"Active",

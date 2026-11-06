@@ -200,7 +200,7 @@
     "allow_edit": "Stage Gate Owner",
     "avoid_status_override": 0,
     "doc_status": "0",
-    "is_optional_state": 0,
+    "is_optional_state": 1,
     "message": null,
     "next_action_email_template": null,
     "parent": "Project Gate Checkpoint Workflow",

@@ -23,20 +23,6 @@
  {
   "docstatus": 0,
   "doctype": "Workflow Action Master",
-  "modified": "2023-02-21 18:24:43.347957",
-  "name": "Approve",
-  "workflow_action_name": "Approve"
- },
- {
-  "docstatus": 0,
-  "doctype": "Workflow Action Master",
-  "modified": "2023-02-21 18:24:43.349710",
-  "name": "Reject",
-  "workflow_action_name": "Reject"
- },
- {
-  "docstatus": 0,
-  "doctype": "Workflow Action Master",
   "modified": "2026-04-11 20:07:57.726912",
   "name": "Submit for Review",
   "workflow_action_name": "Submit for Review"
