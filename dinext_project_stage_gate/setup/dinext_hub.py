@@ -9,32 +9,7 @@ import frappe
 
 APP_NAME = 'dinext_project_stage_gate'
 
-HUB_ITEMS = (
-	{
-		"section": 'Scope & Governance',
-		"element_type": 'DocType',
-		"target": 'Project Governance Model',
-		"label": 'Project Governance Model',
-		"description": 'Defines lifecycle stages, entry and exit criteria, expected duration, and checkpoint templates.',
-		"icon": 'review',
-	},
-	{
-		"section": 'Scope & Governance',
-		"element_type": 'DocType',
-		"target": 'Stage Gate Template',
-		"label": 'Stage Gate Template',
-		"description": 'Reusable stage-gate checkpoint templates with mandatory checklist items and evidence requirements.',
-		"icon": 'milestone',
-	},
-	{
-		"section": 'Scope & Governance',
-		"element_type": 'DocType',
-		"target": 'Project Stage',
-		"label": 'Project Stage',
-		"description": 'Master list of lifecycle stages with code, sequence, description, and gate requirement.',
-		"icon": 'gantt',
-	},
-)
+HUB_ITEMS = ()  # Existing saved rows are retained; no new default contribution.
 
 
 def register_dinext_hub_items() -> None:
