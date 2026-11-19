@@ -381,3 +381,7 @@ scheduler_events = {
 # List of apps whose translatable strings should be excluded from this app's translations.
 # ignore_translatable_strings_from = []
 
+
+workflow_approval_email_profile_providers = ["dinext_project_stage_gate.workflow_settings.email_profiles"]
+
+workflow_approval_preserve_fixture_transition_ids = ['Project Gate Checkpoint Workflow', 'Project Stage Workflow']
