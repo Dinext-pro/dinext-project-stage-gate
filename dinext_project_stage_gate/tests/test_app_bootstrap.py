@@ -1,7 +1,29 @@
+import json
 import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+import frappe
 
 
 class TestAppBootstrap(unittest.TestCase):
+	def test_stage_workflows_leave_terminal_documents_out_of_new_processes(self):
+		from dinext_common.workflow_approval.scenarios import service
+
+		fixtures = Path(__file__).resolve().parents[1] / "fixtures" / "workflow.json"
+		workflows = {row["name"]: frappe._dict(row) for row in json.loads(fixtures.read_text())}
+		cases = (
+			("Project Stage Workflow", ("Completed", "Skipped", "Canceled"), (None, "Planned", "Active")),
+			("Project Gate Checkpoint Workflow", ("Approved", "Canceled"), (None, "Draft", "In Review", "Rejected")),
+		)
+		for name, terminal, still_actionable in cases:
+			workflow = workflows[name]
+			with patch.object(service, "_definitions", return_value=[workflow]):
+				for status in terminal + still_actionable:
+					with self.subTest(workflow=name, status=status):
+						source = frappe._dict(doctype=workflow.document_type, status=status, docstatus=0)
+						self.assertIs(service.select_workflow(source), None if status in terminal else workflow)
+
 	def test_hooks_define_required_apps(self):
 		from dinext_project_stage_gate import hooks
 
