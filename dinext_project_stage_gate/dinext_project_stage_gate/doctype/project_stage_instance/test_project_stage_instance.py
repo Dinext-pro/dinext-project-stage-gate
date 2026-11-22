@@ -169,11 +169,11 @@ class TestProjectStageInstance(FrappeTestCase):
 				self.assertIsNone(service.active_process(checkpoint))
 
 			self.assertIn("Complete", actions(first))
-			api.apply_workflow(first, "Complete")
+			api.apply_workflow(first.reload(), "Complete")
 			self.assertEqual((first.reload().status, first.docstatus), ("Completed", 0))
 			self.assertIsNone(service.active_process(first))
 			self.assertIn("Activate", actions(successor))
-			api.apply_workflow(successor, "Activate")
+			api.apply_workflow(successor.reload(), "Activate")
 			self.assertEqual(successor.reload().status, "Active")
 			self.assertEqual(first.reload().status, "Completed")
 
@@ -409,7 +409,10 @@ class TestProjectStageInstance(FrappeTestCase):
 			return_value=fixed_today,
 		):
 			stage.status = "Active"
-			with patch("frappe.model.document.validate_workflow"):
+			with (
+				patch.dict(frappe.conf, {"enable_parallel_workflow_approval": False}),
+				patch("frappe.model.document.validate_workflow"),
+			):
 				stage.save(ignore_permissions=True)
 
 		stage.reload()
@@ -421,7 +424,10 @@ class TestProjectStageInstance(FrappeTestCase):
 			return_value=fixed_today,
 		):
 			stage.status = "Completed"
-			with patch("frappe.model.document.validate_workflow"):
+			with (
+				patch.dict(frappe.conf, {"enable_parallel_workflow_approval": False}),
+				patch("frappe.model.document.validate_workflow"),
+			):
 				stage.save(ignore_permissions=True)
 
 		stage.reload()
