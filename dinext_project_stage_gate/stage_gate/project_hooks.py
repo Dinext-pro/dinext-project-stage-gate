@@ -3,7 +3,6 @@ from frappe import _
 
 from dinext_project_stage_gate.stage_gate import service
 
-
 SUMMARY_FIELDS = (
 	"current_stage_instance",
 	"current_stage",
@@ -86,6 +85,17 @@ def sync_project_stage_summary_from_instance(doc, method=None):
 		return
 
 	_update_project_summary(doc.project, _get_stage_instances(doc.project, active_ver))
+	if method != "on_update":
+		return
+
+	stage_name = None
+	if doc.status in ("Completed", "Skipped", "Canceled") and doc.has_value_changed("status"):
+		stage_name = doc.next_stage_instance
+	elif doc.status == "Active" and doc.gate_result and doc.has_value_changed("gate_result"):
+		stage_name = doc.name
+	if stage_name and (workflow := _parallel_stage_workflow()):
+		engine, _scenarios = workflow
+		engine.reconcile_source(frappe.get_doc("Project Stage Instance", stage_name))
 
 
 def _chain_has_stage_instances(project_name, chain_version):
@@ -112,16 +122,22 @@ def _create_stage_instances(project_name, governance_model_name, chain_version):
 			frappe.ValidationError,
 		)
 
+	workflow = _parallel_stage_workflow()
 	for payload in prepared_stage_instances:
 		# Workflow initial state is Planned; inserting as Active is rejected.
 		insert_payload = {
 			"doctype": "Project Stage Instance",
 			**payload,
 			"status": "Planned",
-			"previous_stage_instance": None,
+			"previous_stage_instance": payload.get("previous_stage_instance") if workflow else None,
 			"next_stage_instance": None,
 		}
 		frappe.get_doc(insert_payload).insert(ignore_permissions=True)
+
+	if workflow:
+		engine, scenarios = workflow
+		first = frappe.get_doc("Project Stage Instance", prepared_stage_instances[0]["name"], for_update=True)
+		scenarios.ensure_context(first)
 
 	for payload in prepared_stage_instances:
 		values = {
@@ -137,7 +153,31 @@ def _create_stage_instances(project_name, governance_model_name, chain_version):
 			update_modified=False,
 		)
 
+	if workflow:
+		# The first stage starts Active as part of provisioning, without a user vote.
+		first.reload()
+		scenarios.finish_transition(first)
+		engine.reconcile_source(first)
+
 	return _get_stage_instances(project_name, chain_version)
+
+
+def _parallel_stage_workflow():
+	if frappe.flags.in_install or frappe.flags.in_migrate:
+		return None
+	try:
+		from dinext_common.workflow_approval.lifecycle import is_engine_enabled
+	except ModuleNotFoundError as error:
+		if error.name != "dinext_common.workflow_approval":
+			raise
+		return None
+	if not is_engine_enabled():
+		return None
+
+	from dinext_common.workflow_approval import engine
+	from dinext_common.workflow_approval.scenarios import service as scenarios
+
+	return engine, scenarios
 
 
 def _get_stage_instances(project_name, chain_version):

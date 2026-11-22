@@ -85,6 +85,98 @@ class TestProjectStageInstance(FrappeTestCase):
 		)
 		self.assertEqual(len(stage_instances), 2)
 
+	def test_new_stage_chain_can_complete_first_stage_and_activate_successor(self):
+		self._exercise_stage_workflow(gated=False)
+
+	def test_checkpoint_approval_unlocks_the_first_stage(self):
+		self._exercise_stage_workflow(gated=True)
+
+	def _exercise_stage_workflow(self, *, gated):
+		try:
+			from dinext_common.workflow_approval import api
+			from dinext_common.workflow_approval.scenarios import service
+		except ModuleNotFoundError as error:
+			if error.name != "dinext_common.workflow_approval":
+				raise
+			self.skipTest("Parallel Workflow approval is not installed")
+		if not service.is_ready():
+			self.skipTest("Workflow scenario schema is not installed")
+
+		self.addCleanup(frappe.set_user, frappe.session.user)
+		actor = frappe.get_doc(
+			{
+				"doctype": "User",
+				"email": f"stage-workflow-{frappe.generate_hash(length=8)}@example.test",
+				"first_name": "Stage Workflow Tester",
+				"user_type": "System User",
+				"send_welcome_email": 0,
+				"roles": [{"role": role} for role in (
+					"Dinext_Project_Manager", "Project Governance Admin", "Stage Gate Owner", "Stage Gate Approver",
+				)],
+			}
+		).insert(ignore_permissions=True)
+
+		with (
+			patch.dict(frappe.conf, {"enable_parallel_workflow_approval": True}),
+			patch.dict(frappe.flags, {"suppress_workflow_mail": True}),
+		):
+			template = None
+			if gated:
+				suffix = frappe.generate_hash(length=8)
+				level = self._make_checkpoint_level(f"Workflow Gate {suffix}")
+				template = self._make_stage_gate_template(
+					f"Workflow Checklist {suffix}", level.name, ["Review the plan"],
+				).name
+			model = self._make_governance_model(checkpoint_template=template)
+			stage = frappe.get_doc("Project Stage", model.stages[0].stage)
+			stage.is_gate_required = int(gated)
+			stage.save(ignore_permissions=True)
+			project = self._make_project(governance_model=model.name)
+			first = frappe.get_doc("Project Stage Instance", project.reload().current_stage_instance)
+			successor = frappe.get_doc("Project Stage Instance", first.next_stage_instance)
+
+			def actions(stage):
+				tasks = frappe.get_all(
+					"Workflow Task",
+					filters={
+						"reference_doctype": stage.doctype,
+						"reference_name": stage.name,
+						"approver": actor.name,
+						"status": "Working",
+						"round_status": "Open",
+					},
+					pluck="name",
+				)
+				return frappe.get_all(
+					"Available Workflow Transitions", filters={"parent": ["in", tasks]}, pluck="action"
+				)
+
+			self.assertEqual(first.status, "Active")
+			self.assertEqual(bool(first.is_gate_required), gated)
+			self.assertFalse(first.actual_start_date)
+			self.assertNotIn("Activate", actions(successor))
+			self.assertEqual(service.active_process(first).current_state, "Active")
+
+			frappe.set_user(actor.name)
+			if gated:
+				self.assertNotIn("Complete", actions(first))
+				checkpoint = frappe.get_doc("Project Gate Checkpoint", {"stage_instance": first.name})
+				checkpoint.checklist[0].status = "Done"
+				checkpoint.save(ignore_permissions=True)
+				api.apply_workflow(checkpoint, "Submit for Review")
+				api.apply_workflow(checkpoint.reload(), "Approve")
+				self.assertEqual(checkpoint.reload().status, "Approved")
+				self.assertIsNone(service.active_process(checkpoint))
+
+			self.assertIn("Complete", actions(first))
+			api.apply_workflow(first.reload(), "Complete")
+			self.assertEqual((first.reload().status, first.docstatus), ("Completed", 0))
+			self.assertIsNone(service.active_process(first))
+			self.assertIn("Activate", actions(successor))
+			api.apply_workflow(successor.reload(), "Activate")
+			self.assertEqual(successor.reload().status, "Active")
+			self.assertEqual(first.reload().status, "Completed")
+
 	def test_project_update_with_governance_model_provisions_stage_instances(self):
 		governance_model = self._make_governance_model(label="Later")
 		project = self._make_project(governance_model=None)
@@ -317,7 +409,10 @@ class TestProjectStageInstance(FrappeTestCase):
 			return_value=fixed_today,
 		):
 			stage.status = "Active"
-			with patch("frappe.model.document.validate_workflow"):
+			with (
+				patch.dict(frappe.conf, {"enable_parallel_workflow_approval": False}),
+				patch("frappe.model.document.validate_workflow"),
+			):
 				stage.save(ignore_permissions=True)
 
 		stage.reload()
@@ -329,7 +424,10 @@ class TestProjectStageInstance(FrappeTestCase):
 			return_value=fixed_today,
 		):
 			stage.status = "Completed"
-			with patch("frappe.model.document.validate_workflow"):
+			with (
+				patch.dict(frappe.conf, {"enable_parallel_workflow_approval": False}),
+				patch("frappe.model.document.validate_workflow"),
+			):
 				stage.save(ignore_permissions=True)
 
 		stage.reload()
